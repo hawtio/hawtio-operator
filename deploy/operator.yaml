@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hawtio-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: hawtio-operator
+  template:
+    metadata:
+      labels:
+        name: hawtio-operator
+    spec:
+      serviceAccountName: hawtio-operator
+      containers:
+        - name: hawtio-operator
+          # Replace this with the built image name
+          image: REPLACE_IMAGE
+          ports:
+          - containerPort: 60000
+            name: metrics
+          command:
+          - hawtio-operator
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "hawtio-operator"

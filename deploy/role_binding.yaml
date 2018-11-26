@@ -1,0 +1,11 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: hawtio-operator
+subjects:
+- kind: ServiceAccount
+  name: hawtio-operator
+roleRef:
+  kind: Role
+  name: hawtio-operator
+  apiGroup: rbac.authorization.k8s.io
