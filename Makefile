@@ -1,8 +1,8 @@
 
-ORG=hawtio
+ORG = hawtio
 NAMESPACE ?= hawtio
-PROJECT=operator
-TAG=latest
+PROJECT = operator
+TAG = latest
 
 .PHONY: setup
 setup:
@@ -21,6 +21,19 @@ build:
 compile:
 	go build -o=hawtio-operator ./cmd/manager/main.go
 
+.PHONY: install
+install: install-crds
+	kubectl apply -f deploy/role.yaml -n ${NAMESPACE}
+	kubectl apply -f deploy/role_binding.yaml -n ${NAMESPACE}
+
+.PHONY: install-crds
+install-crds:
+	kubectl apply -f deploy/crds/hawtio_v1alpha1_hawtio_crd.yaml
+
+.PHONY: run
+run:
+	operator-sdk up local --namespace=${NAMESPACE} --operator-flags=""
+
 .PHONY: deploy
 deploy:
-	-kubectl create -f deploy/operator.yaml -n ${NAMESPACE}
+	kubectl apply -f deploy/operator.yaml -n ${NAMESPACE}
