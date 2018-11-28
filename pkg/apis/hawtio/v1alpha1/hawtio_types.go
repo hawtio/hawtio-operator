@@ -7,39 +7,39 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// ConsoleSpec defines the desired state of Console
-type ConsoleSpec struct {
+// HawtioSpec defines the desired state of Hawtio
+type HawtioSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 }
 
-// ConsoleStatus defines the observed state of Console
-type ConsoleStatus struct {
+// HawtioStatus defines the observed state of Hawtio
+type HawtioStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Console is the Schema for the consoles API
+// Hawtio is the Schema for the hawtios API
 // +k8s:openapi-gen=true
-type Console struct {
+type Hawtio struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ConsoleSpec   `json:"spec,omitempty"`
-	Status ConsoleStatus `json:"status,omitempty"`
+	Spec   HawtioSpec   `json:"spec,omitempty"`
+	Status HawtioStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ConsoleList contains a list of Console
-type ConsoleList struct {
+// HawtioList contains a list of Hawtio
+type HawtioList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Console `json:"items"`
+	Items           []Hawtio `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Console{}, &ConsoleList{})
+	SchemeBuilder.Register(&Hawtio{}, &HawtioList{})
 }
