@@ -52,3 +52,8 @@ required = [
   [[prune.project]]
     name = "k8s.io/code-generator"
     non-go = false
+
+[[constraint]]
+  #branch = "master"
+  version = "=v3.9.0"
+  name = "github.com/openshift/api"
