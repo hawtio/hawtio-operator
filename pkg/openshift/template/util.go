@@ -1,4 +1,4 @@
-package hawtio
+package template
 
 import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -57,7 +57,7 @@ func decoder(gv schema.GroupVersion, codecs serializer.CodecFactory) runtime.Dec
 	return codec
 }
 
-func runtimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object, error) {
+func RuntimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object, error) {
 	gvk := u.GroupVersionKind()
 	decoder := decoderFunc(gvk.GroupVersion(), codecs)
 
@@ -74,7 +74,7 @@ func runtimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object
 	return ro, nil
 }
 
-func unstructuredFromRuntimeObject(ro runtime.Object) (*unstructured.Unstructured, error) {
+func UnstructuredFromRuntimeObject(ro runtime.Object) (*unstructured.Unstructured, error) {
 	b, err := json.Marshal(ro)
 	if err != nil {
 		return nil, fmt.Errorf("error running MarshalJSON on runtime object: %v", err)
@@ -92,7 +92,7 @@ func LoadKubernetesResourceFromFile(path string) (runtime.Object, error) {
 		return nil, err
 	}
 
-	data, err = JsonIfYaml(data, path)
+	data, err = jsonIfYaml(data, path)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +108,10 @@ func LoadKubernetesResource(jsonData []byte) (runtime.Object, error) {
 		return nil, err
 	}
 
-	return runtimeObjectFromUnstructured(&u)
+	return RuntimeObjectFromUnstructured(&u)
 }
 
-func JsonIfYaml(source []byte, filename string) ([]byte, error) {
+func jsonIfYaml(source []byte, filename string) ([]byte, error) {
 	if strings.HasSuffix(filename, ".yaml") || strings.HasSuffix(filename, ".yml") {
 		return yaml.ToJSON(source)
 	}
