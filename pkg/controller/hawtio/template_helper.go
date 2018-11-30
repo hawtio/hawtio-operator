@@ -20,6 +20,7 @@ import (
 	image "github.com/openshift/api/image/v1"
 	route "github.com/openshift/api/route/v1"
 	template "github.com/openshift/api/template/v1"
+	v1template "github.com/openshift/api/template/v1"
 
 	"encoding/json"
 )
@@ -73,6 +74,18 @@ func runtimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object
 	return ro, nil
 }
 
+func unstructuredFromRuntimeObject(ro runtime.Object) (*unstructured.Unstructured, error) {
+	b, err := json.Marshal(ro)
+	if err != nil {
+		return nil, fmt.Errorf("error running MarshalJSON on runtime object: %v", err)
+	}
+	var u unstructured.Unstructured
+	if err := json.Unmarshal(b, &u.Object); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal json into unstructured object: %v", err)
+	}
+	return &u, nil
+}
+
 func LoadKubernetesResourceFromFile(path string) (runtime.Object, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -106,14 +119,10 @@ func JsonIfYaml(source []byte, filename string) ([]byte, error) {
 	return source, nil
 }
 
-func UnstructuredFromRuntimeObject(ro runtime.Object) (*unstructured.Unstructured, error) {
-	b, err := json.Marshal(ro)
-	if err != nil {
-		return nil, fmt.Errorf("error running MarshalJSON on runtime object: %v", err)
+func FillParams(tmpl *v1template.Template, params map[string]string) {
+	for i, param := range tmpl.Parameters {
+		if value, ok := params[param.Name]; ok {
+			tmpl.Parameters[i].Value = value
+		}
 	}
-	var u unstructured.Unstructured
-	if err := json.Unmarshal(b, &u.Object); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal json into unstructured object: %v", err)
-	}
-	return &u, nil
 }

@@ -2,13 +2,16 @@ package hawtio
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -17,14 +20,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	v1template "github.com/openshift/api/template/v1"
 )
 
 var log = logf.Log.WithName("controller_hawtio")
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
+const (
+	hawtioTemplatePath = "templates/deployment-namespace.yaml"
+)
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -34,7 +38,11 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileHawtio{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileHawtio{
+		client: mgr.GetClient(),
+		config: mgr.GetConfig(),
+		scheme: mgr.GetScheme(),
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -71,6 +79,7 @@ type ReconcileHawtio struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
+	config *rest.Config
 	scheme *runtime.Scheme
 }
 
@@ -99,54 +108,127 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	// Define a new Pod object
-	pod := newPodForCR(instance)
-
-	// Set Hawtio instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+	exts, err := r.processTemplate(instance, request)
+	if err != nil {
+		reqLogger.Error(err, "Error while processing template", "template", hawtioTemplatePath)
 		return reconcile.Result{}, err
 	}
 
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
+	objs, err := getRuntimeObjects(exts)
+	if err != nil {
+		reqLogger.Error(err, "Error while retrieving runtime objects")
 		return reconcile.Result{}, err
 	}
 
-	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
+	err = r.createObjects(objs, request.Namespace, instance)
+	if err != nil {
+		reqLogger.Error(err, "Error creating runtime objects")
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{}, nil
 }
 
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Pod {
-	labels := map[string]string{
-		"app": cr.Name,
+func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request reconcile.Request) ([]runtime.RawExtension, error) {
+	res, err := LoadKubernetesResourceFromFile(hawtioTemplatePath)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading template: %s", err)
 	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
-				},
-			},
-		},
+
+	params := make(map[string]string)
+	// TODO: map CR spec to parameters
+
+	tmpl := res.(*v1template.Template)
+
+	FillParams(tmpl, params)
+
+	resource, err := json.Marshal(tmpl)
+	if err != nil {
+		return nil, err
 	}
+
+	config := rest.CopyConfig(r.config)
+	config.GroupVersion = &schema.GroupVersion{
+		Group:   "template.openshift.io",
+		Version: "v1",
+	}
+	config.APIPath = "/apis"
+	config.AcceptContentTypes = "application/json"
+	config.ContentType = "application/json"
+
+	// config.NegotiatedSerializer = basicNegotiatedSerializer{}
+	if config.UserAgent == "" {
+		config.UserAgent = rest.DefaultKubernetesUserAgent()
+	}
+
+	restClient, err := rest.RESTClientFor(config)
+	if err != nil {
+		return nil, err
+	}
+
+	result := restClient.
+		Post().
+		Namespace(request.Namespace).
+		Body(resource).
+		Resource("processedtemplates").
+		Do()
+
+	if result.Error() == nil {
+		data, err := result.Raw()
+		if err != nil {
+			return nil, err
+		}
+
+		templ, err := LoadKubernetesResource(data)
+		if err != nil {
+			return nil, err
+		}
+
+		if v1Temp, ok := templ.(*v1template.Template); ok {
+			return v1Temp.Objects, nil
+		}
+
+		return nil, fmt.Errorf("Wrong type returned by the server: %v", templ)
+	}
+
+	return nil, result.Error()
+}
+
+func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr *hawtiov1alpha1.Hawtio) error {
+	for _, o := range objects {
+		uo, err := unstructuredFromRuntimeObject(o)
+		if err != nil {
+			return fmt.Errorf("failed to transform object: %v", err)
+		}
+
+		uo.SetNamespace(ns)
+		err = controllerutil.SetControllerReference(cr, uo, r.scheme)
+		if err != nil {
+			return fmt.Errorf("failed to set owner in object: %v", err)
+		}
+
+		err = r.client.Create(context.TODO(), uo.DeepCopyObject())
+		if err != nil {
+			if errors.IsAlreadyExists(err) {
+				continue
+			}
+			return fmt.Errorf("failed to create object: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func getRuntimeObjects(exts []runtime.RawExtension) ([]runtime.Object, error) {
+	objects := make([]runtime.Object, 0)
+
+	for _, ext := range exts {
+		res, err := LoadKubernetesResource(ext.Raw)
+		if err != nil {
+			return nil, err
+		}
+		objects = append(objects, res)
+	}
+
+	return objects, nil
 }
