@@ -142,7 +142,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get route")
 		return reconcile.Result{}, err
 	} else {
+		// FIXME: reconcile the whole URL instead of the sole hostname
 		instance.Status.RouteHostName = route.Spec.Host
+		// FIXME: avoid CR request to be requeued
 		err := r.client.Update(context.TODO(), instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to update status")
