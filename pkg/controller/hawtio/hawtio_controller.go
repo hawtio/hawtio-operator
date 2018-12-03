@@ -2,19 +2,16 @@ package hawtio
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift/template"
+	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -133,73 +130,25 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 }
 
 func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request reconcile.Request) ([]runtime.RawExtension, error) {
-	res, err := template.LoadKubernetesResourceFromFile(hawtioTemplatePath)
+	res, err := util.LoadKubernetesResourceFromFile(hawtioTemplatePath)
 	if err != nil {
 		return nil, fmt.Errorf("Error reading template: %s", err)
 	}
 
-	params := make(map[string]string)
+	processor, err := template.NewProcessor(request.Namespace, r.config)
+	if err != nil {
+		return nil, err
+	}
+
+	parameters := make(map[string]string)
 	// TODO: map CR spec to parameters
 
-	tmpl := res.(*v1template.Template)
-
-	template.FillParams(tmpl, params)
-
-	resource, err := json.Marshal(tmpl)
-	if err != nil {
-		return nil, err
-	}
-
-	config := rest.CopyConfig(r.config)
-	config.GroupVersion = &schema.GroupVersion{
-		Group:   "template.openshift.io",
-		Version: "v1",
-	}
-	config.APIPath = "/apis"
-	config.AcceptContentTypes = "application/json"
-	config.ContentType = "application/json"
-
-	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: scheme.Codecs}
-	if config.UserAgent == "" {
-		config.UserAgent = rest.DefaultKubernetesUserAgent()
-	}
-
-	restClient, err := rest.RESTClientFor(config)
-	if err != nil {
-		return nil, err
-	}
-
-	result := restClient.
-		Post().
-		Namespace(request.Namespace).
-		Body(resource).
-		Resource("processedtemplates").
-		Do()
-
-	if result.Error() == nil {
-		data, err := result.Raw()
-		if err != nil {
-			return nil, err
-		}
-
-		templ, err := template.LoadKubernetesResource(data)
-		if err != nil {
-			return nil, err
-		}
-
-		if v1Temp, ok := templ.(*v1template.Template); ok {
-			return v1Temp.Objects, nil
-		}
-
-		return nil, fmt.Errorf("Wrong type returned by the server: %v", templ)
-	}
-
-	return nil, result.Error()
+	return processor.Process(res.(*v1template.Template), parameters)
 }
 
 func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr *hawtiov1alpha1.Hawtio) error {
 	for _, o := range objects {
-		uo, err := template.UnstructuredFromRuntimeObject(o)
+		uo, err := util.UnstructuredFromRuntimeObject(o)
 		if err != nil {
 			return fmt.Errorf("failed to transform object: %v", err)
 		}
@@ -226,7 +175,7 @@ func getRuntimeObjects(exts []runtime.RawExtension) ([]runtime.Object, error) {
 	objects := make([]runtime.Object, 0)
 
 	for _, ext := range exts {
-		res, err := template.LoadKubernetesResource(ext.Raw)
+		res, err := util.LoadKubernetesResource(ext.Raw)
 		if err != nil {
 			return nil, err
 		}

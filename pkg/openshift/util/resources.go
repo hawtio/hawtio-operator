@@ -1,14 +1,14 @@
-package template
+package util
 
 import (
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -20,9 +20,6 @@ import (
 	image "github.com/openshift/api/image/v1"
 	route "github.com/openshift/api/route/v1"
 	template "github.com/openshift/api/template/v1"
-	v1template "github.com/openshift/api/template/v1"
-
-	"encoding/json"
 )
 
 var (
@@ -117,12 +114,4 @@ func jsonIfYaml(source []byte, filename string) ([]byte, error) {
 	}
 
 	return source, nil
-}
-
-func FillParams(tmpl *v1template.Template, params map[string]string) {
-	for i, param := range tmpl.Parameters {
-		if value, ok := params[param.Name]; ok {
-			tmpl.Parameters[i].Value = value
-		}
-	}
 }
