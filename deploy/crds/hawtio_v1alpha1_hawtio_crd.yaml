@@ -12,7 +12,11 @@ spec:
   scope: Namespaced
   version: v1alpha1
   additionalPrinterColumns:
+    - name: Age
+      description: Creation date
+      type: date
+      JSONPath: .metadata.creationTimestamp
     - name: URL
-      description: hawtio console URL
+      description: Hawtio console URL
       type: string
       JSONPath: .status.routeHostName
