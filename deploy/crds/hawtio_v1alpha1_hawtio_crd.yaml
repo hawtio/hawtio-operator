@@ -11,3 +11,8 @@ spec:
     singular: hawtio
   scope: Namespaced
   version: v1alpha1
+  additionalPrinterColumns:
+    - name: URL
+      description: hawtio console URL
+      type: string
+      JSONPath: .status.routeHostName
