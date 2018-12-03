@@ -140,7 +140,9 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 	}
 
 	parameters := make(map[string]string)
-	// TODO: map CR spec to parameters
+	if route := cr.Spec.RouteHostName; len(route) > 0 {
+		parameters["ROUTE_HOSTNAME"] = route
+	}
 
 	return r.template.Process(res.(*v1template.Template), request.Namespace, parameters)
 }

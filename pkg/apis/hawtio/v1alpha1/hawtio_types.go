@@ -11,6 +11,7 @@ import (
 type HawtioSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	RouteHostName string `json:"routeHostName,omitempty"`
 }
 
 // HawtioStatus defines the observed state of Hawtio

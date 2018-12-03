@@ -3,5 +3,4 @@ kind: Hawtio
 metadata:
   name: example-hawtio
 spec:
-  # Add fields here
-  size: 3
+  # routeHostName: hawtio.192.168.64.38.nip.io
