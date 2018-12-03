@@ -16,11 +16,10 @@ import (
 )
 
 type TemplateProcessor struct {
-	namespace  string
 	restClient *rest.RESTClient
 }
 
-func NewProcessor(namespace string, inConfig *rest.Config) (*TemplateProcessor, error) {
+func NewProcessor(inConfig *rest.Config) (*TemplateProcessor, error) {
 	config := rest.CopyConfig(inConfig)
 	config.GroupVersion = &schema.GroupVersion{
 		Group:   "template.openshift.io",
@@ -41,12 +40,11 @@ func NewProcessor(namespace string, inConfig *rest.Config) (*TemplateProcessor, 
 	}
 
 	return &TemplateProcessor{
-		namespace:  namespace,
 		restClient: restClient,
 	}, nil
 }
 
-func (p *TemplateProcessor) Process(template *v1template.Template, parameters map[string]string) ([]runtime.RawExtension, error) {
+func (p *TemplateProcessor) Process(template *v1template.Template, namespace string, parameters map[string]string) ([]runtime.RawExtension, error) {
 	fillParameters(template, parameters)
 
 	resource, err := json.Marshal(template)
@@ -56,7 +54,7 @@ func (p *TemplateProcessor) Process(template *v1template.Template, parameters ma
 
 	result := p.restClient.
 		Post().
-		Namespace(p.namespace).
+		Namespace(namespace).
 		Body(resource).
 		Resource("processedtemplates").
 		Do()

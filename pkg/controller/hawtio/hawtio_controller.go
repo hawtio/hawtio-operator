@@ -33,16 +33,19 @@ const (
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
-}
-
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileHawtio{
+	r := &ReconcileHawtio{
 		client: mgr.GetClient(),
 		config: mgr.GetConfig(),
 		scheme: mgr.GetScheme(),
 	}
+
+	processor, err := template.NewProcessor(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r.template = processor
+
+	return add(mgr, r)
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -81,6 +84,7 @@ type ReconcileHawtio struct {
 	client client.Client
 	config *rest.Config
 	scheme *runtime.Scheme
+	template *template.TemplateProcessor
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -135,15 +139,10 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 		return nil, fmt.Errorf("Error reading template: %s", err)
 	}
 
-	processor, err := template.NewProcessor(request.Namespace, r.config)
-	if err != nil {
-		return nil, err
-	}
-
 	parameters := make(map[string]string)
 	// TODO: map CR spec to parameters
 
-	return processor.Process(res.(*v1template.Template), parameters)
+	return r.template.Process(res.(*v1template.Template), request.Namespace, parameters)
 }
 
 func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr *hawtiov1alpha1.Hawtio) error {
