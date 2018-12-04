@@ -19,4 +19,4 @@ spec:
     - name: URL
       description: Hawtio console URL
       type: string
-      JSONPath: .status.routeHostName
+      JSONPath: .status.URL
