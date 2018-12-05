@@ -165,6 +165,7 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 	}
 
 	parameters := make(map[string]string)
+	parameters["APPLICATION_NAME"] = cr.Name
 	if route := cr.Spec.RouteHostName; len(route) > 0 {
 		parameters["ROUTE_HOSTNAME"] = route
 	}
