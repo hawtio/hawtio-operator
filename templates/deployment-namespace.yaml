@@ -1,47 +1,31 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: hawtio-online
+  name: hawtio
 parameters:
+- name: APPLICATION_NAME
+  displayName: Application Name
+  required: true
+  value: hawtio
+  description: The name assigned to the Hawtio resources
 - name: ROUTE_HOSTNAME
-  description: The externally-reachable host name that routes to the Hawtio Online service
-message: |-
-  Hawtio Online is deployed.
+  description: The externally-reachable host name that routes to the Hawtio service
 objects:
 - apiVersion: v1
   kind: ConfigMap
   metadata:
-    name: hawtio-online
+    name: ${APPLICATION_NAME}-config
   data:
     hawtconfig.json: |
       {
         "about": {
-          "title": "Hawtio OpenShift Console",
+          "title": "Hawtio Console",
           "productInfo": [],
-          "additionalInfo": "The Hawtio OpenShift Console eases the discovery and management of 'hawtio-enabled' applications deployed on OpenShift.",
+          "additionalInfo": "The Hawtio console eases the discovery and management of 'hawtio-enabled' applications deployed on OpenShift.",
           "copyright": ""
         },
         "branding": {
-          "appName": "Hawtio OpenShift Console",
-          "appLogoUrl": "img/hawtio-logo.svg"
-        },
-        "disabledRoutes": []
-      }
-- apiVersion: v1
-  kind: ConfigMap
-  metadata:
-    name: hawtio-integration
-  data:
-    hawtconfig.json: |
-      {
-        "about": {
-          "title": "Hawtio Integration Console",
-          "productInfo": [],
-          "additionalInfo": "The Hawtio Integration Console enables introspecting Java applications.",
-          "copyright": ""
-        },
-        "branding": {
-          "appName": "Hawtio Integration Console",
+          "appName": "Hawtio Console",
           "appLogoUrl": "img/hawtio-logo.svg"
         },
         "disabledRoutes": []
@@ -49,10 +33,9 @@ objects:
 - apiVersion: v1
   kind: ImageStream
   metadata:
-    name: hawtio-online
+    name: ${APPLICATION_NAME}
     labels:
       app: hawtio
-      component: online
   spec:
     tags:
     - from:
@@ -66,14 +49,12 @@ objects:
   metadata:
     labels:
       app: hawtio
-      component: online
-    name: hawtio-online
+    name: ${APPLICATION_NAME}
   spec:
     replicas: 1
     selector:
       app: hawtio
-      component: online
-      deploymentconfig: hawtio-online
+      deploymentconfig: ${APPLICATION_NAME}
     strategy:
       rollingParams:
         intervalSeconds: 1
@@ -86,8 +67,7 @@ objects:
       metadata:
         labels:
           app: hawtio
-          component: online
-          deploymentconfig: hawtio-online
+          deploymentconfig: ${APPLICATION_NAME}
       spec:
         containers:
         - image: 'hawtio/online'
@@ -118,6 +98,8 @@ objects:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: HAWTIO_OAUTH_CLIENT_ID
+            value: ${APPLICATION_NAME}
           resources:
             requests:
               cpu: 0.2
@@ -137,13 +119,13 @@ objects:
         volumes:
         - name: hawtio-online
           configMap:
-            name: hawtio-online
+            name: ${APPLICATION_NAME}-config
         - name: hawtio-integration
           configMap:
-            name: hawtio-online
+            name: ${APPLICATION_NAME}-config
         - name: hawtio-online-tls
           secret:
-            secretName: hawtio-online-tls
+            secretName: ${APPLICATION_NAME}-tls
     triggers:
     - imageChangeParams:
         automatic: true
@@ -151,7 +133,7 @@ objects:
         - hawtio-online
         from:
           kind: ImageStreamTag
-          name: hawtio-online:latest
+          name: ${APPLICATION_NAME}:latest
       type: ImageChange
     - type: ConfigChange
 - apiVersion: v1
@@ -159,10 +141,9 @@ objects:
   metadata:
     labels:
       app: hawtio
-      component: online
     annotations:
-      service.alpha.openshift.io/serving-cert-secret-name: hawtio-online-tls
-    name: hawtio-online
+      service.alpha.openshift.io/serving-cert-secret-name: ${APPLICATION_NAME}-tls
+    name: ${APPLICATION_NAME}
   spec:
     ports:
     - port: 443
@@ -170,29 +151,27 @@ objects:
       targetPort: nginx
     selector:
       app: hawtio
-      component: online
 - apiVersion: v1
   kind: Route
   metadata:
     labels:
       app: hawtio
-      component: online
-    name: hawtio-online
+    name: ${APPLICATION_NAME}
   spec:
     host: ${ROUTE_HOSTNAME}
     to:
       kind: Service
-      name: hawtio-online
+      name: ${APPLICATION_NAME}
     tls:
       insecureEdgeTerminationPolicy: Redirect
       termination: reencrypt
 - apiVersion: v1
   kind: ServiceAccount
   metadata:
-    name: hawtio-online
+    name: ${APPLICATION_NAME}
     labels:
-      app: hawtio-online
+      app: hawtio
     annotations:
       # All HTTPS ingresses for the Hawtio Online route
       serviceaccounts.openshift.io/oauth-redirecturi.route: https://
-      serviceaccounts.openshift.io/oauth-redirectreference.route: '{"kind": "OAuthRedirectReference", "apiVersion": "v1", "reference": {"kind": "Route", "name": "hawtio-online"}}'
+      serviceaccounts.openshift.io/oauth-redirectreference.route: '{"kind": "OAuthRedirectReference", "apiVersion": "v1", "reference": {"kind": "Route", "name": "${APPLICATION_NAME}"}}'
