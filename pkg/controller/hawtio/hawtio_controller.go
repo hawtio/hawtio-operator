@@ -10,7 +10,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -134,8 +133,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	route := &routev1.Route{}
-	// FIXME: fix route key resolution
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: "hawtio-online", Namespace: request.Namespace}, route)
+	err = r.client.Get(context.TODO(), request.NamespacedName, route)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
