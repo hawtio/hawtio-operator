@@ -20,6 +20,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	imagev1 "github.com/openshift/api/image/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 )
@@ -33,7 +34,11 @@ const (
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-	err := routev1.AddToScheme(mgr.GetScheme())
+	err := imagev1.AddToScheme(mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	err = routev1.AddToScheme(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
@@ -146,6 +151,33 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			return reconcile.Result{}, nil
 		}
 		instance.Status.URL = url
+		err := r.client.Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update status")
+			return reconcile.Result{}, err
+		}
+	}
+
+	stream := &imagev1.ImageStream{}
+	err = r.client.Get(context.TODO(), request.NamespacedName, stream)
+	if err != nil && errors.IsNotFound(err) {
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get image stream")
+		return reconcile.Result{}, err
+	} else {
+		image := "<invalid>"
+		for _, tag := range stream.Spec.Tags {
+			// TODO: use tag parameter
+			if tag.Name == "latest" {
+				image = tag.From.Name
+			}
+		}
+		if instance.Status.Image == image {
+			// Avoid another CR reconcile cycle
+			return reconcile.Result{}, nil
+		}
+		instance.Status.Image = image
 		err := r.client.Update(context.TODO(), instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to update status")
