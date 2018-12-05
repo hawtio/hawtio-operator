@@ -20,3 +20,7 @@ spec:
       description: Hawtio console URL
       type: string
       JSONPath: .status.URL
+    - name: Image
+      description: Hawtio console image
+      type: string
+      JSONPath: .status.image
