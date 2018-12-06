@@ -8,6 +8,10 @@ parameters:
   required: true
   value: hawtio
   description: The name assigned to the Hawtio resources
+- name: REPLICA_COUNT
+  required: true
+  value: "1"
+  description: The number of desired replicas
 - name: ROUTE_HOSTNAME
   description: The externally-reachable host name that routes to the Hawtio service
 objects:
@@ -51,7 +55,7 @@ objects:
       app: hawtio
     name: ${APPLICATION_NAME}
   spec:
-    replicas: 1
+    replicas: ${{REPLICA_COUNT}}
     selector:
       app: hawtio
       deploymentconfig: ${APPLICATION_NAME}

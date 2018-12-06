@@ -196,6 +196,9 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 
 	parameters := make(map[string]string)
 	parameters["APPLICATION_NAME"] = cr.Name
+	if replicas := cr.Spec.ReplicaCount; replicas > 0 {
+		parameters["REPLICA_COUNT"] = fmt.Sprint(replicas)
+	}
 	if route := cr.Spec.RouteHostName; len(route) > 0 {
 		parameters["ROUTE_HOSTNAME"] = route
 	}

@@ -11,6 +11,7 @@ import (
 type HawtioSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	ReplicaCount  int32  `json:"replicaCount,omitempty"`
 	RouteHostName string `json:"routeHostName,omitempty"`
 }
 

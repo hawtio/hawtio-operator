@@ -3,4 +3,5 @@ kind: Hawtio
 metadata:
   name: example-hawtio
 spec:
+  replicaCount: 1
   # routeHostName: hawtio.192.168.64.38.nip.io
