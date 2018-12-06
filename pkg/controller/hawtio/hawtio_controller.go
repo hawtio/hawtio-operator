@@ -149,6 +149,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
+	// FIXME: do not override CR spec update
 	deployment := &appsv1.DeploymentConfig{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
@@ -255,6 +256,7 @@ func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr 
 		err = r.client.Create(context.TODO(), uo.DeepCopyObject())
 		if err != nil {
 			if errors.IsAlreadyExists(err) {
+				// FIXME: apply CR spec to existing resources
 				continue
 			}
 			return fmt.Errorf("failed to create object: %v", err)
