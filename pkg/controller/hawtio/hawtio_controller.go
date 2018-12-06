@@ -20,6 +20,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	appsv1 "github.com/openshift/api/apps/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	templatev1 "github.com/openshift/api/template/v1"
@@ -34,7 +35,11 @@ const (
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-	err := imagev1.AddToScheme(mgr.GetScheme())
+	err := appsv1.AddToScheme(mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	err = imagev1.AddToScheme(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
@@ -74,6 +79,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// Watch for changes to secondary resources and requeue the owner Hawtio
 	err = c.Watch(&source.Kind{Type: &routev1.Route{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &hawtiov1alpha1.Hawtio{},
+	})
+	if err != nil {
+		return err
+	}
+	err = c.Watch(&source.Kind{Type: &appsv1.DeploymentConfig{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &hawtiov1alpha1.Hawtio{},
 	})
@@ -135,6 +147,27 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if err != nil {
 		reqLogger.Error(err, "Error creating runtime objects")
 		return reconcile.Result{}, err
+	}
+
+	deployment := &appsv1.DeploymentConfig{}
+	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
+	if err != nil && errors.IsNotFound(err) {
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get deployment")
+		return reconcile.Result{}, err
+	} else {
+		replicas := deployment.Spec.Replicas
+		if instance.Spec.ReplicaCount == replicas {
+			// Avoid another CR reconcile cycle
+			return reconcile.Result{}, nil
+		}
+		instance.Spec.ReplicaCount = replicas
+		err := r.client.Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update replica count")
+			return reconcile.Result{}, err
+		}
 	}
 
 	route := &routev1.Route{}
