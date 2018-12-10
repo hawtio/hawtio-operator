@@ -150,7 +150,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	// FIXME: do not override CR spec update
 	deployment := &appsv1.DeploymentConfig{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
@@ -159,16 +158,28 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get deployment")
 		return reconcile.Result{}, err
 	} else {
-		replicas := deployment.Spec.Replicas
-		if instance.Spec.ReplicaCount == replicas {
-			// Avoid another CR reconcile cycle
-			return reconcile.Result{}, nil
-		}
-		instance.Spec.ReplicaCount = replicas
-		err := r.client.Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update replica count")
-			return reconcile.Result{}, err
+		if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioRevisionAnnotation] == instance.GetResourceVersion() {
+			replicas := deployment.Spec.Replicas
+			if instance.Spec.ReplicaCount == replicas {
+				// Avoid another CR reconcile cycle
+				return reconcile.Result{}, nil
+			}
+			instance.Spec.ReplicaCount = replicas
+			err := r.client.Update(context.TODO(), instance)
+			if err != nil {
+				reqLogger.Error(err, "Failed to update replica count")
+				return reconcile.Result{}, err
+			}
+		} else {
+			if replicas := instance.Spec.ReplicaCount; deployment.Spec.Replicas != replicas {
+				deployment.Annotations[hawtioRevisionAnnotation] = instance.GetResourceVersion()
+				deployment.Spec.Replicas = replicas
+				err := r.client.Update(context.TODO(), deployment)
+				if err != nil {
+					reqLogger.Error(err, "Failed to update deployment")
+					return reconcile.Result{}, err
+				}
+			}
 		}
 	}
 
