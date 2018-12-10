@@ -159,16 +159,13 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	} else {
 		if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioRevisionAnnotation] == instance.GetResourceVersion() {
-			replicas := deployment.Spec.Replicas
-			if instance.Spec.ReplicaCount == replicas {
-				// Avoid another CR reconcile cycle
-				return reconcile.Result{}, nil
-			}
-			instance.Spec.ReplicaCount = replicas
-			err := r.client.Update(context.TODO(), instance)
-			if err != nil {
-				reqLogger.Error(err, "Failed to update replica count")
-				return reconcile.Result{}, err
+			if replicas := deployment.Spec.Replicas; instance.Spec.ReplicaCount != replicas {
+				instance.Spec.ReplicaCount = replicas
+				err := r.client.Update(context.TODO(), instance)
+				if err != nil {
+					reqLogger.Error(err, "Failed to reconcile from deployment")
+					return reconcile.Result{}, err
+				}
 			}
 		} else {
 			if replicas := instance.Spec.ReplicaCount; deployment.Spec.Replicas != replicas {
@@ -176,13 +173,14 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				deployment.Spec.Replicas = replicas
 				err := r.client.Update(context.TODO(), deployment)
 				if err != nil {
-					reqLogger.Error(err, "Failed to update deployment")
+					reqLogger.Error(err, "Failed to reconcile to deployment")
 					return reconcile.Result{}, err
 				}
 			}
 		}
 	}
 
+	// TODO: reconcile route from CR
 	route := &routev1.Route{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, route)
 	if err != nil && errors.IsNotFound(err) {
@@ -191,16 +189,13 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get route")
 		return reconcile.Result{}, err
 	} else {
-		url := util.GetRouteURL(route)
-		if instance.Status.URL == url {
-			// Avoid another CR reconcile cycle
-			return reconcile.Result{}, nil
-		}
-		instance.Status.URL = url
-		err := r.client.Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update status")
-			return reconcile.Result{}, err
+		if url := util.GetRouteURL(route); instance.Status.URL != url {
+			instance.Status.URL = url
+			err := r.client.Update(context.TODO(), instance)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile from route")
+				return reconcile.Result{}, err
+			}
 		}
 	}
 
@@ -219,15 +214,13 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				image = tag.From.Name
 			}
 		}
-		if instance.Status.Image == image {
-			// Avoid another CR reconcile cycle
-			return reconcile.Result{}, nil
-		}
-		instance.Status.Image = image
-		err := r.client.Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update status")
-			return reconcile.Result{}, err
+		if instance.Status.Image != image {
+			instance.Status.Image = image
+			err := r.client.Update(context.TODO(), instance)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile from image stream")
+				return reconcile.Result{}, err
+			}
 		}
 	}
 
