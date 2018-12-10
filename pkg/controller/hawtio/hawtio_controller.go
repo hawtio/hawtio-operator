@@ -30,6 +30,7 @@ var log = logf.Log.WithName("controller_hawtio")
 
 const (
 	hawtioTemplatePath = "templates/deployment-namespace.yaml"
+	hawtioRevisionAnnotation = "hawtio.hawt.io/hawtiorevision"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -252,6 +253,16 @@ func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr 
 		if err != nil {
 			return fmt.Errorf("failed to set owner in object: %v", err)
 		}
+
+		annotations := uo.GetAnnotations()
+		if annotations == nil {
+			annotations = map[string]string{
+				hawtioRevisionAnnotation: cr.GetResourceVersion(),
+			}
+		} else {
+			annotations[hawtioRevisionAnnotation] = cr.GetResourceVersion()
+		}
+		uo.SetAnnotations(annotations)
 
 		err = r.client.Create(context.TODO(), uo.DeepCopyObject())
 		if err != nil {
