@@ -8,8 +8,10 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/openshift/template"
 	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -31,6 +33,7 @@ var log = logf.Log.WithName("controller_hawtio")
 const (
 	hawtioTemplatePath = "templates/deployment-namespace.yaml"
 	hawtioRevisionAnnotation = "hawtio.hawt.io/hawtiorevision"
+	configVersionAnnotation = "hawtio.hawt.io/configversion"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -150,6 +153,15 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
+	config := &corev1.ConfigMap{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: request.Name + "-config"}, config)
+	if err != nil && errors.IsNotFound(err) {
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get config map")
+		return reconcile.Result{}, err
+	}
+
 	deployment := &appsv1.DeploymentConfig{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
@@ -166,6 +178,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 					reqLogger.Error(err, "Failed to reconcile from deployment")
 					return reconcile.Result{}, err
 				}
+				// TODO: factorize updates instead of requeuing
+				return reconcile.Result{Requeue: true}, nil
 			}
 		} else {
 			if replicas := instance.Spec.ReplicaCount; deployment.Spec.Replicas != replicas {
@@ -176,6 +190,14 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 					reqLogger.Error(err, "Failed to reconcile to deployment")
 					return reconcile.Result{}, err
 				}
+			}
+		}
+		if configVersion := config.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
+			deployment.Annotations[configVersionAnnotation] = configVersion
+			err := r.client.Update(context.TODO(), deployment)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile config map to deployment")
+				return reconcile.Result{}, err
 			}
 		}
 	}
