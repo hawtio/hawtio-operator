@@ -31,8 +31,8 @@ import (
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	hawtioTemplatePath = "templates/deployment-namespace.yaml"
-	hawtioRevisionAnnotation = "hawtio.hawt.io/hawtiorevision"
+	hawtioTemplatePath      = "templates/deployment-namespace.yaml"
+	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
 	configVersionAnnotation = "hawtio.hawt.io/configversion"
 )
 
@@ -106,9 +106,9 @@ var _ reconcile.Reconciler = &ReconcileHawtio{}
 type ReconcileHawtio struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	config *rest.Config
-	scheme *runtime.Scheme
+	client   client.Client
+	config   *rest.Config
+	scheme   *runtime.Scheme
 	template *template.TemplateProcessor
 }
 
@@ -170,7 +170,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get deployment")
 		return reconcile.Result{}, err
 	} else {
-		if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioRevisionAnnotation] == instance.GetResourceVersion() {
+		if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
 			if replicas := deployment.Spec.Replicas; instance.Spec.ReplicaCount != replicas {
 				instance.Spec.ReplicaCount = replicas
 				err := r.client.Update(context.TODO(), instance)
@@ -183,7 +183,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		} else {
 			if replicas := instance.Spec.ReplicaCount; deployment.Spec.Replicas != replicas {
-				deployment.Annotations[hawtioRevisionAnnotation] = instance.GetResourceVersion()
+				deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
 				deployment.Spec.Replicas = replicas
 				err := r.client.Update(context.TODO(), deployment)
 				if err != nil {
@@ -283,10 +283,10 @@ func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr 
 		annotations := uo.GetAnnotations()
 		if annotations == nil {
 			annotations = map[string]string{
-				hawtioRevisionAnnotation: cr.GetResourceVersion(),
+				hawtioVersionAnnotation: cr.GetResourceVersion(),
 			}
 		} else {
-			annotations[hawtioRevisionAnnotation] = cr.GetResourceVersion()
+			annotations[hawtioVersionAnnotation] = cr.GetResourceVersion()
 		}
 		uo.SetAnnotations(annotations)
 
