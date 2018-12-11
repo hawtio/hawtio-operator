@@ -170,6 +170,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get deployment")
 		return reconcile.Result{}, err
 	} else {
+		updateDeployment := false
+
 		if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
 			if replicas := deployment.Spec.Replicas; instance.Spec.ReplicaCount != replicas {
 				instance.Spec.ReplicaCount = replicas
@@ -178,25 +180,24 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 					reqLogger.Error(err, "Failed to reconcile from deployment")
 					return reconcile.Result{}, err
 				}
-				// TODO: factorize updates instead of requeuing
-				return reconcile.Result{Requeue: true}, nil
 			}
 		} else {
 			if replicas := instance.Spec.ReplicaCount; deployment.Spec.Replicas != replicas {
 				deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
 				deployment.Spec.Replicas = replicas
-				err := r.client.Update(context.TODO(), deployment)
-				if err != nil {
-					reqLogger.Error(err, "Failed to reconcile to deployment")
-					return reconcile.Result{}, err
-				}
+				updateDeployment = true
 			}
 		}
+
 		if configVersion := config.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
 			deployment.Annotations[configVersionAnnotation] = configVersion
+			updateDeployment = true
+		}
+
+		if updateDeployment {
 			err := r.client.Update(context.TODO(), deployment)
 			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile config map to deployment")
+				reqLogger.Error(err, "Failed to reconcile to deployment")
 				return reconcile.Result{}, err
 			}
 		}
