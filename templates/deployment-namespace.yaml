@@ -8,7 +8,7 @@ parameters:
   required: true
   value: hawtio
   description: The name assigned to the Hawtio resources
-- name: REPLICA_COUNT
+- name: REPLICAS
   required: true
   value: "1"
   description: The number of desired replicas
@@ -55,7 +55,7 @@ objects:
       app: hawtio
     name: ${APPLICATION_NAME}
   spec:
-    replicas: ${{REPLICA_COUNT}}
+    replicas: ${{REPLICAS}}
     selector:
       app: hawtio
       deploymentconfig: ${APPLICATION_NAME}

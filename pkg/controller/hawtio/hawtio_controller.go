@@ -189,8 +189,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		updateDeployment := false
 
 		if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
-			if replicas := deployment.Spec.Replicas; instance.Spec.ReplicaCount != replicas {
-				instance.Spec.ReplicaCount = replicas
+			if replicas := deployment.Spec.Replicas; instance.Spec.Replicas != replicas {
+				instance.Spec.Replicas = replicas
 				err := r.client.Update(context.TODO(), instance)
 				if err != nil {
 					reqLogger.Error(err, "Failed to reconcile from deployment")
@@ -198,7 +198,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				}
 			}
 		} else {
-			if replicas := instance.Spec.ReplicaCount; deployment.Spec.Replicas != replicas {
+			if replicas := instance.Spec.Replicas; deployment.Spec.Replicas != replicas {
 				deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
 				deployment.Spec.Replicas = replicas
 				updateDeployment = true
@@ -311,8 +311,8 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 
 	parameters := make(map[string]string)
 	parameters["APPLICATION_NAME"] = cr.Name
-	if replicas := cr.Spec.ReplicaCount; replicas > 0 {
-		parameters["REPLICA_COUNT"] = fmt.Sprint(replicas)
+	if replicas := cr.Spec.Replicas; replicas > 0 {
+		parameters["REPLICAS"] = fmt.Sprint(replicas)
 	}
 	if route := cr.Spec.RouteHostName; len(route) > 0 {
 		parameters["ROUTE_HOSTNAME"] = route
