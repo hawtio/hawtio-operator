@@ -5,11 +5,13 @@ import (
 	"fmt"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/openshift/template"
 	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -64,6 +66,12 @@ func Add(mgr manager.Manager) error {
 	}
 	r.template = processor
 
+	deployment, err := openshift.NewDeploymentClient(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r.deployment = deployment
+
 	return add(mgr, r)
 }
 
@@ -82,6 +90,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to secondary resources and requeue the owner Hawtio
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &hawtiov1alpha1.Hawtio{},
+	})
+	if err != nil {
+		return err
+	}
 	err = c.Watch(&source.Kind{Type: &routev1.Route{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &hawtiov1alpha1.Hawtio{},
@@ -106,10 +121,11 @@ var _ reconcile.Reconciler = &ReconcileHawtio{}
 type ReconcileHawtio struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client   client.Client
-	config   *rest.Config
-	scheme   *runtime.Scheme
-	template *template.TemplateProcessor
+	client     client.Client
+	config     *rest.Config
+	scheme     *runtime.Scheme
+	template   *template.TemplateProcessor
+	deployment *openshift.DeploymentClient
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -189,7 +205,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 
+		requestDeployment := false
 		if configVersion := config.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
+			if len(deployment.Annotations[configVersionAnnotation]) > 0 {
+				requestDeployment = true
+			}
 			deployment.Annotations[configVersionAnnotation] = configVersion
 			updateDeployment = true
 		}
@@ -198,6 +218,22 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			err := r.client.Update(context.TODO(), deployment)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile to deployment")
+				return reconcile.Result{}, err
+			}
+		}
+		if requestDeployment {
+			rollout := &appsv1.DeploymentRequest{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "DeploymentRequest",
+					APIVersion: "apps.openshift.io/v1",
+				},
+				Name:   request.NamespacedName.Name,
+				Latest: true,
+				Force:  true,
+			}
+			_, err := r.deployment.Deploy(rollout, request.Namespace)
+			if err != nil {
+				reqLogger.Error(err, "Failed to rollout deployment")
 				return reconcile.Result{}, err
 			}
 		}
