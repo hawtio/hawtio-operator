@@ -270,15 +270,15 @@
   version = "v3.9.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:0d00888f3a9fc3e98000280cbcfc47c5173fabb331b836a48f53cc76545faa12"
+  digest = "1:25c007d9329a7240b7011d3f733dbfb5ec797af09c21a89a159439b0497e8e21"
   name = "github.com/operator-framework/operator-sdk"
   packages = [
     "pkg/k8sutil",
     "version",
   ]
   pruneopts = "NT"
-  revision = "28401acc96452170cbe3d3fffcbb5a9a2b75dd64"
+  revision = "15244d60ef7e328531a4f150a05b1fdabf9cc1ae"
+  version = "v0.3.0"
 
 [[projects]]
   digest = "1:93b1d84c5fa6d1ea52f4114c37714cddd84d5b78f151b62bb101128dd51399bf"
@@ -758,9 +758,11 @@
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/runtime/serializer",
+    "k8s.io/apimachinery/pkg/types",
     "k8s.io/apimachinery/pkg/util/yaml",
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
+    "k8s.io/client-go/rest",
     "k8s.io/code-generator/cmd/client-gen",
     "k8s.io/code-generator/cmd/conversion-gen",
     "k8s.io/code-generator/cmd/deepcopy-gen",

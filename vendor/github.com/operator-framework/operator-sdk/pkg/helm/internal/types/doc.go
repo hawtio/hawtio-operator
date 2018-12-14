@@ -12,19 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package framework
-
-import (
-	"os"
-	"testing"
-
-	log "github.com/sirupsen/logrus"
-)
-
-func MainEntry(m *testing.M) {
-	if err := setup(); err != nil {
-		log.Fatalf("failed to set up framework: (%v)", err)
-	}
-
-	os.Exit(m.Run())
-}
+// Package types contains types used by various components of the Helm
+// operator
+package types
