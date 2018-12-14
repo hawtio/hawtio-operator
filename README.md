@@ -22,6 +22,10 @@ $ kubectl get hawtio
 NAME             AGE   URL                                           IMAGE
 example-hawtio   16s   https://example-hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:latest
 
+# Scale Hawtio
+$ kubectl scale hawtio example-hawtio --replicas=3
+hawtio.hawt.io/example-hawtio scaled
+
 # Delete Hawtio
 $ kubectl delete hawtio example-hawtio
 hawtio.hawt.io "example-hawtio" deleted
