@@ -11,6 +11,12 @@ spec:
     singular: hawtio
   scope: Namespaced
   version: v1alpha1
+  subresources:
+    status: {}
+    scale:
+      specReplicasPath: .spec.replicas
+      statusReplicasPath: .status.replicas
+      labelSelectorPath: .status.labelSelector
   additionalPrinterColumns:
     - name: Age
       description: Creation date
