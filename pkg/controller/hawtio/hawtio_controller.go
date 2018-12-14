@@ -250,7 +250,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	} else {
 		if url := util.GetRouteURL(route); instance.Status.URL != url {
 			instance.Status.URL = url
-			err := r.client.Update(context.TODO(), instance)
+			err := r.client.Status().Update(context.TODO(), instance)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile from route")
 				return reconcile.Result{}, err
@@ -275,7 +275,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 		if instance.Status.Image != image {
 			instance.Status.Image = image
-			err := r.client.Update(context.TODO(), instance)
+			err := r.client.Status().Update(context.TODO(), instance)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile from image stream")
 				return reconcile.Result{}, err
