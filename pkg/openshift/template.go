@@ -1,4 +1,4 @@
-package template
+package openshift
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ type TemplateProcessor struct {
 	restClient *rest.RESTClient
 }
 
-func NewProcessor(inConfig *rest.Config) (*TemplateProcessor, error) {
+func NewTemplateProcessor(inConfig *rest.Config) (*TemplateProcessor, error) {
 	config := rest.CopyConfig(inConfig)
 	config.GroupVersion = &schema.GroupVersion{
 		Group:   "template.openshift.io",

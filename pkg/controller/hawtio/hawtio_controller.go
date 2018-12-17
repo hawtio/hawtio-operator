@@ -6,7 +6,6 @@ import (
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
-	"github.com/hawtio/hawtio-operator/pkg/openshift/template"
 	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
 
 	corev1 "k8s.io/api/core/v1"
@@ -62,7 +61,7 @@ func Add(mgr manager.Manager) error {
 		scheme: mgr.GetScheme(),
 	}
 
-	processor, err := template.NewProcessor(mgr.GetConfig())
+	processor, err := openshift.NewTemplateProcessor(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
@@ -135,7 +134,7 @@ type ReconcileHawtio struct {
 	client     client.Client
 	config     *rest.Config
 	scheme     *runtime.Scheme
-	template   *template.TemplateProcessor
+	template   *openshift.TemplateProcessor
 	deployment *openshift.DeploymentClient
 }
 
