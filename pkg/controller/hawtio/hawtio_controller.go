@@ -35,7 +35,7 @@ import (
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	hawtioTemplatePath      = "templates/deployment-namespace.yaml"
+	hawtioTemplatePath      = "templates/deployment.yaml"
 	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
 	configVersionAnnotation = "hawtio.hawt.io/configversion"
 )
@@ -173,6 +173,14 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Error while retrieving runtime objects")
 		return reconcile.Result{}, err
 	}
+
+	// Add OAuth client
+	sa, err := newServiceAccountAsOauthClient(request.Name)
+	if err != nil {
+		reqLogger.Error(err, "Error while creating OAuth client")
+		return reconcile.Result{}, err
+	}
+	objs = append(objs, sa)
 
 	err = r.createObjects(objs, request.Namespace, instance)
 	if err != nil {

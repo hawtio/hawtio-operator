@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	serializerjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	cgoscheme "k8s.io/client-go/kubernetes/scheme"
 
@@ -23,9 +24,10 @@ import (
 )
 
 var (
-	scheme      = runtime.NewScheme()
-	codecs      = serializer.NewCodecFactory(scheme)
-	decoderFunc = decoder
+	scheme         = runtime.NewScheme()
+	codecs         = serializer.NewCodecFactory(scheme)
+	decoderFunc    = decoder
+	jsonSerializer = serializerjson.NewSerializer(serializerjson.DefaultMetaFactory, scheme, scheme, false)
 )
 
 func init() {
@@ -52,6 +54,10 @@ func init() {
 func decoder(gv schema.GroupVersion, codecs serializer.CodecFactory) runtime.Decoder {
 	codec := codecs.UniversalDecoder(gv)
 	return codec
+}
+
+func Encode(obj runtime.Object) ([]byte, error) {
+	return runtime.Encode(jsonSerializer, obj)
 }
 
 func RuntimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object, error) {
