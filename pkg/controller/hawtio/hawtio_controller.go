@@ -28,6 +28,7 @@ import (
 
 	appsv1 "github.com/openshift/api/apps/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 )
@@ -48,6 +49,10 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 	err = imagev1.AddToScheme(mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	err = oauthv1.AddToScheme(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
@@ -174,25 +179,34 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	// Add OAuth client
+	if !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) && !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		err := fmt.Errorf("Unsupported type: %s", instance.Spec.Type)
+		return reconcile.Result{}, err
+	}
+
 	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
+		// Add service account as OAuth client
 		sa, err := newServiceAccountAsOauthClient(request.Name)
 		if err != nil {
 			reqLogger.Error(err, "Error while creating OAuth client")
 			return reconcile.Result{}, err
 		}
 		objs = append(objs, sa)
-	} else if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
-		// TODO
-	} else {
-		err := fmt.Errorf("Unsupported type: %s", instance.Spec.Type)
-		return reconcile.Result{}, err
 	}
 
 	err = r.createObjects(objs, request.Namespace, instance)
 	if err != nil {
 		reqLogger.Error(err, "Error creating runtime objects")
 		return reconcile.Result{}, err
+	}
+
+	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		// Add OAuth client
+		oauthclient := newOAuthClient()
+		err = r.client.Create(context.TODO(), oauthclient)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return reconcile.Result{}, err
+		}
 	}
 
 	config := &corev1.ConfigMap{}
@@ -280,6 +294,28 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile from route")
 				return reconcile.Result{}, err
+			}
+		}
+	}
+
+	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		// Add route URL to OAuthClient authorized redirect URIs
+		oc := &oauthv1.OAuthClient{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: "hawtio"}, oc)
+		if err != nil && errors.IsNotFound(err) {
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to get OAuth client")
+			return reconcile.Result{}, err
+		} else {
+			uri := util.GetRouteURL(route)
+			if !oauthClientContainsRedirectURI(oc, uri) {
+				oc.RedirectURIs = append(oc.RedirectURIs, uri)
+				err := r.client.Update(context.TODO(), oc)
+				if err != nil {
+					reqLogger.Error(err, "Failed to reconcile OAuth client")
+					return reconcile.Result{}, err
+				}
 			}
 		}
 	}

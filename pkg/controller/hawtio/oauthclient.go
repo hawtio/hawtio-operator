@@ -44,3 +44,25 @@ func newServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error)
 	}
 	return sa, nil
 }
+
+func newOAuthClient() *oauthv1.OAuthClient {
+	oc := &oauthv1.OAuthClient{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "OAuthClient",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "hawtio",
+		},
+	}
+	return oc
+}
+
+func oauthClientContainsRedirectURI(oc *oauthv1.OAuthClient, uri string) bool {
+	for _, u := range oc.RedirectURIs {
+		if u == uri {
+			return true
+		}
+	}
+	return false
+}
