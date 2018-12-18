@@ -3,6 +3,7 @@ package hawtio
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
@@ -174,12 +175,19 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Add OAuth client
-	sa, err := newServiceAccountAsOauthClient(request.Name)
-	if err != nil {
-		reqLogger.Error(err, "Error while creating OAuth client")
+	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
+		sa, err := newServiceAccountAsOauthClient(request.Name)
+		if err != nil {
+			reqLogger.Error(err, "Error while creating OAuth client")
+			return reconcile.Result{}, err
+		}
+		objs = append(objs, sa)
+	} else if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		// TODO
+	} else {
+		err := fmt.Errorf("Unsupported type: %s", instance.Spec.Type)
 		return reconcile.Result{}, err
 	}
-	objs = append(objs, sa)
 
 	err = r.createObjects(objs, request.Namespace, instance)
 	if err != nil {

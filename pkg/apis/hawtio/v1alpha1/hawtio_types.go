@@ -7,12 +7,27 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// HawtioDeploymentType defines the possible deployment types
+type HawtioDeploymentType = string
+
+const (
+	// ClusterHawtioDeploymentType is the deployment type capable of discovering
+	// and managing applications accross all namespaces the authenticated user
+	// has access to.
+	ClusterHawtioDeploymentType HawtioDeploymentType = "Cluster"
+
+	// NamespaceHawtioDeploymentType is the deployment type capable of discovering
+	// and managing applications within the deployment namespace.
+	NamespaceHawtioDeploymentType HawtioDeploymentType = "Namespace"
+)
+
 // HawtioSpec defines the desired state of Hawtio
 type HawtioSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	Replicas      int32  `json:"replicas,omitempty"`
-	RouteHostName string `json:"routeHostName,omitempty"`
+	Type          HawtioDeploymentType `json:"type,omitempty"`
+	Replicas      int32                `json:"replicas,omitempty"`
+	RouteHostName string               `json:"routeHostName,omitempty"`
 }
 
 // HawtioStatus defines the observed state of Hawtio
