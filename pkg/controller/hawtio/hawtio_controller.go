@@ -373,6 +373,12 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 
 	parameters := make(map[string]string)
 	parameters["APPLICATION_NAME"] = cr.Name
+	parameters["DEPLOYMENT_TYPE"] = cr.Spec.Type
+
+	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		parameters["OAUTH_CLIENT"] = "hawtio"
+	}
+
 	if replicas := cr.Spec.Replicas; replicas > 0 {
 		parameters["REPLICAS"] = fmt.Sprint(replicas)
 	}

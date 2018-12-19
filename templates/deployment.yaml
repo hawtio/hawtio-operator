@@ -8,6 +8,16 @@ parameters:
   required: true
   value: hawtio
   description: The name assigned to the Hawtio resources
+- name: DEPLOYMENT_TYPE
+  displayName: Deployment Type
+  required: true
+  value: namespace
+  description: The deployment type, either "cluster" or "namespace"
+- name: OAUTH_CLIENT
+  displayName: OAuth Client Name
+  required: true
+  value: ${APPLICATION_NAME}
+  description: The OAuth client name
 - name: REPLICAS
   required: true
   value: "1"
@@ -97,13 +107,13 @@ objects:
             timeoutSeconds: 1
           env:
           - name: HAWTIO_ONLINE_MODE
-            value: namespace
+            value: ${DEPLOYMENT_TYPE}
           - name: HAWTIO_ONLINE_NAMESPACE
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
           - name: HAWTIO_OAUTH_CLIENT_ID
-            value: ${APPLICATION_NAME}
+            value: ${OAUTH_CLIENT}
           resources:
             requests:
               cpu: 0.2
