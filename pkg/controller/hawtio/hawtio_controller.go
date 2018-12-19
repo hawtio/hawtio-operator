@@ -41,6 +41,7 @@ const (
 	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
 	configVersionAnnotation = "hawtio.hawt.io/configversion"
 	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
+	oauthClientName         = "hawtio"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -329,7 +330,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		// Add route URL to OAuthClient authorized redirect URIs
 		oc := &oauthv1.OAuthClient{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: "hawtio"}, oc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
 		if err != nil && errors.IsNotFound(err) {
 			return reconcile.Result{Requeue: true}, nil
 		} else if err != nil {
@@ -337,7 +338,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			return reconcile.Result{}, err
 		} else {
 			uri := osutil.GetRouteURL(route)
-			if !oauthClientContainsRedirectURI(oc, uri) {
+			if ok, _ := oauthClientContainsRedirectURI(oc, uri); !ok {
 				oc.RedirectURIs = append(oc.RedirectURIs, uri)
 				err := r.client.Update(context.TODO(), oc)
 				if err != nil {
@@ -460,6 +461,23 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	}
 	if ok {
 		return nil
+	}
+
+	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		// Remove URI for OAuth client
+		oc := &oauthv1.OAuthClient{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
+		if err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("Failed to get OAuth client: %v", err)
+		} else {
+			updated := removeRedirectURIFromOauthClient(oc, cr.Status.URL)
+			if updated {
+				err := r.client.Update(context.TODO(), oc)
+				if err != nil {
+					return fmt.Errorf("Failed to remove redirect URI from OAuth client: %v", err)
+				}
+			}
+		}
 	}
 
 	_, err = util.RemoveFinalizer(cr, hawtioFinalizer)

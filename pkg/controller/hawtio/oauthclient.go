@@ -52,17 +52,26 @@ func newOAuthClient() *oauthv1.OAuthClient {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "hawtio",
+			Name: oauthClientName,
 		},
 	}
 	return oc
 }
 
-func oauthClientContainsRedirectURI(oc *oauthv1.OAuthClient, uri string) bool {
-	for _, u := range oc.RedirectURIs {
+func oauthClientContainsRedirectURI(oc *oauthv1.OAuthClient, uri string) (bool, int) {
+	for i, u := range oc.RedirectURIs {
 		if u == uri {
-			return true
+			return true, i
 		}
+	}
+	return false, -1
+}
+
+func removeRedirectURIFromOauthClient(oc *oauthv1.OAuthClient, uri string) bool {
+	ok, i := oauthClientContainsRedirectURI(oc, uri)
+	if ok {
+		oc.RedirectURIs = append(oc.RedirectURIs[:i], oc.RedirectURIs[i+1:]...)
+		return true
 	}
 	return false
 }
