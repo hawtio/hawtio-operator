@@ -7,7 +7,8 @@ import (
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
-	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
+	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -39,6 +40,7 @@ const (
 	hawtioTemplatePath      = "templates/deployment.yaml"
 	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
 	configVersionAnnotation = "hawtio.hawt.io/configversion"
+	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -167,6 +169,31 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
+	// Delete phase
+	if instance.GetDeletionTimestamp() != nil {
+		err = r.deletion(instance)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Deletion failed: %v", err)
+		}
+		return reconcile.Result{}, nil
+	}
+
+	ok, err := util.HasFinalizer(instance, hawtioFinalizer)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("Failed to read finalizer: %v", err)
+	}
+	if !ok {
+		err = util.AddFinalizer(instance, hawtioFinalizer)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Failed to set finalizer: %v", err)
+		}
+		err = r.client.Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Failed to update finalizer: %v", err)
+		}
+	}
+
+	// Install phase
 	exts, err := r.processTemplate(instance, request)
 	if err != nil {
 		reqLogger.Error(err, "Error while processing template", "template", hawtioTemplatePath)
@@ -209,6 +236,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
+	// Update phase
 	config := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: request.Name + "-config"}, config)
 	if err != nil && errors.IsNotFound(err) {
@@ -288,7 +316,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get route")
 		return reconcile.Result{}, err
 	} else {
-		if url := util.GetRouteURL(route); instance.Status.URL != url {
+		if url := osutil.GetRouteURL(route); instance.Status.URL != url {
 			instance.Status.URL = url
 			err := r.client.Status().Update(context.TODO(), instance)
 			if err != nil {
@@ -308,7 +336,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			reqLogger.Error(err, "Failed to get OAuth client")
 			return reconcile.Result{}, err
 		} else {
-			uri := util.GetRouteURL(route)
+			uri := osutil.GetRouteURL(route)
 			if !oauthClientContainsRedirectURI(oc, uri) {
 				oc.RedirectURIs = append(oc.RedirectURIs, uri)
 				err := r.client.Update(context.TODO(), oc)
@@ -366,7 +394,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 }
 
 func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request reconcile.Request) ([]runtime.RawExtension, error) {
-	res, err := util.LoadKubernetesResourceFromFile(hawtioTemplatePath)
+	res, err := osutil.LoadKubernetesResourceFromFile(hawtioTemplatePath)
 	if err != nil {
 		return nil, fmt.Errorf("Error reading template: %s", err)
 	}
@@ -391,7 +419,7 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 
 func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr *hawtiov1alpha1.Hawtio) error {
 	for _, o := range objects {
-		uo, err := util.UnstructuredFromRuntimeObject(o)
+		uo, err := osutil.UnstructuredFromRuntimeObject(o)
 		if err != nil {
 			return fmt.Errorf("failed to transform object: %v", err)
 		}
@@ -425,11 +453,33 @@ func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr 
 	return nil
 }
 
+func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
+	ok, err := util.HasFinalizer(cr, "foregroundDeletion")
+	if err != nil {
+		return err
+	}
+	if ok {
+		return nil
+	}
+
+	_, err = util.RemoveFinalizer(cr, hawtioFinalizer)
+	if err != nil {
+		return err
+	}
+
+	err = r.client.Update(context.TODO(), cr)
+	if err != nil {
+		return fmt.Errorf("Failed to remove finalizer: %v", err)
+	}
+
+	return nil
+}
+
 func getRuntimeObjects(exts []runtime.RawExtension) ([]runtime.Object, error) {
 	objects := make([]runtime.Object, 0)
 
 	for _, ext := range exts {
-		res, err := util.LoadKubernetesResource(ext.Raw)
+		res, err := osutil.LoadKubernetesResource(ext.Raw)
 		if err != nil {
 			return nil, err
 		}
