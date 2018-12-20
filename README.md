@@ -26,6 +26,9 @@ example-hawtio   16s   https://example-hawtio.192.168.64.38.nip.io   docker.io/h
 $ kubectl scale hawtio example-hawtio --replicas=3
 hawtio.hawt.io/example-hawtio scaled
 
+# Edit Hawtio config
+$ kubectl edit configmap example-hawtio-config
+
 # Delete Hawtio
 $ kubectl delete hawtio example-hawtio
 hawtio.hawt.io "example-hawtio" deleted
