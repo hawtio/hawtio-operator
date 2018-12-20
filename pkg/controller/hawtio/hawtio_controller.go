@@ -469,13 +469,12 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
 		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("Failed to get OAuth client: %v", err)
-		} else {
-			updated := removeRedirectURIFromOauthClient(oc, cr.Status.URL)
-			if updated {
-				err := r.client.Update(context.TODO(), oc)
-				if err != nil {
-					return fmt.Errorf("Failed to remove redirect URI from OAuth client: %v", err)
-				}
+		}
+		updated := removeRedirectURIFromOauthClient(oc, cr.Status.URL)
+		if updated {
+			err := r.client.Update(context.TODO(), oc)
+			if err != nil {
+				return fmt.Errorf("Failed to remove redirect URI from OAuth client: %v", err)
 			}
 		}
 	}
