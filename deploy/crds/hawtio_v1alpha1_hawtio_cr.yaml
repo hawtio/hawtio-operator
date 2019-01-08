@@ -3,12 +3,15 @@ kind: Hawtio
 metadata:
   name: example-hawtio
 spec:
-  # the deployment type, either "cluster" or "namespace":
+  # The deployment type, either "cluster" or "namespace":
   # - cluster: Hawtio is capable of discovering and managing
   #   applications accross all namespaces the authenticated user
   #   has access to.
   # - namespace: Hawtio is capable of discovering and managing
   #   applications within the deployment namespace.
   type: namespace
+  # The number of desired replicas
   replicas: 1
+  # The edge host name of the route that exposes the Hawtio service
+  # externally
   # routeHostName: hawtio.192.168.64.38.nip.io
