@@ -16,7 +16,6 @@ parameters:
 - name: OAUTH_CLIENT
   displayName: OAuth Client Name
   required: true
-  value: ${APPLICATION_NAME}
   description: The OAuth client name
 - name: REPLICAS
   required: true

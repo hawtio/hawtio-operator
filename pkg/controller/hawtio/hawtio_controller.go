@@ -194,6 +194,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
+	// Invariant checks
+	if !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) && !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		err := fmt.Errorf("Unsupported type: %s", instance.Spec.Type)
+		return reconcile.Result{}, err
+	}
+
 	// Install phase
 	exts, err := r.processTemplate(instance, request)
 	if err != nil {
@@ -204,11 +210,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	objs, err := getRuntimeObjects(exts)
 	if err != nil {
 		reqLogger.Error(err, "Error while retrieving runtime objects")
-		return reconcile.Result{}, err
-	}
-
-	if !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) && !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
-		err := fmt.Errorf("Unsupported type: %s", instance.Spec.Type)
 		return reconcile.Result{}, err
 	}
 
@@ -405,7 +406,9 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 	parameters["DEPLOYMENT_TYPE"] = cr.Spec.Type
 
 	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
-		parameters["OAUTH_CLIENT"] = "hawtio"
+		parameters["OAUTH_CLIENT"] = oauthClientName
+	} else if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
+		parameters["OAUTH_CLIENT"] = cr.Name
 	}
 
 	if replicas := cr.Spec.Replicas; replicas > 0 {
