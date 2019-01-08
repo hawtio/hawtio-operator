@@ -239,7 +239,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Update phase
 	config := &corev1.ConfigMap{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: request.Name + "-config"}, config)
+	err = r.client.Get(context.TODO(), request.NamespacedName, config)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {

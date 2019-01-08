@@ -28,7 +28,7 @@ objects:
 - apiVersion: v1
   kind: ConfigMap
   metadata:
-    name: ${APPLICATION_NAME}-config
+    name: ${APPLICATION_NAME}
   data:
     hawtconfig.json: |
       {
@@ -133,10 +133,10 @@ objects:
         volumes:
         - name: hawtio-online
           configMap:
-            name: ${APPLICATION_NAME}-config
+            name: ${APPLICATION_NAME}
         - name: hawtio-integration
           configMap:
-            name: ${APPLICATION_NAME}-config
+            name: ${APPLICATION_NAME}
         - name: hawtio-online-tls
           secret:
             secretName: ${APPLICATION_NAME}-tls
