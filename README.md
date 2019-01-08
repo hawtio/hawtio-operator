@@ -27,7 +27,8 @@ $ kubectl scale hawtio example-hawtio --replicas=3
 hawtio.hawt.io/example-hawtio scaled
 
 # Edit Hawtio config
-$ kubectl edit configmap example-hawtio-config
+$ kubectl edit configmap example-hawtio
+configmap/example-hawtio edited
 
 # Delete Hawtio
 $ kubectl delete hawtio example-hawtio
