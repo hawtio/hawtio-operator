@@ -13,5 +13,9 @@ spec:
   # The number of desired replicas
   replicas: 1
   # The edge host name of the route that exposes the Hawtio service
-  # externally
+  # externally. If not specified, it is automatically generated and
+  # is of the form:
+  #   <name>[-<namespace>].<suffix>
+  # where <suffix> is the default routing subdomain as configured for
+  # the cluster.
   # routeHostName: hawtio.192.168.64.38.nip.io
