@@ -37,10 +37,11 @@ import (
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	hawtioTemplatePath      = "templates/deployment.yaml"
-	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
 	configVersionAnnotation = "hawtio.hawt.io/configversion"
 	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
+	hawtioTemplatePath      = "templates/deployment.yaml"
+	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
+	hostGeneratedAnnotation = "openshift.io/host.generated"
 	oauthClientName         = "hawtio"
 )
 
@@ -309,7 +310,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	// TODO: reconcile route from CR
 	route := &routev1.Route{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, route)
 	if err != nil && errors.IsNotFound(err) {
@@ -323,6 +323,15 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			err := r.client.Status().Update(context.TODO(), instance)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile from route")
+				return reconcile.Result{}, err
+			}
+		}
+		// Reconcile route host from routeHostName field
+		if hostName := instance.Spec.RouteHostName; len(hostName) > 0 && hostName != route.Spec.Host {
+			route.Spec.Host = hostName
+			err := r.client.Update(context.TODO(), route)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile route from CR")
 				return reconcile.Result{}, err
 			}
 		}
