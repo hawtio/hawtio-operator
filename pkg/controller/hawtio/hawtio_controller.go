@@ -328,12 +328,27 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 		// Reconcile route host from routeHostName field
 		if hostName := instance.Spec.RouteHostName; len(hostName) > 0 && hostName != route.Spec.Host {
+			if _, ok := route.Annotations[hostGeneratedAnnotation]; ok {
+				delete(route.Annotations, hostGeneratedAnnotation)
+			}
 			route.Spec.Host = hostName
 			err := r.client.Update(context.TODO(), route)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile route from CR")
 				return reconcile.Result{}, err
 			}
+		}
+		if hostName := instance.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
+			// Emptying route host is ignored so it's not possible to re-generate the host
+			// See https://github.com/openshift/origin/pull/9425
+			// In that case, let's delete the route
+			err := r.client.Delete(context.TODO(), route)
+			if err != nil {
+				reqLogger.Error(err, "Failed to delete route to auto-generate hostname")
+				return reconcile.Result{}, err
+			}
+			// And requeue to create a new route in the next reconcile loop
+			return reconcile.Result{Requeue: true}, nil
 		}
 	}
 

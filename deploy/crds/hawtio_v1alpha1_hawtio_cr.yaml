@@ -18,4 +18,6 @@ spec:
   #   <name>[-<namespace>].<suffix>
   # where <suffix> is the default routing subdomain as configured for
   # the cluster.
-  # routeHostName: hawtio.192.168.64.38.nip.io
+  # Note that the operator will recreate the route if the field is emptied,
+  # so that the host is re-generated.
+  # routeHostName: example-hawtio.192.168.64.38.nip.io
