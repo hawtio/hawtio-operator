@@ -26,6 +26,14 @@ example-hawtio   16s   https://example-hawtio.192.168.64.38.nip.io   docker.io/h
 $ kubectl scale hawtio example-hawtio --replicas=3
 hawtio.hawt.io/example-hawtio scaled
 
+# Edit Hawtio resource
+$ kubectl patch hawtio example-hawtio --type='merge' -p '{"spec":{"routeHostName":"hawtio.192.168.64.38.nip.io"}}'
+hawtio.hawt.io/example-hawtio patched
+# Check the status has updated accordingly
+$ kubectl get hawtio
+NAME             AGE   URL                                   IMAGE
+example-hawtio   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:latest
+
 # Edit Hawtio config
 $ kubectl edit configmap example-hawtio
 configmap/example-hawtio edited
