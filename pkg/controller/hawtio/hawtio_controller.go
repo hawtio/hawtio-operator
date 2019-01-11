@@ -196,7 +196,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Invariant checks
-	if !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) && !strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+	isClusterDeployment := strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType)
+	isNamespaceDeployment := strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
+
+	if !isNamespaceDeployment && !isClusterDeployment {
 		err := fmt.Errorf("Unsupported type: %s", instance.Spec.Type)
 		return reconcile.Result{}, err
 	}
@@ -214,7 +217,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
+	if isNamespaceDeployment {
 		// Add service account as OAuth client
 		sa, err := newServiceAccountAsOauthClient(request.Name)
 		if err != nil {
@@ -230,7 +233,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+	if isClusterDeployment {
 		// Add OAuth client
 		oauthclient := newOAuthClient()
 		err = r.client.Create(context.TODO(), oauthclient)
@@ -317,59 +320,72 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get route")
 		return reconcile.Result{}, err
-	} else {
-		if url := osutil.GetRouteURL(route); instance.Status.URL != url {
-			instance.Status.URL = url
-			err := r.client.Status().Update(context.TODO(), instance)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile from route")
-				return reconcile.Result{}, err
-			}
-		}
-		// Reconcile route host from routeHostName field
-		if hostName := instance.Spec.RouteHostName; len(hostName) > 0 && hostName != route.Spec.Host {
-			if _, ok := route.Annotations[hostGeneratedAnnotation]; ok {
-				delete(route.Annotations, hostGeneratedAnnotation)
-			}
-			route.Spec.Host = hostName
-			err := r.client.Update(context.TODO(), route)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile route from CR")
-				return reconcile.Result{}, err
-			}
-		}
-		if hostName := instance.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
-			// Emptying route host is ignored so it's not possible to re-generate the host
-			// See https://github.com/openshift/origin/pull/9425
-			// In that case, let's delete the route
-			err := r.client.Delete(context.TODO(), route)
-			if err != nil {
-				reqLogger.Error(err, "Failed to delete route to auto-generate hostname")
-				return reconcile.Result{}, err
-			}
-			// And requeue to create a new route in the next reconcile loop
-			return reconcile.Result{Requeue: true}, nil
-		}
 	}
 
-	if strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
-		// Add route URL to OAuthClient authorized redirect URIs
-		oc := &oauthv1.OAuthClient{}
+	// Reconcile route host from routeHostName field
+	if hostName := instance.Spec.RouteHostName; len(hostName) > 0 && hostName != route.Spec.Host {
+		if _, ok := route.Annotations[hostGeneratedAnnotation]; ok {
+			delete(route.Annotations, hostGeneratedAnnotation)
+		}
+		route.Spec.Host = hostName
+		err := r.client.Update(context.TODO(), route)
+		if err != nil {
+			reqLogger.Error(err, "Failed to reconcile route from CR")
+			return reconcile.Result{}, err
+		}
+	}
+	if hostName := instance.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
+		// Emptying route host is ignored so it's not possible to re-generate the host
+		// See https://github.com/openshift/origin/pull/9425
+		// In that case, let's delete the route
+		err := r.client.Delete(context.TODO(), route)
+		if err != nil {
+			reqLogger.Error(err, "Failed to delete route to auto-generate hostname")
+			return reconcile.Result{}, err
+		}
+		// And requeue to create a new route in the next reconcile loop
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	oc := &oauthv1.OAuthClient{}
+	if isClusterDeployment {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
 		if err != nil && errors.IsNotFound(err) {
 			return reconcile.Result{Requeue: true}, nil
 		} else if err != nil {
 			reqLogger.Error(err, "Failed to get OAuth client")
 			return reconcile.Result{}, err
-		} else {
-			uri := osutil.GetRouteURL(route)
-			if ok, _ := oauthClientContainsRedirectURI(oc, uri); !ok {
-				oc.RedirectURIs = append(oc.RedirectURIs, uri)
+		}
+	}
+
+	if url := osutil.GetRouteURL(route); instance.Status.URL != url {
+		if isClusterDeployment {
+			// First remove old URL from OAuthClient
+			if removeRedirectURIFromOauthClient(oc, instance.Status.URL) {
 				err := r.client.Update(context.TODO(), oc)
 				if err != nil {
 					reqLogger.Error(err, "Failed to reconcile OAuth client")
 					return reconcile.Result{}, err
 				}
+			}
+		}
+		instance.Status.URL = url
+		err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to reconcile from route")
+			return reconcile.Result{}, err
+		}
+	}
+
+	if isClusterDeployment {
+		// Add route URL to OAuthClient authorized redirect URIs
+		uri := osutil.GetRouteURL(route)
+		if ok, _ := oauthClientContainsRedirectURI(oc, uri); !ok {
+			oc.RedirectURIs = append(oc.RedirectURIs, uri)
+			err := r.client.Update(context.TODO(), oc)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile OAuth client")
+				return reconcile.Result{}, err
 			}
 		}
 	}
