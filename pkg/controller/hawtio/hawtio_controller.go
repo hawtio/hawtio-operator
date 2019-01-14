@@ -37,12 +37,16 @@ import (
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	configVersionAnnotation = "hawtio.hawt.io/configversion"
 	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
 	hawtioTemplatePath      = "templates/deployment.yaml"
+
+	configVersionAnnotation = "hawtio.hawt.io/configversion"
 	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
 	hawtioTypeAnnotation    = "hawtio.hawt.io/hawtioType"
 	hostGeneratedAnnotation = "openshift.io/host.generated"
+
+	hawtioTypeEnv           = "HAWTIO_ONLINE_MODE"
+
 	oauthClientName         = "hawtio"
 )
 
@@ -278,6 +282,22 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				deployment.Spec.Replicas = replicas
 				updateDeployment = true
 			}
+		}
+
+		// Reconcile environment variables based on deployment type
+		env := deployment.Spec.Template.Spec.Containers[0].Env
+		envVar, _ := util.GetEnvVarByName(env, hawtioTypeEnv)
+		if envVar == nil {
+			err := fmt.Errorf("Environment variable not found: %s", hawtioTypeEnv)
+			return reconcile.Result{}, err
+		}
+		if isClusterDeployment && envVar.Value != strings.ToLower(hawtiov1alpha1.ClusterHawtioDeploymentType) {
+			envVar.Value = strings.ToLower(hawtiov1alpha1.ClusterHawtioDeploymentType)
+			updateDeployment = true
+		}
+		if isNamespaceDeployment && envVar.Value != strings.ToLower(hawtiov1alpha1.NamespaceHawtioDeploymentType) {
+			envVar.Value = strings.ToLower(hawtiov1alpha1.NamespaceHawtioDeploymentType)
+			updateDeployment = true
 		}
 
 		requestDeployment := false
