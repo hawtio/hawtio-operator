@@ -41,6 +41,7 @@ const (
 	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
 	hawtioTemplatePath      = "templates/deployment.yaml"
 	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
+	hawtioTypeAnnotation    = "hawtio.hawt.io/hawtioType"
 	hostGeneratedAnnotation = "openshift.io/host.generated"
 	oauthClientName         = "hawtio"
 )
@@ -422,12 +423,13 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to refresh CR")
 		return reconcile.Result{}, err
 	}
-	// and report back the version into the owned deployment
-	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] != instance.GetResourceVersion() {
+	// and report back the type and version into the owned deployment
+	if annotations := deployment.GetAnnotations(); annotations != nil && (!strings.EqualFold(annotations[hawtioTypeAnnotation], instance.Spec.Type) || annotations[hawtioVersionAnnotation] != instance.GetResourceVersion()) {
+		deployment.Annotations[hawtioTypeAnnotation] = instance.Spec.Type
 		deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
 		err := r.client.Update(context.TODO(), deployment)
 		if err != nil {
-			reqLogger.Error(err, "Failed to refresh deployment owner version")
+			reqLogger.Error(err, "Failed to refresh deployment owner annotations")
 			return reconcile.Result{}, err
 		}
 	}
