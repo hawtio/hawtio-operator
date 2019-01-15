@@ -401,6 +401,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// TODO: OAuth client reconciliation triggered by rollout deployment should ideally
+	// wait until the deployment is successful before deleting resources.
 	oc := &oauthv1.OAuthClient{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
 	if err != nil && errors.IsNotFound(err) {
