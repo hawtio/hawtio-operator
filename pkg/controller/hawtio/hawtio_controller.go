@@ -402,14 +402,16 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	oc := &oauthv1.OAuthClient{}
-	if isClusterDeployment {
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
-		if err != nil && errors.IsNotFound(err) {
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
+	if err != nil && errors.IsNotFound(err) {
+		// OAuth client should not be found for namespace deployment type
+		// except when it changes from "cluster" to "namespace"
+		if isClusterDeployment {
 			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to get OAuth client")
-			return reconcile.Result{}, err
 		}
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get OAuth client")
+		return reconcile.Result{}, err
 	}
 
 	if url := osutil.GetRouteURL(route); instance.Status.URL != url {
@@ -436,6 +438,16 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		uri := osutil.GetRouteURL(route)
 		if ok, _ := oauthClientContainsRedirectURI(oc, uri); !ok {
 			oc.RedirectURIs = append(oc.RedirectURIs, uri)
+			err := r.client.Update(context.TODO(), oc)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile OAuth client")
+				return reconcile.Result{}, err
+			}
+		}
+	}
+	if isNamespaceDeployment && oc != nil {
+		uri := osutil.GetRouteURL(route)
+		if removeRedirectURIFromOauthClient(oc, uri) {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
