@@ -2,6 +2,34 @@
 
 A Kubernetes operator based on the Operator SDK that installs and maintains [Hawtio Online](https://github.com/hawtio/hawtio-online) on a cluster.
 
+## Custom Resource
+
+```yaml
+apiVersion: hawt.io/v1alpha1
+kind: Hawtio
+metadata:
+  name: example-hawtio
+spec:
+  # The deployment type, either "cluster" or "namespace":
+  # - cluster: Hawtio is capable of discovering and managing
+  #   applications accross all namespaces the authenticated user
+  #   has access to.
+  # - namespace: Hawtio is capable of discovering and managing
+  #   applications within the deployment namespace.
+  type: cluster
+  # The number of desired replicas
+  replicas: 1
+  # The edge host name of the route that exposes the Hawtio service
+  # externally. If not specified, it is automatically generated and
+  # is of the form:
+  #   <name>[-<namespace>].<suffix>
+  # where <suffix> is the default routing subdomain as configured for
+  # the cluster.
+  # Note that the operator will recreate the route if the field is emptied,
+  # so that the host is re-generated.
+  routeHostName: example-hawtio.192.168.64.38.nip.io
+```
+
 ## Development
 
 ```console
