@@ -26,6 +26,8 @@ install: install-crds
 	kubectl apply -f deploy/service_account.yaml -n ${NAMESPACE}
 	kubectl apply -f deploy/role.yaml -n ${NAMESPACE}
 	kubectl apply -f deploy/role_binding.yaml -n ${NAMESPACE}
+	kubectl apply -f deploy/cluster_role.yaml
+	cat deploy/cluster_role_binding.yaml | sed "s/{{NAMESPACE}}/${NAMESPACE}/g" | kubectl apply -f -
 
 .PHONY: install-crds
 install-crds:
