@@ -30,6 +30,27 @@ spec:
   routeHostName: example-hawtio.192.168.64.38.nip.io
 ```
 
+## Features
+
+The operator covers the following cases:
+
+* Creation
+  * Create deployment config, config map, service and route resources
+  * Create a service account as OAuth client in `namespace` deployment
+  * Create an OAuth client in `cluster` deployment
+* Update
+  * Reconcile the route host from the `routeHostName` field
+  * Support emptying the `routeHostName` field (recreate the route to re-generate the host)
+  * Reconcile the `replicas` count into the deployment config
+  * Reconcile the `replicas` count from deployment config changes
+  * Support changing deployment type from / to `namespace` or `cluster`
+  * Remove previous route host from OAuth client in `cluster` deployment
+  * Trigger a rollout deployment on config map change
+* Deletion
+  * Remove deployment config, config map, service and route resources
+  * Remove the service account as OAuth client in `namespace` deployment
+  * Remove the route URL from the OAuth client authorized redirect URIs in `cluster` deployment
+
 ## Development
 
 ```console
