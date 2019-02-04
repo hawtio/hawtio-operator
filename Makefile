@@ -23,6 +23,7 @@ compile:
 
 .PHONY: install
 install: install-crds
+	kubectl apply -f deploy/service_account.yaml -n ${NAMESPACE}
 	kubectl apply -f deploy/role.yaml -n ${NAMESPACE}
 	kubectl apply -f deploy/role_binding.yaml -n ${NAMESPACE}
 
