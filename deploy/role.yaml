@@ -8,11 +8,7 @@ rules:
   resources:
   - pods
   - services
-  - endpoints
-  - persistentvolumeclaims
-  - events
   - configmaps
-  - secrets
   - serviceaccounts
   verbs:
   - '*'
@@ -20,9 +16,6 @@ rules:
   - apps
   resources:
   - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
   verbs:
   - '*'
 - apiGroups:
