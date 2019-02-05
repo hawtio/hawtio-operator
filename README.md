@@ -35,7 +35,7 @@ spec:
 The operator covers the following cases:
 
 * Creation
-  * Create deployment config, config map, service and route resources
+  * Create image stream, deployment config, config map, service and route resources
   * Create a service account as OAuth client in `namespace` deployment
   * Create an OAuth client in `cluster` deployment
 * Update
@@ -47,7 +47,7 @@ The operator covers the following cases:
   * Remove previous route host from OAuth client in `cluster` deployment
   * Trigger a rollout deployment on config map change
 * Deletion
-  * Remove deployment config, config map, service and route resources
+  * Remove image stream, deployment config, config map, service and route resources
   * Remove the service account as OAuth client in `namespace` deployment
   * Remove the route URL from the OAuth client authorized redirect URIs in `cluster` deployment
 
