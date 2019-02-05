@@ -14,3 +14,5 @@ FROM alpine:3.8
 USER nobody
 
 COPY --from=builder /go/src/github.com/hawtio/hawtio-operator/hawtio-operator /usr/local/bin/hawtio-operator
+
+COPY --from=builder /go/src/github.com/hawtio/hawtio-operator/templates /templates
