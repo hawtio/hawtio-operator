@@ -13,6 +13,7 @@ rules:
   - events
   - configmaps
   - secrets
+  - serviceaccounts
   verbs:
   - '*'
 - apiGroups:
@@ -34,6 +35,18 @@ rules:
   - route.openshift.io
   resources:
   - routes
+  verbs:
+  - '*'
+- apiGroups:
+  - image.openshift.io
+  resources:
+  - imagestreams
+  verbs:
+  - '*'
+- apiGroups:
+  - template.openshift.io
+  resources:
+  - processedtemplates
   verbs:
   - '*'
 - apiGroups:
