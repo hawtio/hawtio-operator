@@ -51,15 +51,30 @@ The operator covers the following cases:
   * Remove the service account as OAuth client in `namespace` deployment
   * Remove the route URL from the OAuth client authorized redirect URIs in `cluster` deployment
 
-## Development
+## Install
+
+To create the required resources by the operator (e.g. custom resource definition, service account, roles, role binding, ...), run the following command:
 
 ```console
-$ make install run
+$ make install
+```
 
-INFO[0000] Running the operator locally.
+The above command must be executed on behalf of a priviledged user, as the creation of the custom resource definition and the cluster role requires _cluster-admin_ permission.
+
+## Deploy
+
+To create the operator deployment, run the following command:
+
+```console
+$ make deploy
+
+kubectl apply -f deploy/operator.yaml -n hawtio
+deployment.apps/hawtio-operator created
 ```
 
 ## Test
+
+To create and operate a Hawtio console resource, you can run the following commands:
 
 ```console
 # Create Hawtio
@@ -99,4 +114,14 @@ replication controller "example-hawtio-2" successfully rolled out
 # Delete Hawtio
 $ kubectl delete hawtio example-hawtio
 hawtio.hawt.io "example-hawtio" deleted
+```
+
+## Development
+
+To run the operator locally in order to speed up development cycle, you can run the following command: 
+
+```console
+$ make run
+
+INFO[0000] Running the operator locally.
 ```
