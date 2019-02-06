@@ -61,6 +61,8 @@ $ make install
 
 The above command must be executed on behalf of a priviledged user, as the creation of the custom resource definition and the cluster role requires _cluster-admin_ permission.
 
+Note that the cluster role creation is optional in case you plan to only deploy Hawtio custom resources with `namespace` deployment type.
+
 ## Deploy
 
 To create the operator deployment, run the following command:
