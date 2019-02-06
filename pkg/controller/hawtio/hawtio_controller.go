@@ -37,8 +37,8 @@ import (
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
-	hawtioTemplatePath      = "templates/deployment.yaml"
+	hawtioFinalizer    = "finalizer.hawtio.hawt.io"
+	hawtioTemplatePath = "templates/deployment.yaml"
 
 	configVersionAnnotation = "hawtio.hawt.io/configversion"
 	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
@@ -48,7 +48,7 @@ const (
 	hawtioTypeEnvVar        = "HAWTIO_ONLINE_MODE"
 	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
 
-	oauthClientName         = "hawtio"
+	oauthClientName = "hawtio"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -88,6 +88,12 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 	r.deployment = deployment
+
+	oauthclient, err := openshift.NewOAuthClientClient(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r.oauthclient = oauthclient
 
 	return add(mgr, r)
 }
@@ -147,11 +153,12 @@ var _ reconcile.Reconciler = &ReconcileHawtio{}
 type ReconcileHawtio struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client     client.Client
-	config     *rest.Config
-	scheme     *runtime.Scheme
-	template   *openshift.TemplateProcessor
-	deployment *openshift.DeploymentClient
+	client      client.Client
+	config      *rest.Config
+	scheme      *runtime.Scheme
+	template    *openshift.TemplateProcessor
+	deployment  *openshift.DeploymentClient
+	oauthclient *openshift.OAuthClientClient
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -401,21 +408,26 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	// TODO: OAuth client reconciliation triggered by rollout deployment should ideally
-	// wait until the deployment is successful before deleting resources.
-	oc := &oauthv1.OAuthClient{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
-	if err != nil && errors.IsNotFound(err) {
-		// OAuth client should not be found for namespace deployment type
-		// except when it changes from "cluster" to "namespace"
-		if isClusterDeployment {
+	// Do not use the default client whose cached informers require
+	// permission to list cluster wide oauth clients
+	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
+	oc, err := r.oauthclient.Get(oauthClientName)
+	if err != nil {
+		if errors.IsNotFound(err) && isClusterDeployment {
+			// OAuth client should not be found for namespace deployment type
+			// except when it changes from "cluster" to "namespace"
 			return reconcile.Result{Requeue: true}, nil
+		} else if !(errors.IsForbidden(err) && isNamespaceDeployment) {
+			// We tolerate 403 for namespace deployment as the operator
+			// may not have permission to read cluster wide resources
+			// like OAuth clients
+			reqLogger.Error(err, "Failed to get OAuth client")
+			return reconcile.Result{}, err
 		}
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get OAuth client")
-		return reconcile.Result{}, err
 	}
 
+	// TODO: OAuth client reconciliation triggered by rollout deployment should ideally
+	// wait until the deployment is successful before deleting resources.
 	if url := osutil.GetRouteURL(route); instance.Status.URL != url {
 		if isClusterDeployment {
 			// First remove old URL from OAuthClient
@@ -448,6 +460,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 	if isNamespaceDeployment && oc != nil {
+		// Clean-up OAuth client if any.
+		// This happens when the deployment type is changed
+		// from "cluster" to "namespace".
 		uri := osutil.GetRouteURL(route)
 		if removeRedirectURIFromOauthClient(oc, uri) {
 			err := r.client.Update(context.TODO(), oc)

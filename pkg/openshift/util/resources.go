@@ -19,6 +19,7 @@ import (
 	authorization "github.com/openshift/api/authorization/v1"
 	build "github.com/openshift/api/build/v1"
 	image "github.com/openshift/api/image/v1"
+	oauth "github.com/openshift/api/oauth/v1"
 	route "github.com/openshift/api/route/v1"
 	template "github.com/openshift/api/template/v1"
 )
@@ -39,6 +40,7 @@ func init() {
 	authorization.AddToScheme(scheme)
 	build.AddToScheme(scheme)
 	image.AddToScheme(scheme)
+	oauth.AddToScheme(scheme)
 	route.AddToScheme(scheme)
 	template.AddToScheme(scheme)
 
@@ -47,6 +49,7 @@ func init() {
 	authorization.AddToSchemeInCoreGroup(scheme)
 	build.AddToSchemeInCoreGroup(scheme)
 	image.AddToSchemeInCoreGroup(scheme)
+	oauth.AddToSchemeInCoreGroup(scheme)
 	route.AddToSchemeInCoreGroup(scheme)
 	template.AddToSchemeInCoreGroup(scheme)
 }
