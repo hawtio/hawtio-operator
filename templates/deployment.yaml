@@ -7,6 +7,10 @@ parameters:
   displayName: Application Name
   required: true
   value: hawtio
+- name: VERSION
+  displayName: Application Version
+  required: true
+  value: latest
   description: The name assigned to the Hawtio resources
 - name: DEPLOYMENT_TYPE
   displayName: Deployment Type
@@ -53,10 +57,10 @@ objects:
     tags:
     - from:
         kind: DockerImage
-        name: docker.io/hawtio/online:latest
+        name: docker.io/hawtio/online:${VERSION}
       importPolicy:
         scheduled: true
-      name: latest
+      name: ${VERSION}
 - apiVersion: v1
   kind: DeploymentConfig
   metadata:
@@ -146,7 +150,7 @@ objects:
         - hawtio-online
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}:latest
+          name: ${APPLICATION_NAME}:${VERSION}
       type: ImageChange
     - type: ConfigChange
 - apiVersion: v1
