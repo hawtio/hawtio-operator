@@ -413,10 +413,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
 	oc, err := r.oauthclient.Get(oauthClientName)
 	if err != nil {
-		if errors.IsNotFound(err) && isClusterDeployment {
+		if errors.IsNotFound(err) {
 			// OAuth client should not be found for namespace deployment type
 			// except when it changes from "cluster" to "namespace"
-			return reconcile.Result{Requeue: true}, nil
+			if isClusterDeployment {
+				return reconcile.Result{Requeue: true}, nil
+			}
 		} else if !(errors.IsForbidden(err) && isNamespaceDeployment) {
 			// We tolerate 403 for namespace deployment as the operator
 			// may not have permission to read cluster wide resources
