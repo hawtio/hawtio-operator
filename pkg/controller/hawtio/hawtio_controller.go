@@ -289,88 +289,87 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get deployment")
 		return reconcile.Result{}, err
+	}
+	updateDeployment := false
+	// Reconcile replicas
+	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
+		if replicas := deployment.Spec.Replicas; instance.Spec.Replicas != replicas {
+			instance.Spec.Replicas = replicas
+			err := r.client.Update(context.TODO(), instance)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile from deployment")
+				return reconcile.Result{}, err
+			}
+		}
 	} else {
-		updateDeployment := false
-
-		if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
-			if replicas := deployment.Spec.Replicas; instance.Spec.Replicas != replicas {
-				instance.Spec.Replicas = replicas
-				err := r.client.Update(context.TODO(), instance)
-				if err != nil {
-					reqLogger.Error(err, "Failed to reconcile from deployment")
-					return reconcile.Result{}, err
-				}
-			}
-		} else {
-			if replicas := instance.Spec.Replicas; deployment.Spec.Replicas != replicas {
-				deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
-				deployment.Spec.Replicas = replicas
-				updateDeployment = true
-			}
+		if replicas := instance.Spec.Replicas; deployment.Spec.Replicas != replicas {
+			deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
+			deployment.Spec.Replicas = replicas
+			updateDeployment = true
 		}
+	}
 
-		// Reconcile environment variables based on deployment type
-		env := deployment.Spec.Template.Spec.Containers[0].Env
+	// Reconcile environment variables based on deployment type
+	env := deployment.Spec.Template.Spec.Containers[0].Env
 
-		envVar, _ := util.GetEnvVarByName(env, hawtioTypeEnvVar)
-		if envVar == nil {
-			err := fmt.Errorf("Environment variable not found: %s", hawtioTypeEnvVar)
+	envVar, _ := util.GetEnvVarByName(env, hawtioTypeEnvVar)
+	if envVar == nil {
+		err := fmt.Errorf("Environment variable not found: %s", hawtioTypeEnvVar)
+		return reconcile.Result{}, err
+	}
+	if isClusterDeployment && envVar.Value != strings.ToLower(hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		envVar.Value = strings.ToLower(hawtiov1alpha1.ClusterHawtioDeploymentType)
+		updateDeployment = true
+	}
+	if isNamespaceDeployment && envVar.Value != strings.ToLower(hawtiov1alpha1.NamespaceHawtioDeploymentType) {
+		envVar.Value = strings.ToLower(hawtiov1alpha1.NamespaceHawtioDeploymentType)
+		updateDeployment = true
+	}
+
+	envVar, _ = util.GetEnvVarByName(env, hawtioOAuthClientEnvVar)
+	if envVar == nil {
+		err := fmt.Errorf("Environment variable not found: %s", hawtioOAuthClientEnvVar)
+		return reconcile.Result{}, err
+	}
+	if isClusterDeployment && envVar.Value != oauthClientName {
+		envVar.Value = oauthClientName
+		updateDeployment = true
+	}
+	if isNamespaceDeployment && envVar.Value != instance.Name {
+		envVar.Value = instance.Name
+		updateDeployment = true
+	}
+
+	requestDeployment := false
+	if configVersion := config.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
+		if len(deployment.Annotations[configVersionAnnotation]) > 0 {
+			requestDeployment = true
+		}
+		deployment.Annotations[configVersionAnnotation] = configVersion
+		updateDeployment = true
+	}
+
+	if updateDeployment {
+		err := r.client.Update(context.TODO(), deployment)
+		if err != nil {
+			reqLogger.Error(err, "Failed to reconcile to deployment")
 			return reconcile.Result{}, err
 		}
-		if isClusterDeployment && envVar.Value != strings.ToLower(hawtiov1alpha1.ClusterHawtioDeploymentType) {
-			envVar.Value = strings.ToLower(hawtiov1alpha1.ClusterHawtioDeploymentType)
-			updateDeployment = true
+	}
+	if requestDeployment {
+		rollout := &appsv1.DeploymentRequest{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "DeploymentRequest",
+				APIVersion: "apps.openshift.io/v1",
+			},
+			Name:   request.NamespacedName.Name,
+			Latest: true,
+			Force:  true,
 		}
-		if isNamespaceDeployment && envVar.Value != strings.ToLower(hawtiov1alpha1.NamespaceHawtioDeploymentType) {
-			envVar.Value = strings.ToLower(hawtiov1alpha1.NamespaceHawtioDeploymentType)
-			updateDeployment = true
-		}
-
-		envVar, _ = util.GetEnvVarByName(env, hawtioOAuthClientEnvVar)
-		if envVar == nil {
-			err := fmt.Errorf("Environment variable not found: %s", hawtioOAuthClientEnvVar)
+		_, err := r.deployment.Deploy(rollout, request.Namespace)
+		if err != nil {
+			reqLogger.Error(err, "Failed to rollout deployment")
 			return reconcile.Result{}, err
-		}
-		if isClusterDeployment && envVar.Value != oauthClientName {
-			envVar.Value = oauthClientName
-			updateDeployment = true
-		}
-		if isNamespaceDeployment && envVar.Value != instance.Name {
-			envVar.Value = instance.Name
-			updateDeployment = true
-		}
-
-		requestDeployment := false
-		if configVersion := config.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
-			if len(deployment.Annotations[configVersionAnnotation]) > 0 {
-				requestDeployment = true
-			}
-			deployment.Annotations[configVersionAnnotation] = configVersion
-			updateDeployment = true
-		}
-
-		if updateDeployment {
-			err := r.client.Update(context.TODO(), deployment)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile to deployment")
-				return reconcile.Result{}, err
-			}
-		}
-		if requestDeployment {
-			rollout := &appsv1.DeploymentRequest{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "DeploymentRequest",
-					APIVersion: "apps.openshift.io/v1",
-				},
-				Name:   request.NamespacedName.Name,
-				Latest: true,
-				Force:  true,
-			}
-			_, err := r.deployment.Deploy(rollout, request.Namespace)
-			if err != nil {
-				reqLogger.Error(err, "Failed to rollout deployment")
-				return reconcile.Result{}, err
-			}
 		}
 	}
 
@@ -482,24 +481,23 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get image stream")
 		return reconcile.Result{}, err
-	} else {
-		image := "<invalid>"
-		version := instance.Spec.Version
-		if len(version) == 0 {
-			version = "latest"
+	}
+	image := "<invalid>"
+	version := instance.Spec.Version
+	if len(version) == 0 {
+		version = "latest"
+	}
+	for _, tag := range stream.Spec.Tags {
+		if tag.Name == version {
+			image = tag.From.Name
 		}
-		for _, tag := range stream.Spec.Tags {
-			if tag.Name == version {
-				image = tag.From.Name
-			}
-		}
-		if instance.Status.Image != image {
-			instance.Status.Image = image
-			err := r.client.Status().Update(context.TODO(), instance)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile from image stream")
-				return reconcile.Result{}, err
-			}
+	}
+	if instance.Status.Image != image {
+		instance.Status.Image = image
+		err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to reconcile from image stream")
+			return reconcile.Result{}, err
 		}
 	}
 
