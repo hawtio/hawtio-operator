@@ -482,18 +482,33 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get image stream")
 		return reconcile.Result{}, err
 	}
-	image := "<invalid>"
 	version := instance.Spec.Version
 	if len(version) == 0 {
 		version = "latest"
 	}
-	for _, tag := range stream.Spec.Tags {
-		if tag.Name == version {
-			image = tag.From.Name
+	// Add tag to the image stream if missing
+	var tag *imagev1.TagReference
+	if ok, tag = imageStreamContainsTag(stream, version); !ok {
+		tag = &imagev1.TagReference{
+			Name: version,
+			From: &corev1.ObjectReference{
+				Kind: "DockerImage",
+				Name: "docker.io/hawtio/online:" + version,
+			},
+			ImportPolicy: imagev1.TagImportPolicy{
+				Scheduled: true,
+			},
+		}
+		stream.Spec.Tags = append(stream.Spec.Tags, *tag)
+		err := r.client.Update(context.TODO(), stream)
+		if err != nil {
+			reqLogger.Error(err, "Failed to reconcile to image stream")
+			return reconcile.Result{}, err
 		}
 	}
-	if instance.Status.Image != image {
-		instance.Status.Image = image
+	// Update CR status image field from image stream
+	if instance.Status.Image != tag.From.Name {
+		instance.Status.Image = tag.From.Name
 		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
 			reqLogger.Error(err, "Failed to reconcile from image stream")
@@ -501,7 +516,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	// refresh the instance
+	// Refresh the instance
 	instance = &hawtiov1alpha1.Hawtio{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
