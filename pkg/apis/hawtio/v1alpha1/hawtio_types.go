@@ -28,6 +28,7 @@ type HawtioSpec struct {
 	Type          HawtioDeploymentType `json:"type,omitempty"`
 	Replicas      int32                `json:"replicas,omitempty"`
 	RouteHostName string               `json:"routeHostName,omitempty"`
+	Version       string               `json:"version,omitempty"`
 }
 
 // HawtioStatus defines the observed state of Hawtio

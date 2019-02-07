@@ -484,9 +484,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	} else {
 		image := "<invalid>"
+		version := instance.Spec.Version
+		if len(version) == 0 {
+			version = "latest"
+		}
 		for _, tag := range stream.Spec.Tags {
-			// TODO: use tag parameter
-			if tag.Name == "latest" {
+			if tag.Name == version {
 				image = tag.From.Name
 			}
 		}
@@ -530,6 +533,10 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 	parameters := make(map[string]string)
 	parameters["APPLICATION_NAME"] = cr.Name
 	parameters["DEPLOYMENT_TYPE"] = cr.Spec.Type
+
+	if version := cr.Spec.Version; len(version) > 0 {
+		parameters["VERSION"] = version
+	}
 
 	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		parameters["OAUTH_CLIENT"] = oauthClientName
