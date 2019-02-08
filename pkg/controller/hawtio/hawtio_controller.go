@@ -273,6 +273,50 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Update phase
+
+	// Reconcile image stream
+	stream := &imagev1.ImageStream{}
+	err = r.client.Get(context.TODO(), request.NamespacedName, stream)
+	if err != nil && errors.IsNotFound(err) {
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get image stream")
+		return reconcile.Result{}, err
+	}
+	version := instance.Spec.Version
+	if len(version) == 0 {
+		version = "latest"
+	}
+	// Add tag to the image stream if missing
+	var tag *imagev1.TagReference
+	if ok, tag = imageStreamContainsTag(stream, version); !ok {
+		tag = &imagev1.TagReference{
+			Name: version,
+			From: &corev1.ObjectReference{
+				Kind: "DockerImage",
+				Name: "docker.io/hawtio/online:" + version,
+			},
+			ImportPolicy: imagev1.TagImportPolicy{
+				Scheduled: true,
+			},
+		}
+		stream.Spec.Tags = append(stream.Spec.Tags, *tag)
+		err := r.client.Update(context.TODO(), stream)
+		if err != nil {
+			reqLogger.Error(err, "Failed to reconcile to image stream")
+			return reconcile.Result{}, err
+		}
+	}
+	// Update CR status image field from image stream
+	if instance.Status.Image != tag.From.Name {
+		instance.Status.Image = tag.From.Name
+		err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to reconcile from image stream")
+			return reconcile.Result{}, err
+		}
+	}
+
 	config := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, config)
 	if err != nil && errors.IsNotFound(err) {
@@ -282,6 +326,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
+	// Reconcile deployment
 	deployment := &appsv1.DeploymentConfig{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
@@ -291,6 +336,13 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 	updateDeployment := false
+
+	// Reconcile image
+	if trigger := fmt.Sprintf("%s:%s", instance.Name, version); deployment.Spec.Triggers[0].ImageChangeParams.From.Name != trigger {
+		deployment.Spec.Triggers[0].ImageChangeParams.From.Name = trigger
+		updateDeployment = true
+	}
+
 	// Reconcile replicas
 	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
 		if replicas := deployment.Spec.Replicas; instance.Spec.Replicas != replicas {
@@ -310,9 +362,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile environment variables based on deployment type
-	env := deployment.Spec.Template.Spec.Containers[0].Env
-
-	envVar, _ := util.GetEnvVarByName(env, hawtioTypeEnvVar)
+	container := deployment.Spec.Template.Spec.Containers[0]
+	envVar, _ := util.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("Environment variable not found: %s", hawtioTypeEnvVar)
 		return reconcile.Result{}, err
@@ -326,7 +377,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		updateDeployment = true
 	}
 
-	envVar, _ = util.GetEnvVarByName(env, hawtioOAuthClientEnvVar)
+	envVar, _ = util.GetEnvVarByName(container.Env, hawtioOAuthClientEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("Environment variable not found: %s", hawtioOAuthClientEnvVar)
 		return reconcile.Result{}, err
@@ -373,6 +424,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
+	// Reconcile route
 	route := &routev1.Route{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, route)
 	if err != nil && errors.IsNotFound(err) {
@@ -407,6 +459,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// Reconcile OAuth client
 	// Do not use the default client whose cached informers require
 	// permission to list cluster wide oauth clients
 	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
@@ -471,48 +524,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
 				return reconcile.Result{}, err
 			}
-		}
-	}
-
-	stream := &imagev1.ImageStream{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, stream)
-	if err != nil && errors.IsNotFound(err) {
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get image stream")
-		return reconcile.Result{}, err
-	}
-	version := instance.Spec.Version
-	if len(version) == 0 {
-		version = "latest"
-	}
-	// Add tag to the image stream if missing
-	var tag *imagev1.TagReference
-	if ok, tag = imageStreamContainsTag(stream, version); !ok {
-		tag = &imagev1.TagReference{
-			Name: version,
-			From: &corev1.ObjectReference{
-				Kind: "DockerImage",
-				Name: "docker.io/hawtio/online:" + version,
-			},
-			ImportPolicy: imagev1.TagImportPolicy{
-				Scheduled: true,
-			},
-		}
-		stream.Spec.Tags = append(stream.Spec.Tags, *tag)
-		err := r.client.Update(context.TODO(), stream)
-		if err != nil {
-			reqLogger.Error(err, "Failed to reconcile to image stream")
-			return reconcile.Result{}, err
-		}
-	}
-	// Update CR status image field from image stream
-	if instance.Status.Image != tag.From.Name {
-		instance.Status.Image = tag.From.Name
-		err := r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to reconcile from image stream")
-			return reconcile.Result{}, err
 		}
 	}
 
