@@ -28,6 +28,8 @@ spec:
   # Note that the operator will recreate the route if the field is emptied,
   # so that the host is re-generated.
   routeHostName: example-hawtio.192.168.64.38.nip.io
+  # The version (default 'latest')
+  version: latest
 ```
 
 ## Features
@@ -39,6 +41,7 @@ The operator covers the following cases:
   * Create a service account as OAuth client in `namespace` deployment
   * Create an OAuth client in `cluster` deployment
 * Update
+  * Reconcile the image stream tag and deployment trigger from the `version` field
   * Reconcile the route host from the `routeHostName` field
   * Support emptying the `routeHostName` field (recreate the route to re-generate the host)
   * Reconcile the `replicas` count into the deployment config
@@ -112,6 +115,18 @@ Waiting for rollout to finish: 3 out of 3 new replicas have been updated...
 Waiting for rollout to finish: 1 old replicas are pending termination...
 Waiting for latest deployment config spec to be observed by the controller loop...
 replication controller "example-hawtio-2" successfully rolled out
+
+# Change the Hawtio version
+$ kubectl patch hawtio example-hawtio --type='merge' -p '{"spec":{"version":"1.6.0"}}'
+hawtio.hawt.io/example-hawtio patched
+# Check the status has updated accordingly
+$ kubectl get hawtio
+NAME             AGE   URL                                   IMAGE
+example-hawtio   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:1.6.0
+# Watch rollout deployment triggered by version change
+$ oc rollout status dc/example-hawtio
+...
+replication controller "example-hawtio-3" successfully rolled out
 
 # Delete Hawtio
 $ kubectl delete hawtio example-hawtio
