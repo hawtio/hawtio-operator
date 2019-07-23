@@ -12,6 +12,7 @@ import (
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
+	"github.com/operator-framework/operator-sdk/pkg/ready"
 	"github.com/operator-framework/operator-sdk/version"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -58,6 +59,14 @@ func main() {
 		log.Error(err, "")
 		os.Exit(1)
 	}
+
+	r := ready.NewFileReady()
+	err = r.Set()
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+	defer r.Unset()
 
 	// Create a new Cmd to provide shared dependencies and start components
 	mgr, err := manager.New(cfg, manager.Options{Namespace: namespace})
