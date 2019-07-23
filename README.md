@@ -12,7 +12,7 @@ metadata:
 spec:
   # The deployment type, either "cluster" or "namespace":
   # - cluster: Hawtio is capable of discovering and managing
-  #   applications accross all namespaces the authenticated user
+  #   applications across all namespaces the authenticated user
   #   has access to.
   # - namespace: Hawtio is capable of discovering and managing
   #   applications within the deployment namespace.
@@ -23,7 +23,7 @@ spec:
   # externally. If not specified, it is automatically generated and
   # is of the form:
   #   <name>[-<namespace>].<suffix>
-  # where <suffix> is the default routing subdomain as configured for
+  # where <suffix> is the default routing sub-domain as configured for
   # the cluster.
   # Note that the operator will recreate the route if the field is emptied,
   # so that the host is re-generated.
@@ -62,7 +62,7 @@ To create the required resources by the operator (e.g. custom resource definitio
 $ make install
 ```
 
-The above command must be executed on behalf of a priviledged user, as the creation of the custom resource definition and the cluster role requires _cluster-admin_ permission.
+The above command must be executed on behalf of a privileged user, as the creation of the custom resource definition and the cluster role requires _cluster-admin_ permission.
 
 Note that the cluster role creation is optional in case you plan to only deploy Hawtio custom resources with `namespace` deployment type.
 
