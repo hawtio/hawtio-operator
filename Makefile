@@ -4,12 +4,6 @@ NAMESPACE ?= hawtio
 PROJECT = operator
 TAG = latest
 
-.PHONY: setup
-setup:
-	@echo Installing dep
-	curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-	@echo setup complete run make build deploy to build and deploy the operator to a local cluster
-
 .PHONY: build-image
 build-image: compile build
 
