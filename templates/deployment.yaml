@@ -87,7 +87,7 @@ objects:
           deploymentconfig: ${APPLICATION_NAME}
       spec:
         containers:
-        - image: 'hawtio/online'
+        - image: hawtio/online
           imagePullPolicy: Always
           name: hawtio-online
           ports:
@@ -131,8 +131,8 @@ objects:
           - name: hawtio-integration
             mountPath: /usr/share/nginx/html/integration/hawtconfig.json
             subPath: hawtconfig.json
-          - mountPath: /etc/tls/private
-            name: hawtio-online-tls
+          - mountPath: /etc/tls/private/serving
+            name: hawtio-online-tls-serving
         volumes:
         - name: hawtio-online
           configMap:
@@ -140,9 +140,9 @@ objects:
         - name: hawtio-integration
           configMap:
             name: ${APPLICATION_NAME}
-        - name: hawtio-online-tls
+        - name: hawtio-online-tls-serving
           secret:
-            secretName: ${APPLICATION_NAME}-tls
+            secretName: ${APPLICATION_NAME}-tls-serving
     triggers:
     - imageChangeParams:
         automatic: true
@@ -159,7 +159,7 @@ objects:
     labels:
       app: hawtio
     annotations:
-      service.alpha.openshift.io/serving-cert-secret-name: ${APPLICATION_NAME}-tls
+      service.alpha.openshift.io/serving-cert-secret-name: ${APPLICATION_NAME}-tls-serving
     name: ${APPLICATION_NAME}
   spec:
     ports:
