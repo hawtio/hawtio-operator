@@ -51,7 +51,10 @@ const (
 	hawtioTypeEnvVar        = "HAWTIO_ONLINE_MODE"
 	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
 
-	oauthClientName = "hawtio"
+	oauthClientName                     = "hawtio"
+	serviceSigningSecretName            = "hawtio-online-tls-serving"
+	serviceSigningSecretMountPathPre170 = "/etc/tls/private"
+	serviceSigningSecretMountPath       = "/etc/tls/private/serving"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -271,17 +274,16 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Adjust service signing secret volume mount path
 	var volumeMountPath string
 	if ver170orHigher {
-		volumeMountPath = "/etc/tls/private/serving"
+		volumeMountPath = serviceSigningSecretMountPath
 	} else {
-		volumeMountPath = "/etc/tls/private"
+		volumeMountPath = serviceSigningSecretMountPathPre170
 	}
 	deploymentConfig := osutil.GetDeploymentConfig(objs)
 	container := deploymentConfig.Spec.Template.Spec.Containers[0]
-	volumeMount := corev1.VolumeMount{
+	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 		MountPath: volumeMountPath,
-		Name:      "hawtio-online-tls-serving",
-	}
-	container.VolumeMounts = append(container.VolumeMounts, volumeMount)
+		Name:      serviceSigningSecretName,
+	})
 	deploymentConfig.Spec.Template.Spec.Containers[0] = container
 
 	// Create runtime objects
@@ -384,6 +386,17 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		updateDeployment = true
 	}
 
+	// Reconcile service signing secret volume mount path
+	container = deployment.Spec.Template.Spec.Containers[0]
+	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretName)
+	if ver170orHigher && volumeMount.MountPath != serviceSigningSecretMountPath {
+		volumeMount.MountPath = serviceSigningSecretMountPath
+		updateDeployment = true
+	} else if !ver170orHigher && volumeMount.MountPath != serviceSigningSecretMountPathPre170 {
+		volumeMount.MountPath = serviceSigningSecretMountPathPre170
+		updateDeployment = true
+	}
+
 	// Reconcile replicas
 	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
 		if replicas := deployment.Spec.Replicas; instance.Spec.Replicas != replicas {
@@ -403,7 +416,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile environment variables based on deployment type
-	container = deployment.Spec.Template.Spec.Containers[0]
 	envVar, _ := util.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("Environment variable not found: %s", hawtioTypeEnvVar)
