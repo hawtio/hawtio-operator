@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Masterminds/semver"
+
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
@@ -16,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -218,6 +221,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Install phase
+
 	exts, err := r.processTemplate(instance, request)
 	if err != nil {
 		reqLogger.Error(err, "Error while processing template", "template", hawtioTemplatePath)
@@ -240,6 +244,47 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		objs = append(objs, sa)
 	}
 
+	// Check version
+	version := instance.Spec.Version
+	if len(version) == 0 {
+		version = "latest"
+	}
+	var ver170orHigher bool
+	if version != "latest" {
+		semVer, err := semver.NewVersion(version)
+		if err != nil {
+			reqLogger.Error(err, "Error parsing semantic version")
+			return reconcile.Result{}, err
+		}
+		constraint, err := semver.NewConstraint(">= 1.7.0")
+		if err != nil {
+			reqLogger.Error(err, "Error parsing version constraint")
+			return reconcile.Result{}, err
+		}
+		if constraint.Check(semVer) {
+			ver170orHigher = true
+		}
+	} else {
+		ver170orHigher = true
+	}
+
+	// Adjust service signing secret volume mount path
+	var volumeMountPath string
+	if ver170orHigher {
+		volumeMountPath = "/etc/tls/private/serving"
+	} else {
+		volumeMountPath = "/etc/tls/private"
+	}
+	deploymentConfig := osutil.GetDeploymentConfig(objs)
+	container := deploymentConfig.Spec.Template.Spec.Containers[0]
+	volumeMount := corev1.VolumeMount{
+		MountPath: volumeMountPath,
+		Name:      "hawtio-online-tls-serving",
+	}
+	container.VolumeMounts = append(container.VolumeMounts, volumeMount)
+	deploymentConfig.Spec.Template.Spec.Containers[0] = container
+
+	// Create runtime objects
 	err = r.createObjects(objs, request.Namespace, instance)
 	if err != nil {
 		reqLogger.Error(err, "Error creating runtime objects")
@@ -282,10 +327,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get image stream")
 		return reconcile.Result{}, err
-	}
-	version := instance.Spec.Version
-	if len(version) == 0 {
-		version = "latest"
 	}
 	// Add tag to the image stream if missing
 	var tag *imagev1.TagReference
@@ -362,7 +403,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile environment variables based on deployment type
-	container := deployment.Spec.Template.Spec.Containers[0]
+	container = deployment.Spec.Template.Spec.Containers[0]
 	envVar, _ := util.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("Environment variable not found: %s", hawtioTypeEnvVar)
