@@ -4,7 +4,8 @@ go 1.12
 
 require (
 	github.com/Masterminds/semver v1.4.2
-	github.com/openshift/api v3.9.0+incompatible
+	// OpenShift 4.1
+	github.com/openshift/api v0.0.0-20190716152234-9ea19f9dd578+incompatible
 	github.com/operator-framework/operator-sdk v0.9.0
 	k8s.io/api v0.0.0-20190612125737-db0771252981
 	k8s.io/apimachinery v0.0.0-20190612125636-6a5db36e93ad
