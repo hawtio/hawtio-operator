@@ -53,11 +53,11 @@ const (
 	hawtioTypeEnvVar        = "HAWTIO_ONLINE_MODE"
 	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
 
-	oauthClientName                     = "hawtio"
-	serviceSigningSecretName            = "hawtio-online-tls-serving"
-	serviceSigningSecretMountPathPre170 = "/etc/tls/private"
-	serviceSigningSecretMountPath       = "/etc/tls/private/serving"
-	clientCertificateSecretMountPath    = "/etc/tls/private/proxying"
+	oauthClientName                           = "hawtio"
+	serviceSigningSecretVolumeMountName       = "hawtio-online-tls-serving"
+	serviceSigningSecretVolumeMountPathPre170 = "/etc/tls/private"
+	serviceSigningSecretVolumeMountPath       = "/etc/tls/private/serving"
+	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -314,13 +314,13 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Adjust service signing secret volume mount path
 	var volumeMountPath string
 	if isConsoleVersion170orHigher {
-		volumeMountPath = serviceSigningSecretMountPath
+		volumeMountPath = serviceSigningSecretVolumeMountPath
 	} else {
-		volumeMountPath = serviceSigningSecretMountPathPre170
+		volumeMountPath = serviceSigningSecretVolumeMountPathPre170
 	}
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 		MountPath: volumeMountPath,
-		Name:      serviceSigningSecretName,
+		Name:      serviceSigningSecretVolumeMountName,
 	})
 
 	if isOpenShift4 {
@@ -337,7 +337,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		deploymentConfig.Spec.Template.Spec.Volumes = append(deploymentConfig.Spec.Template.Spec.Volumes, volume)
 
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-			MountPath: clientCertificateSecretMountPath,
+			MountPath: clientCertificateSecretVolumeMountPath,
 			Name:      instance.Name + "-tls-proxying",
 		})
 	}
@@ -446,12 +446,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Reconcile service signing secret volume mount path
 	container = deployment.Spec.Template.Spec.Containers[0]
-	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretName)
-	if isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretMountPath {
-		volumeMount.MountPath = serviceSigningSecretMountPath
+	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretVolumeMountName)
+	if isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretVolumeMountPath {
+		volumeMount.MountPath = serviceSigningSecretVolumeMountPath
 		updateDeployment = true
-	} else if !isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretMountPathPre170 {
-		volumeMount.MountPath = serviceSigningSecretMountPathPre170
+	} else if !isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretVolumeMountPathPre170 {
+		volumeMount.MountPath = serviceSigningSecretVolumeMountPathPre170
 		updateDeployment = true
 	}
 
