@@ -54,6 +54,7 @@ func newOAuthClient() *oauthv1.OAuthClient {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: oauthClientName,
 		},
+		GrantMethod: oauthv1.GrantHandlerAuto,
 	}
 	return oc
 }
