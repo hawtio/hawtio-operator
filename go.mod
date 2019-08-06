@@ -6,6 +6,7 @@ require (
 	github.com/Masterminds/semver v1.4.2
 	// OpenShift 4.1
 	github.com/openshift/api v0.0.0-20190716152234-9ea19f9dd578+incompatible
+	github.com/openshift/client-go v0.0.0-20190412095722-0255926f5393
 	github.com/operator-framework/operator-sdk v0.9.0
 	k8s.io/api v0.0.0-20190612125737-db0771252981
 	k8s.io/apimachinery v0.0.0-20190612125636-6a5db36e93ad
