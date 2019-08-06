@@ -35,6 +35,8 @@ import (
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	templatev1 "github.com/openshift/api/template/v1"
+
+	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 )
 
 var log = logf.Log.WithName("controller_hawtio")
@@ -101,6 +103,12 @@ func Add(mgr manager.Manager) error {
 	}
 	r.oauthclient = oauthclient
 
+	configclient, err := configv1client.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r.configclient = configclient
+
 	return add(mgr, r)
 }
 
@@ -159,12 +167,13 @@ var _ reconcile.Reconciler = &ReconcileHawtio{}
 type ReconcileHawtio struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client      client.Client
-	config      *rest.Config
-	scheme      *runtime.Scheme
-	template    *openshift.TemplateProcessor
-	deployment  *openshift.DeploymentClient
-	oauthclient *openshift.OAuthClientClient
+	client       client.Client
+	config       *rest.Config
+	scheme       *runtime.Scheme
+	template     *openshift.TemplateProcessor
+	deployment   *openshift.DeploymentClient
+	oauthclient  *openshift.OAuthClientClient
+	configclient *configv1client.Clientset
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -247,43 +256,72 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		objs = append(objs, sa)
 	}
 
-	// Check version
-	version := instance.Spec.Version
-	if len(version) == 0 {
-		version = "latest"
-	}
-	var ver170orHigher bool
-	if version != "latest" {
-		semVer, err := semver.NewVersion(version)
-		if err != nil {
-			reqLogger.Error(err, "Error parsing semantic version")
-			return reconcile.Result{}, err
-		}
-		constraint, err := semver.NewConstraint(">= 1.7.0")
-		if err != nil {
+	// Check OpenShift version
+	var openShiftSemVer *semver.Version
+	clusterVersion, err := r.configclient.ConfigV1().ClusterVersions().Get("version", metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Let's default to OpenShift 3 as ClusterVersion API was introduced in OpenShift 4
+			openShiftSemVer, _ = semver.NewVersion("3")
+		} else {
 			reqLogger.Error(err, "Error parsing version constraint")
 			return reconcile.Result{}, err
 		}
+	} else {
+		// Let's take the latest version from the history
+		v := clusterVersion.Status.History[0].Version
+		openShiftSemVer, err = semver.NewVersion(v)
+		if err != nil {
+			reqLogger.Error(err, "Error parsing cluster semantic version", "version", v)
+			return reconcile.Result{}, err
+		}
+	}
+	constraint, _ := semver.NewConstraint(">= 4")
+	isOpenShift4 := constraint.Check(openShiftSemVer)
+
+	// Check console version
+	consoleVersion := instance.Spec.Version
+	if len(consoleVersion) == 0 {
+		consoleVersion = "latest"
+	}
+	var isConsoleVersion170orHigher bool
+	if consoleVersion != "latest" {
+		semVer, err := semver.NewVersion(consoleVersion)
+		if err != nil {
+			reqLogger.Error(err, "Error parsing console semantic version", "version", consoleVersion)
+			return reconcile.Result{}, err
+		}
+		constraint, _ := semver.NewConstraint(">= 1.7.0")
 		if constraint.Check(semVer) {
-			ver170orHigher = true
+			isConsoleVersion170orHigher = true
 		}
 	} else {
-		ver170orHigher = true
+		isConsoleVersion170orHigher = true
+	}
+
+	deploymentConfig := osutil.GetDeploymentConfig(objs)
+	container := deploymentConfig.Spec.Template.Spec.Containers[0]
+
+	if isOpenShift4 {
+		// Activate console backend gateway
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  "HAWTIO_ONLINE_GATEWAY",
+			Value: "true",
+		})
 	}
 
 	// Adjust service signing secret volume mount path
 	var volumeMountPath string
-	if ver170orHigher {
+	if isConsoleVersion170orHigher {
 		volumeMountPath = serviceSigningSecretMountPath
 	} else {
 		volumeMountPath = serviceSigningSecretMountPathPre170
 	}
-	deploymentConfig := osutil.GetDeploymentConfig(objs)
-	container := deploymentConfig.Spec.Template.Spec.Containers[0]
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 		MountPath: volumeMountPath,
 		Name:      serviceSigningSecretName,
 	})
+
 	deploymentConfig.Spec.Template.Spec.Containers[0] = container
 
 	// Create runtime objects
@@ -332,12 +370,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 	// Add tag to the image stream if missing
 	var tag *imagev1.TagReference
-	if ok, tag = imageStreamContainsTag(stream, version); !ok {
+	if ok, tag = imageStreamContainsTag(stream, consoleVersion); !ok {
 		tag = &imagev1.TagReference{
-			Name: version,
+			Name: consoleVersion,
 			From: &corev1.ObjectReference{
 				Kind: "DockerImage",
-				Name: "docker.io/hawtio/online:" + version,
+				Name: "docker.io/hawtio/online:" + consoleVersion,
 			},
 			ImportPolicy: imagev1.TagImportPolicy{
 				Scheduled: true,
@@ -381,7 +419,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	updateDeployment := false
 
 	// Reconcile image
-	if trigger := fmt.Sprintf("%s:%s", instance.Name, version); deployment.Spec.Triggers[0].ImageChangeParams.From.Name != trigger {
+	if trigger := fmt.Sprintf("%s:%s", instance.Name, consoleVersion); deployment.Spec.Triggers[0].ImageChangeParams.From.Name != trigger {
 		deployment.Spec.Triggers[0].ImageChangeParams.From.Name = trigger
 		updateDeployment = true
 	}
@@ -389,10 +427,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Reconcile service signing secret volume mount path
 	container = deployment.Spec.Template.Spec.Containers[0]
 	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretName)
-	if ver170orHigher && volumeMount.MountPath != serviceSigningSecretMountPath {
+	if isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretMountPath {
 		volumeMount.MountPath = serviceSigningSecretMountPath
 		updateDeployment = true
-	} else if !ver170orHigher && volumeMount.MountPath != serviceSigningSecretMountPathPre170 {
+	} else if !isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretMountPathPre170 {
 		volumeMount.MountPath = serviceSigningSecretMountPathPre170
 		updateDeployment = true
 	}
