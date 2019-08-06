@@ -57,6 +57,7 @@ const (
 	serviceSigningSecretName            = "hawtio-online-tls-serving"
 	serviceSigningSecretMountPathPre170 = "/etc/tls/private"
 	serviceSigningSecretMountPath       = "/etc/tls/private/serving"
+	clientCertificateSecretMountPath    = "/etc/tls/private/proxying"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -321,6 +322,25 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		MountPath: volumeMountPath,
 		Name:      serviceSigningSecretName,
 	})
+
+	if isOpenShift4 {
+		// Mount client certificate secret
+		volume := corev1.Volume{
+			Name: instance.Name + "-tls-proxying",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: instance.Name + "-tls-proxying",
+				},
+			},
+		}
+
+		deploymentConfig.Spec.Template.Spec.Volumes = append(deploymentConfig.Spec.Template.Spec.Volumes, volume)
+
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			MountPath: clientCertificateSecretMountPath,
+			Name:      instance.Name + "-tls-proxying",
+		})
+	}
 
 	deploymentConfig.Spec.Template.Spec.Containers[0] = container
 
