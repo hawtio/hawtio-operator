@@ -45,13 +45,13 @@ func init() {
 	template.AddToScheme(scheme)
 
 	//legacy openshift types
-	apps.AddToSchemeInCoreGroup(scheme)
-	authorization.AddToSchemeInCoreGroup(scheme)
-	build.AddToSchemeInCoreGroup(scheme)
-	image.AddToSchemeInCoreGroup(scheme)
-	oauth.AddToSchemeInCoreGroup(scheme)
-	route.AddToSchemeInCoreGroup(scheme)
-	template.AddToSchemeInCoreGroup(scheme)
+	apps.DeprecatedInstallWithoutGroup(scheme)
+	authorization.DeprecatedInstallWithoutGroup(scheme)
+	build.DeprecatedInstallWithoutGroup(scheme)
+	image.DeprecatedInstallWithoutGroup(scheme)
+	oauth.DeprecatedInstallWithoutGroup(scheme)
+	route.DeprecatedInstallWithoutGroup(scheme)
+	template.DeprecatedInstallWithoutGroup(scheme)
 }
 
 func decoder(gv schema.GroupVersion, codecs serializer.CodecFactory) runtime.Decoder {
