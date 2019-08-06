@@ -131,8 +131,6 @@ objects:
           - name: hawtio-integration
             mountPath: /usr/share/nginx/html/integration/hawtconfig.json
             subPath: hawtconfig.json
-          - mountPath: /etc/tls/private/serving
-            name: hawtio-online-tls-serving
         volumes:
         - name: hawtio-online
           configMap:
