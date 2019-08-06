@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/semver"
 
@@ -324,6 +325,22 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	})
 
 	if isOpenShift4 {
+		// Check whether client certificate secret exists
+		clientCertificateSecret := &corev1.Secret{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: request.Name + "-tls-proxying"}, clientCertificateSecret)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				reqLogger.Info("Client certificate secret must be created", "secret", request.Name+"-tls-proxying")
+				// Let's poll for the client certificate secret to be created
+				return reconcile.Result{
+					Requeue:      true,
+					RequeueAfter: 5 * time.Second,
+				}, nil
+			} else {
+				return reconcile.Result{}, err
+			}
+		}
+
 		// Mount client certificate secret
 		volume := corev1.Volume{
 			Name: instance.Name + "-tls-proxying",
