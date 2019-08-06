@@ -55,7 +55,8 @@ const (
 	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
 
 	oauthClientName                           = "hawtio"
-	serviceSigningSecretVolumeMountName       = "hawtio-online-tls-serving"
+	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
+	serviceSigningSecretVolumeName            = "hawtio-online-tls-serving"
 	serviceSigningSecretVolumeMountPathPre170 = "/etc/tls/private"
 	serviceSigningSecretVolumeMountPath       = "/etc/tls/private/serving"
 	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
@@ -320,8 +321,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		volumeMountPath = serviceSigningSecretVolumeMountPathPre170
 	}
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+		Name:      serviceSigningSecretVolumeName,
 		MountPath: volumeMountPath,
-		Name:      serviceSigningSecretVolumeMountName,
 	})
 
 	if isOpenShift4 {
@@ -343,7 +344,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 		// Mount client certificate secret
 		volume := corev1.Volume{
-			Name: instance.Name + "-tls-proxying",
+			Name: clientCertificateSecretVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: instance.Name + "-tls-proxying",
@@ -354,8 +355,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		deploymentConfig.Spec.Template.Spec.Volumes = append(deploymentConfig.Spec.Template.Spec.Volumes, volume)
 
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      clientCertificateSecretVolumeName,
 			MountPath: clientCertificateSecretVolumeMountPath,
-			Name:      instance.Name + "-tls-proxying",
 		})
 	}
 
@@ -463,7 +464,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Reconcile service signing secret volume mount path
 	container = deployment.Spec.Template.Spec.Containers[0]
-	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretVolumeMountName)
+	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretVolumeName)
 	if isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretVolumeMountPath {
 		volumeMount.MountPath = serviceSigningSecretVolumeMountPath
 		updateDeployment = true
