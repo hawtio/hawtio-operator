@@ -67,19 +67,19 @@ const (
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-	err := appsv1.AddToScheme(mgr.GetScheme())
+	err := appsv1.Install(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
-	err = imagev1.AddToScheme(mgr.GetScheme())
+	err = imagev1.Install(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
-	err = oauthv1.AddToScheme(mgr.GetScheme())
+	err = oauthv1.Install(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
-	err = routev1.AddToScheme(mgr.GetScheme())
+	err = routev1.Install(mgr.GetScheme())
 	if err != nil {
 		return err
 	}

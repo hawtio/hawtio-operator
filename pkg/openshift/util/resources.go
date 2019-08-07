@@ -35,16 +35,16 @@ func init() {
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
 	cgoscheme.AddToScheme(scheme)
 
-	//add openshift types
-	apps.AddToScheme(scheme)
-	authorization.AddToScheme(scheme)
-	build.AddToScheme(scheme)
-	image.AddToScheme(scheme)
-	oauth.AddToScheme(scheme)
-	route.AddToScheme(scheme)
-	template.AddToScheme(scheme)
+	//add OpenShift types
+	apps.Install(scheme)
+	authorization.Install(scheme)
+	build.Install(scheme)
+	image.Install(scheme)
+	oauth.Install(scheme)
+	route.Install(scheme)
+	template.Install(scheme)
 
-	//legacy openshift types
+	//legacy OpenShift types
 	apps.DeprecatedInstallWithoutGroup(scheme)
 	authorization.DeprecatedInstallWithoutGroup(scheme)
 	build.DeprecatedInstallWithoutGroup(scheme)
