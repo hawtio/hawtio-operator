@@ -37,6 +37,8 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 )
 
@@ -100,17 +102,23 @@ func Add(mgr manager.Manager) error {
 	}
 	r.deployment = deployment
 
-	oauthclient, err := openshift.NewOAuthClientClient(mgr.GetConfig())
+	oauthClient, err := openshift.NewOAuthClientClient(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
-	r.oauthclient = oauthclient
+	r.oauthClient = oauthClient
 
-	configclient, err := configv1client.NewForConfig(mgr.GetConfig())
+	configClient, err := configv1client.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
-	r.configclient = configclient
+	r.configClient = configClient
+
+	coreClient, err := corev1client.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r.coreClient = coreClient
 
 	return add(mgr, r)
 }
@@ -175,8 +183,9 @@ type ReconcileHawtio struct {
 	scheme       *runtime.Scheme
 	template     *openshift.TemplateProcessor
 	deployment   *openshift.DeploymentClient
-	oauthclient  *openshift.OAuthClientClient
-	configclient *configv1client.Clientset
+	coreClient   *corev1client.CoreV1Client
+	oauthClient  *openshift.OAuthClientClient
+	configClient *configv1client.Clientset
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -261,7 +270,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Check OpenShift version
 	var openShiftSemVer *semver.Version
-	clusterVersion, err := r.configclient.ConfigV1().ClusterVersions().Get("version", metav1.GetOptions{})
+	clusterVersion, err := r.configClient.
+		ConfigV1().
+		ClusterVersions().
+		Get("version", metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Let's default to OpenShift 3 as ClusterVersion API was introduced in OpenShift 4
@@ -282,7 +294,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	constraint, _ := semver.NewConstraint(">= 4")
 	isOpenShift4 := constraint.Check(openShiftSemVer)
 
-	// Check console version
+	// Check Hawtio console version
 	consoleVersion := instance.Spec.Version
 	if len(consoleVersion) == 0 {
 		consoleVersion = "latest"
@@ -302,6 +314,22 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		isConsoleVersion170orHigher = true
 	}
 
+	var openShiftConsoleUrl string
+	if isOpenShift4 {
+		// Retrieve OpenShift Web console public URL
+		cm, err := r.coreClient.
+			ConfigMaps("openshift-config-managed").
+			Get("console-public", metav1.GetOptions{})
+		if err != nil {
+			if !errors.IsNotFound(err) && !errors.IsForbidden(err) {
+				reqLogger.Error(err, "Error getting OpenShift managed configuration")
+				return reconcile.Result{}, err
+			}
+		} else {
+			openShiftConsoleUrl = cm.Data["consoleURL"]
+		}
+	}
+
 	deploymentConfig := osutil.GetDeploymentConfig(objs)
 	container := deploymentConfig.Spec.Template.Spec.Containers[0]
 
@@ -316,6 +344,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			corev1.EnvVar{
 				Name:  "OPENSHIFT_CLUSTER_VERSION",
 				Value: openShiftSemVer.String(),
+			},
+			// Valuate the OpenShift Web Console URL environment variable
+			corev1.EnvVar{
+				Name:  "OPENSHIFT_WEB_CONSOLE_URL",
+				Value: openShiftConsoleUrl,
 			},
 		)
 	}
@@ -599,7 +632,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Do not use the default client whose cached informers require
 	// permission to list cluster wide oauth clients
 	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
-	oc, err := r.oauthclient.Get(oauthClientName)
+	oc, err := r.oauthClient.Get(oauthClientName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// OAuth client should not be found for namespace deployment type
