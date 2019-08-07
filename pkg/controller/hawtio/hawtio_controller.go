@@ -306,11 +306,18 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	container := deploymentConfig.Spec.Template.Spec.Containers[0]
 
 	if isOpenShift4 {
-		// Activate console backend gateway
-		container.Env = append(container.Env, corev1.EnvVar{
-			Name:  "HAWTIO_ONLINE_GATEWAY",
-			Value: "true",
-		})
+		container.Env = append(container.Env,
+			// Activate console backend gateway
+			corev1.EnvVar{
+				Name:  "HAWTIO_ONLINE_GATEWAY",
+				Value: "true",
+			},
+			// Valuate the ClusterVersion environment variable
+			corev1.EnvVar{
+				Name:  "OPENSHIFT_CLUSTER_VERSION",
+				Value: openShiftSemVer.String(),
+			},
+		)
 	}
 
 	// Adjust service signing secret volume mount path
