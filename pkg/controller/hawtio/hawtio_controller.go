@@ -215,23 +215,23 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if instance.GetDeletionTimestamp() != nil {
 		err = r.deletion(instance)
 		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("Deletion failed: %v", err)
+			return reconcile.Result{}, fmt.Errorf("deletion failed: %v", err)
 		}
 		return reconcile.Result{}, nil
 	}
 
 	ok, err := util.HasFinalizer(instance, hawtioFinalizer)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("Failed to read finalizer: %v", err)
+		return reconcile.Result{}, fmt.Errorf("failed to read finalizer: %v", err)
 	}
 	if !ok {
 		err = util.AddFinalizer(instance, hawtioFinalizer)
 		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("Failed to set finalizer: %v", err)
+			return reconcile.Result{}, fmt.Errorf("failed to set finalizer: %v", err)
 		}
 		err = r.client.Update(context.TODO(), instance)
 		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("Failed to update finalizer: %v", err)
+			return reconcile.Result{}, fmt.Errorf("failed to update finalizer: %v", err)
 		}
 	}
 
@@ -240,7 +240,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	isNamespaceDeployment := strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
 	if !isNamespaceDeployment && !isClusterDeployment {
-		err := fmt.Errorf("Unsupported type: %s", instance.Spec.Type)
+		err := fmt.Errorf("unsupported type: %s", instance.Spec.Type)
 		return reconcile.Result{}, err
 	}
 
@@ -428,8 +428,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 		// Add OAuth client
-		oauthclient := newOAuthClient()
-		err = r.client.Create(context.TODO(), oauthclient)
+		oauthClient := newOAuthClient()
+		err = r.client.Create(context.TODO(), oauthClient)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
 		}
@@ -534,7 +534,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Reconcile environment variables based on deployment type
 	envVar, _ := util.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
 	if envVar == nil {
-		err := fmt.Errorf("Environment variable not found: %s", hawtioTypeEnvVar)
+		err := fmt.Errorf("environment variable not found: %s", hawtioTypeEnvVar)
 		return reconcile.Result{}, err
 	}
 	if isClusterDeployment && envVar.Value != strings.ToLower(hawtiov1alpha1.ClusterHawtioDeploymentType) {
@@ -548,7 +548,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	envVar, _ = util.GetEnvVarByName(container.Env, hawtioOAuthClientEnvVar)
 	if envVar == nil {
-		err := fmt.Errorf("Environment variable not found: %s", hawtioOAuthClientEnvVar)
+		err := fmt.Errorf("environment variable not found: %s", hawtioOAuthClientEnvVar)
 		return reconcile.Result{}, err
 	}
 	if isClusterDeployment && envVar.Value != oauthClientName {
@@ -577,7 +577,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 	if requestDeployment {
-		rollout := &appsv1.DeploymentRequest{
+		rollOut := &appsv1.DeploymentRequest{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "DeploymentRequest",
 				APIVersion: "apps.openshift.io/v1",
@@ -586,9 +586,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			Latest: true,
 			Force:  true,
 		}
-		_, err := r.deployment.Deploy(rollout, request.Namespace)
+		_, err := r.deployment.Deploy(rollOut, request.Namespace)
 		if err != nil {
-			reqLogger.Error(err, "Failed to rollout deployment")
+			reqLogger.Error(err, "Failed to roll-out deployment")
 			return reconcile.Result{}, err
 		}
 	}
@@ -649,7 +649,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	// TODO: OAuth client reconciliation triggered by rollout deployment should ideally
+	// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
 	// wait until the deployment is successful before deleting resources.
 	if url := osutil.GetRouteURL(route); instance.Status.URL != url {
 		if isClusterDeployment {
@@ -720,7 +720,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request reconcile.Request) ([]runtime.RawExtension, error) {
 	res, err := osutil.LoadKubernetesResourceFromFile(hawtioTemplatePath)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading template: %s", err)
+		return nil, fmt.Errorf("error reading template: %s", err)
 	}
 
 	parameters := make(map[string]string)
@@ -797,13 +797,13 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 		oc := &oauthv1.OAuthClient{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
 		if err != nil && !errors.IsNotFound(err) {
-			return fmt.Errorf("Failed to get OAuth client: %v", err)
+			return fmt.Errorf("failed to get OAuth client: %v", err)
 		}
 		updated := removeRedirectURIFromOauthClient(oc, cr.Status.URL)
 		if updated {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
-				return fmt.Errorf("Failed to remove redirect URI from OAuth client: %v", err)
+				return fmt.Errorf("failed to remove redirect URI from OAuth client: %v", err)
 			}
 		}
 	}
@@ -815,7 +815,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 
 	err = r.client.Update(context.TODO(), cr)
 	if err != nil {
-		return fmt.Errorf("Failed to remove finalizer: %v", err)
+		return fmt.Errorf("failed to remove finalizer: %v", err)
 	}
 
 	return nil
