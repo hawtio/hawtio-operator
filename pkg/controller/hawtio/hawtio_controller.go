@@ -367,8 +367,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if isOpenShift4 {
 		// Check whether client certificate secret exists
-		clientCertificateSecret := &corev1.Secret{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: request.Name + "-tls-proxying"}, clientCertificateSecret)
+		clientCertificateSecret, err := r.coreClient.
+			Secrets(request.Namespace).
+			Get(request.Name+"-tls-proxying", metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				reqLogger.Info("Client certificate secret must be created", "secret", request.Name+"-tls-proxying")
@@ -387,7 +388,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			Name: clientCertificateSecretVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: instance.Name + "-tls-proxying",
+					SecretName: clientCertificateSecret.Name,
 				},
 			},
 		}
