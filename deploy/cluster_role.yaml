@@ -9,3 +9,9 @@ rules:
   - oauthclients
   verbs:
   - '*'
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - clusterversions
+  verbs:
+  - get
