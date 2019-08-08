@@ -6,14 +6,26 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - configmaps
-  - pods
   - secrets
-  - serviceaccounts
-  - services
+  - pods
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - apps
