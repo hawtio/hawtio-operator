@@ -12,7 +12,7 @@ type HawtioDeploymentType = string
 
 const (
 	// ClusterHawtioDeploymentType is the deployment type capable of discovering
-	// and managing applications accross all namespaces the authenticated user
+	// and managing applications across all namespaces the authenticated user
 	// has access to.
 	ClusterHawtioDeploymentType HawtioDeploymentType = "Cluster"
 
