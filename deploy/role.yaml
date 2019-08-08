@@ -46,12 +46,6 @@ rules:
   verbs:
   - '*'
 - apiGroups:
-  - hawtio.io
-  resources:
-  - '*'
-  verbs:
-  - '*'
-- apiGroups:
   - hawt.io
   resources:
   - '*'
