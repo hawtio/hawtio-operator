@@ -235,6 +235,16 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
+	// Init phase
+	if len(instance.Spec.Type) == 0 {
+		instance.Spec.Type = hawtiov1alpha1.ClusterHawtioDeploymentType
+		err = r.client.Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to update type: %v", err)
+		}
+		return reconcile.Result{}, nil
+	}
+
 	// Invariant checks
 	isClusterDeployment := strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType)
 	isNamespaceDeployment := strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
