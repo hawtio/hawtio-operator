@@ -10,17 +10,17 @@ metadata:
     containerImage: docker.io/hawtio/operator:0.1.0
     repository: https://github.com/hawtio/hawtio-operator
     createdAt: "2019-08-09T12:31:00Z"
-    support: Hawtio
+    support: Red Hat
     alm-examples: |-
       [{
         "apiVersion": "hawt.io/v1alpha1",
         "kind": "Hawtio",
         "metadata": {
-          "name": "example-hawtio",
-          "spec": {
-            "replicas": "1",
-            "version": "1.7.1"
-          }
+          "name": "example-hawtio"
+        },
+        "spec": {
+          "replicas": 1,
+          "version": "1.7.1"
         }
       }]
   namespace: placeholder
@@ -30,7 +30,7 @@ spec:
   - email: hawtio@googlegroups.com
     name: The Hawtio team
   provider:
-    name: The Hawtio community
+    name: Red Hat
   maturity: alpha
   version: 0.1.0
   description: |
@@ -83,6 +83,11 @@ spec:
        ```
 
     Note that `CN=hawtio-online.hawtio.svc` must be trusted by the Jolokia agents, for which client certification authentication is enabled. See the `clientPrincipal` parameter from the [Jolokia agent configuration options](https://jolokia.org/reference/html/agents.html#agent-jvm-config).
+  keywords:
+  - Hawtio
+  - Java
+  - Management
+  - Console
   links:
     - name: Hawtio Web site
       url: https://hawt.io
