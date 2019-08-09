@@ -165,12 +165,6 @@ spec:
           - update
           - watch
         - apiGroups:
-          - apps
-          resources:
-          - deployments
-          verbs:
-          - '*'
-        - apiGroups:
           - apps.openshift.io
           resources:
           - deploymentconfigs
