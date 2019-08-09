@@ -202,6 +202,21 @@ spec:
           verbs:
           - '*'
         serviceAccountName: hawtio-operator
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - oauth.openshift.io
+          resources:
+          - oauthclients
+          verbs:
+          - '*'
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - clusterversions
+          verbs:
+          - get
+        serviceAccountName: hawtio-operator
     strategy: deployment
   installModes:
   - supported: true

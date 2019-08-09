@@ -3,3 +3,4 @@ crd-cr-paths:
 - deploy/crds/hawtio_v1alpha1_hawtio_crd.yaml
 role-paths:
 - deploy/role.yaml
+- deploy/cluster_role.yaml
