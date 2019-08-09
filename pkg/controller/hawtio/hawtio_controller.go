@@ -289,7 +289,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			// Let's default to OpenShift 3 as ClusterVersion API was introduced in OpenShift 4
 			openShiftSemVer, _ = semver.NewVersion("3")
 		} else {
-			reqLogger.Error(err, "Error parsing version constraint")
+			reqLogger.Error(err, "Error reading cluster version")
 			return reconcile.Result{}, err
 		}
 	} else {
