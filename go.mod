@@ -7,14 +7,14 @@ require (
 	// OpenShift 4.1
 	github.com/openshift/api v0.0.0-20190716152234-9ea19f9dd578+incompatible
 	github.com/openshift/client-go v0.0.0-20190412095722-0255926f5393
-	github.com/operator-framework/operator-sdk v0.9.0
+	github.com/operator-framework/operator-sdk v0.10.0
 	k8s.io/api v0.0.0-20190612125737-db0771252981
 	k8s.io/apimachinery v0.0.0-20190612125636-6a5db36e93ad
 	k8s.io/client-go v11.0.0+incompatible
 	sigs.k8s.io/controller-runtime v0.1.10
 )
 
-// Pinned to operator-sdk 0.9.0 / kubernetes 1.13.4
+// Pinned to operator-sdk 0.10.0 / kubernetes 1.13.4
 replace (
 	k8s.io/api => k8s.io/api v0.0.0-20190222213804-5cb15d344471
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190228180357-d002e88f6236
