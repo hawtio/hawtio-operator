@@ -687,7 +687,7 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 
 	parameters := make(map[string]string)
 	parameters["APPLICATION_NAME"] = cr.Name
-	parameters["DEPLOYMENT_TYPE"] = cr.Spec.Type
+	parameters["DEPLOYMENT_TYPE"] = strings.ToLower(cr.Spec.Type)
 	parameters["IMAGE"] = getImageFor(cr.Spec.Version)
 	parameters["REPLICAS"] = fmt.Sprint(cr.Spec.Replicas)
 
