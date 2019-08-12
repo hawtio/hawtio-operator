@@ -130,7 +130,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: hawtio-operator
-                image: docker.io/hawtio/operator
+                image: docker.io/hawtio/operator:0.1.0
                 imagePullPolicy: Always
                 name: hawtio-operator
                 ports:
