@@ -22,11 +22,15 @@ spec:
       description: Creation date
       type: date
       JSONPath: .metadata.creationTimestamp
-    - name: URL
-      description: Hawtio console URL
-      type: string
-      JSONPath: .status.URL
     - name: Image
       description: Hawtio console image
       type: string
       JSONPath: .status.image
+    - name: Phase
+      description: Hawtio console phase
+      type: string
+      JSONPath: .status.phase
+    - name: URL
+      description: Hawtio console URL
+      type: string
+      JSONPath: .status.URL

@@ -197,6 +197,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Delete phase
+
 	if instance.GetDeletionTimestamp() != nil {
 		err = r.deletion(instance)
 		if err != nil {
@@ -221,6 +222,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Init phase
+
 	if len(instance.Spec.Type) == 0 {
 		instance.Spec.Type = hawtiov1alpha1.ClusterHawtioDeploymentType
 		err = r.client.Update(context.TODO(), instance)
@@ -236,7 +238,24 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if !isNamespaceDeployment && !isClusterDeployment {
 		err := fmt.Errorf("unsupported type: %s", instance.Spec.Type)
+		if instance.Status.Phase != hawtiov1alpha1.HawtioPhaseFailed {
+			instance.Status.Phase = hawtiov1alpha1.HawtioPhaseFailed
+			err = r.client.Status().Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
+			}
+		}
 		return reconcile.Result{}, err
+	}
+
+	// Update status
+	if len(instance.Status.Phase) == 0 || instance.Status.Phase ==  hawtiov1alpha1.HawtioPhaseFailed {
+		instance.Status.Phase = hawtiov1alpha1.HawtioPhaseInitialized
+		err = r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
+		}
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	// Install phase
@@ -429,6 +448,16 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
 		}
+	}
+
+	// Update status
+	if instance.Status.Phase != hawtiov1alpha1.HawtioPhaseDeployed {
+		instance.Status.Phase = hawtiov1alpha1.HawtioPhaseDeployed
+		err = r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
+		}
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	// Update phase
