@@ -165,21 +165,22 @@ spec:
           - update
           - watch
         - apiGroups:
-          - apps.openshift.io
+          - apps
           resources:
-          - deploymentconfigs
+          - deployments
           verbs:
-          - '*'
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
         - apiGroups:
           - route.openshift.io
           resources:
           - routes
-          verbs:
-          - '*'
-        - apiGroups:
-          - image.openshift.io
-          resources:
-          - imagestreams
           verbs:
           - '*'
         - apiGroups:
