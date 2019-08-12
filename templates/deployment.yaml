@@ -14,7 +14,6 @@ parameters:
 - name: DEPLOYMENT_TYPE
   displayName: Deployment Type
   required: true
-  value: namespace
   description: The deployment type, either "cluster" or "namespace"
 - name: OAUTH_CLIENT
   displayName: OAuth Client Name
