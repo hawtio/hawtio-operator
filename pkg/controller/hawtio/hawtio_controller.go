@@ -13,6 +13,7 @@ import (
 	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,8 +32,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	appsv1 "github.com/openshift/api/apps/v1"
-	imagev1 "github.com/openshift/api/image/v1"
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	templatev1 "github.com/openshift/api/template/v1"
@@ -48,10 +47,11 @@ const (
 	hawtioFinalizer    = "finalizer.hawtio.hawt.io"
 	hawtioTemplatePath = "templates/deployment.yaml"
 
-	configVersionAnnotation = "hawtio.hawt.io/configversion"
-	hawtioVersionAnnotation = "hawtio.hawt.io/hawtioversion"
-	hawtioTypeAnnotation    = "hawtio.hawt.io/hawtioType"
-	hostGeneratedAnnotation = "openshift.io/host.generated"
+	configVersionAnnotation     = "hawtio.hawt.io/configversion"
+	deploymentRolloutAnnotation = "hawtio.hawt.io/restartedAt"
+	hawtioVersionAnnotation     = "hawtio.hawt.io/hawtioversion"
+	hawtioTypeAnnotation        = "hawtio.hawt.io/hawtioType"
+	hostGeneratedAnnotation     = "openshift.io/host.generated"
 
 	hawtioTypeEnvVar        = "HAWTIO_ONLINE_MODE"
 	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
@@ -67,15 +67,7 @@ const (
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-	err := appsv1.Install(mgr.GetScheme())
-	if err != nil {
-		return err
-	}
-	err = imagev1.Install(mgr.GetScheme())
-	if err != nil {
-		return err
-	}
-	err = oauthv1.Install(mgr.GetScheme())
+	err := oauthv1.Install(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
@@ -95,12 +87,6 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 	r.template = processor
-
-	deployment, err := openshift.NewDeploymentClient(mgr.GetConfig())
-	if err != nil {
-		return err
-	}
-	r.deployment = deployment
 
 	oauthClient, err := openshift.NewOAuthClientClient(mgr.GetConfig())
 	if err != nil {
@@ -161,7 +147,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
-	err = c.Watch(&source.Kind{Type: &appsv1.DeploymentConfig{}}, &handler.EnqueueRequestForOwner{
+	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &hawtiov1alpha1.Hawtio{},
 	})
@@ -182,7 +168,6 @@ type ReconcileHawtio struct {
 	config       *rest.Config
 	scheme       *runtime.Scheme
 	template     *openshift.TemplateProcessor
-	deployment   *openshift.DeploymentClient
 	coreClient   *corev1client.CoreV1Client
 	oauthClient  *openshift.OAuthClientClient
 	configClient *configv1client.Clientset
@@ -340,8 +325,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	deploymentConfig := osutil.GetDeploymentConfig(objs)
-	container := deploymentConfig.Spec.Template.Spec.Containers[0]
+	deployment := util.GetDeployment(objs)
+	container := deployment.Spec.Template.Spec.Containers[0]
 
 	if isOpenShift4 {
 		container.Env = append(container.Env,
@@ -403,7 +388,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			},
 		}
 
-		deploymentConfig.Spec.Template.Spec.Volumes = append(deploymentConfig.Spec.Template.Spec.Volumes, volume)
+		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, volume)
 
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 			Name:      clientCertificateSecretVolumeName,
@@ -411,7 +396,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		})
 	}
 
-	deploymentConfig.Spec.Template.Spec.Containers[0] = container
+	deployment.Spec.Template.Spec.Containers[0] = container
 
 	// Create runtime objects
 	err = r.createObjects(objs, request.Namespace, instance)
@@ -448,45 +433,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Update phase
 
-	// Reconcile image stream
-	stream := &imagev1.ImageStream{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, stream)
-	if err != nil && errors.IsNotFound(err) {
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get image stream")
-		return reconcile.Result{}, err
-	}
-	// Add tag to the image stream if missing
-	var tag *imagev1.TagReference
-	if ok, tag = imageStreamContainsTag(stream, consoleVersion); !ok {
-		tag = &imagev1.TagReference{
-			Name: consoleVersion,
-			From: &corev1.ObjectReference{
-				Kind: "DockerImage",
-				Name: "docker.io/hawtio/online:" + consoleVersion,
-			},
-			ImportPolicy: imagev1.TagImportPolicy{
-				Scheduled: true,
-			},
-		}
-		stream.Spec.Tags = append(stream.Spec.Tags, *tag)
-		err := r.client.Update(context.TODO(), stream)
-		if err != nil {
-			reqLogger.Error(err, "Failed to reconcile to image stream")
-			return reconcile.Result{}, err
-		}
-	}
-	// Update CR status image field from image stream
-	if instance.Status.Image != tag.From.Name {
-		instance.Status.Image = tag.From.Name
-		err := r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to reconcile from image stream")
-			return reconcile.Result{}, err
-		}
-	}
-
 	config := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, config)
 	if err != nil && errors.IsNotFound(err) {
@@ -497,7 +443,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile deployment
-	deployment := &appsv1.DeploymentConfig{}
+	deployment = &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
@@ -507,14 +453,15 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 	updateDeployment := false
 
+	container = deployment.Spec.Template.Spec.Containers[0]
+
 	// Reconcile image
-	if trigger := fmt.Sprintf("%s:%s", instance.Name, consoleVersion); deployment.Spec.Triggers[0].ImageChangeParams.From.Name != trigger {
-		deployment.Spec.Triggers[0].ImageChangeParams.From.Name = trigger
+	if image := getImageFor(instance.Spec.Version); container.Image != image {
+		container.Image = image
 		updateDeployment = true
 	}
 
 	// Reconcile service signing secret volume mount path
-	container = deployment.Spec.Template.Spec.Containers[0]
 	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretVolumeName)
 	if isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretVolumeMountPath {
 		volumeMount.MountPath = serviceSigningSecretVolumeMountPath
@@ -526,8 +473,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Reconcile replicas
 	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
-		if replicas := deployment.Spec.Replicas; instance.Spec.Replicas != replicas {
-			instance.Spec.Replicas = replicas
+		if replicas := deployment.Spec.Replicas; replicas != nil && instance.Spec.Replicas != *replicas {
+			instance.Spec.Replicas = *replicas
 			err := r.client.Update(context.TODO(), instance)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile from deployment")
@@ -535,9 +482,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 	} else {
-		if replicas := instance.Spec.Replicas; deployment.Spec.Replicas != replicas {
+		if replicas := instance.Spec.Replicas; deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != replicas {
 			deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
-			deployment.Spec.Replicas = replicas
+			deployment.Spec.Replicas = &replicas
 			updateDeployment = true
 		}
 	}
@@ -580,26 +527,30 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		updateDeployment = true
 	}
 
+	if requestDeployment {
+		// similar to `kubectl rollout restart`
+		if deployment.Spec.Template.ObjectMeta.Annotations == nil {
+			deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+		}
+		deployment.Spec.Template.ObjectMeta.Annotations[deploymentRolloutAnnotation] = time.Now().Format(time.RFC3339)
+		updateDeployment = true
+	}
+
 	if updateDeployment {
+		deployment.Spec.Template.Spec.Containers[0] = container
 		err := r.client.Update(context.TODO(), deployment)
 		if err != nil {
 			reqLogger.Error(err, "Failed to reconcile to deployment")
 			return reconcile.Result{}, err
 		}
 	}
-	if requestDeployment {
-		rollOut := &appsv1.DeploymentRequest{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "DeploymentRequest",
-				APIVersion: "apps.openshift.io/v1",
-			},
-			Name:   request.NamespacedName.Name,
-			Latest: true,
-			Force:  true,
-		}
-		_, err := r.deployment.Deploy(rollOut, request.Namespace)
+
+	// Update CR status image field from deployment container image
+	if instance.Status.Image != container.Image {
+		instance.Status.Image = container.Image
+		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
-			reqLogger.Error(err, "Failed to roll-out deployment")
+			reqLogger.Error(err, "Failed to reconcile image status from deployment")
 			return reconcile.Result{}, err
 		}
 	}
@@ -737,10 +688,7 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 	parameters := make(map[string]string)
 	parameters["APPLICATION_NAME"] = cr.Name
 	parameters["DEPLOYMENT_TYPE"] = cr.Spec.Type
-
-	if version := cr.Spec.Version; len(version) > 0 {
-		parameters["VERSION"] = version
-	}
+	parameters["IMAGE"] = getImageFor(cr.Spec.Version)
 
 	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		parameters["OAUTH_CLIENT"] = oauthClientName
@@ -830,6 +778,14 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	}
 
 	return nil
+}
+
+func getImageFor(version string) string {
+	v := "latest"
+	if len(version) > 0 {
+		v = version
+	}
+	return "docker.io/hawtio/online:" + v
 }
 
 func getRuntimeObjects(exts []runtime.RawExtension) ([]runtime.Object, error) {

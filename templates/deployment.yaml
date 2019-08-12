@@ -7,10 +7,9 @@ parameters:
   displayName: Application Name
   required: true
   value: hawtio
-- name: VERSION
-  displayName: Application Version
+- name: IMAGE
+  displayName: Application Image
   required: true
-  value: latest
   description: The name assigned to the Hawtio resources
 - name: DEPLOYMENT_TYPE
   displayName: Deployment Type
@@ -47,22 +46,8 @@ objects:
         },
         "disabledRoutes": []
       }
-- apiVersion: v1
-  kind: ImageStream
-  metadata:
-    name: ${APPLICATION_NAME}
-    labels:
-      app: hawtio
-  spec:
-    tags:
-    - from:
-        kind: DockerImage
-        name: docker.io/hawtio/online:${VERSION}
-      importPolicy:
-        scheduled: true
-      name: ${VERSION}
-- apiVersion: v1
-  kind: DeploymentConfig
+- apiVersion: apps/v1
+  kind: Deployment
   metadata:
     labels:
       app: hawtio
@@ -70,24 +55,17 @@ objects:
   spec:
     replicas: ${{REPLICAS}}
     selector:
-      app: hawtio
-      deploymentconfig: ${APPLICATION_NAME}
-    strategy:
-      rollingParams:
-        intervalSeconds: 1
-        maxSurge: 25%
-        maxUnavailable: 25%
-        timeoutSeconds: 600
-        updatePeriodSeconds: 1
-      type: Rolling
+      matchLabels:
+        app: hawtio
+        deployment: ${APPLICATION_NAME}
     template:
       metadata:
         labels:
           app: hawtio
-          deploymentconfig: ${APPLICATION_NAME}
+          deployment: ${APPLICATION_NAME}
       spec:
         containers:
-        - image: hawtio/online
+        - image: ${IMAGE}
           imagePullPolicy: Always
           name: hawtio-online
           ports:
@@ -141,16 +119,6 @@ objects:
         - name: hawtio-online-tls-serving
           secret:
             secretName: ${APPLICATION_NAME}-tls-serving
-    triggers:
-    - imageChangeParams:
-        automatic: true
-        containerNames:
-        - hawtio-online
-        from:
-          kind: ImageStreamTag
-          name: ${APPLICATION_NAME}:${VERSION}
-      type: ImageChange
-    - type: ConfigChange
 - apiVersion: v1
   kind: Service
   metadata:
