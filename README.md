@@ -107,26 +107,23 @@ example-hawtio   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/on
 $ kubectl edit configmap example-hawtio
 configmap/example-hawtio edited
 # Watch rollout deployment triggered by config change
-$ oc rollout status dc/example-hawtio
-Waiting for rollout to finish: 0 out of 3 new replicas have been updated...
-Waiting for rollout to finish: 1 out of 3 new replicas have been updated...
-Waiting for rollout to finish: 2 out of 3 new replicas have been updated...
-Waiting for rollout to finish: 3 out of 3 new replicas have been updated...
-Waiting for rollout to finish: 1 old replicas are pending termination...
-Waiting for latest deployment config spec to be observed by the controller loop...
-replication controller "example-hawtio-2" successfully rolled out
+$ kubectl rollout status deployment.v1.apps/example-hawtio
+Waiting for deployment "example-hawtio" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "example-hawtio" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "example-hawtio" rollout to finish: 1 old replicas are pending termination...
+deployment "example-hawtio" successfully rolled out
 
 # Change the Hawtio version
-$ kubectl patch hawtio example-hawtio --type='merge' -p '{"spec":{"version":"1.6.0"}}'
+$ kubectl patch hawtio example-hawtio --type='merge' -p '{"spec":{"version":"1.7.1"}}'
 hawtio.hawt.io/example-hawtio patched
 # Check the status has updated accordingly
 $ kubectl get hawtio
 NAME             AGE   URL                                   IMAGE
-example-hawtio   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:1.6.0
+example-hawtio   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:1.7.1
 # Watch rollout deployment triggered by version change
-$ oc rollout status dc/example-hawtio
+$ kubectl rollout status deployment.v1.apps/example-hawtio
 ...
-replication controller "example-hawtio-3" successfully rolled out
+deployment "example-hawtio" successfully rolled out
 
 # Delete Hawtio
 $ kubectl delete hawtio example-hawtio
