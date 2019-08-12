@@ -689,6 +689,7 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 	parameters["APPLICATION_NAME"] = cr.Name
 	parameters["DEPLOYMENT_TYPE"] = cr.Spec.Type
 	parameters["IMAGE"] = getImageFor(cr.Spec.Version)
+	parameters["REPLICAS"] = fmt.Sprint(cr.Spec.Replicas)
 
 	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		parameters["OAUTH_CLIENT"] = oauthClientName
@@ -696,9 +697,6 @@ func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request rec
 		parameters["OAUTH_CLIENT"] = cr.Name
 	}
 
-	if replicas := cr.Spec.Replicas; replicas > 0 {
-		parameters["REPLICAS"] = fmt.Sprint(replicas)
-	}
 	if route := cr.Spec.RouteHostName; len(route) > 0 {
 		parameters["ROUTE_HOSTNAME"] = route
 	}

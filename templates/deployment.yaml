@@ -21,7 +21,6 @@ parameters:
   description: The OAuth client name
 - name: REPLICAS
   required: true
-  value: "1"
   description: The number of desired replicas
 - name: ROUTE_HOSTNAME
   description: The externally-reachable host name that routes to the Hawtio service
