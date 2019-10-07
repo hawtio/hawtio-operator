@@ -3,6 +3,7 @@ package hawtio
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -63,6 +64,8 @@ const (
 	serviceSigningSecretVolumeMountPath       = "/etc/tls/private/serving"
 	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
 )
+
+var ImageRepository string
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -249,7 +252,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Update status
-	if len(instance.Status.Phase) == 0 || instance.Status.Phase ==  hawtiov1alpha1.HawtioPhaseFailed {
+	if len(instance.Status.Phase) == 0 || instance.Status.Phase == hawtiov1alpha1.HawtioPhaseFailed {
 		instance.Status.Phase = hawtiov1alpha1.HawtioPhaseInitialized
 		err = r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
@@ -808,11 +811,19 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 }
 
 func getImageFor(version string) string {
-	v := "latest"
+	tag := "latest"
 	if len(version) > 0 {
-		v = version
+		tag = version
 	}
-	return "docker.io/hawtio/online:" + v
+	repository := os.Getenv("IMAGE_REPOSITORY")
+	if repository == "" {
+		if ImageRepository != "" {
+			repository = ImageRepository
+		} else {
+			repository = "docker.io/hawtio/online"
+		}
+	}
+	return repository + ":" + tag
 }
 
 func getRuntimeObjects(exts []runtime.RawExtension) ([]runtime.Object, error) {
