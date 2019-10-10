@@ -96,11 +96,24 @@ spec:
     mediatype: image/svg+xml
   customresourcedefinitions:
     owned:
-    - description: A Hawtio Console
+    - name: hawtios.hawt.io
       displayName: Hawtio
+      description: A Hawtio Console
       kind: Hawtio
-      name: hawtios.hawt.io
       version: v1alpha1
+      specDescriptors:
+        - description: The number of Hawtio pods to deploy
+          displayName: Replicas
+          path: replicas
+          x-descriptors:
+            - 'urn:alm:descriptor:com.tectonic.ui:fieldGroup:Deployment'
+            - 'urn:alm:descriptor:com.tectonic.ui:podCount'
+        - description: The version used for the Hawtio
+          displayName: Version
+          path: version
+          x-descriptors:
+            - 'urn:alm:descriptor:com.tectonic.ui:fieldGroup:Deployment'
+            - 'urn:alm:descriptor:com.tectonic.ui:text'
   install:
     spec:
       deployments:
