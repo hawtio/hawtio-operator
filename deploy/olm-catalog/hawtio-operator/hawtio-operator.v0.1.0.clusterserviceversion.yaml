@@ -68,7 +68,7 @@ spec:
 
           [ v3_ext ]
           authorityKeyIdentifier=keyid,issuer:always
-          keyUsage=keyEncipherment,dataEncipherment
+          keyUsage=keyEncipherment,dataEncipherment,digitalSignature
           extendedKeyUsage=serverAuth,clientAuth
         EOT
         # Generate the CSR
