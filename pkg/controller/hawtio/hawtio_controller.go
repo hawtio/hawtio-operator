@@ -60,12 +60,14 @@ const (
 	oauthClientName                           = "hawtio"
 	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
 	serviceSigningSecretVolumeName            = "hawtio-online-tls-serving"
-	serviceSigningSecretVolumeMountPathPre170 = "/etc/tls/private"
+	serviceSigningSecretVolumeMountPathLegacy = "/etc/tls/private"
 	serviceSigningSecretVolumeMountPath       = "/etc/tls/private/serving"
 	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
 )
 
+// Go build-time variables
 var ImageRepository string
+var LegacyServingCertificateMountVersion string
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -316,20 +318,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if len(consoleVersion) == 0 {
 		consoleVersion = "latest"
 	}
-	var isConsoleVersion170orHigher bool
-	if consoleVersion != "latest" {
-		semVer, err := semver.NewVersion(consoleVersion)
-		if err != nil {
-			reqLogger.Error(err, "Error parsing console semantic version", "version", consoleVersion)
-			return reconcile.Result{}, err
-		}
-		constraint, _ := semver.NewConstraint(">= 1.7.0")
-		if constraint.Check(semVer) {
-			isConsoleVersion170orHigher = true
-		}
-	} else {
-		isConsoleVersion170orHigher = true
-	}
 
 	var openShiftConsoleUrl string
 	if isOpenShift4 {
@@ -371,15 +359,14 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Adjust service signing secret volume mount path
-	var volumeMountPath string
-	if isConsoleVersion170orHigher {
-		volumeMountPath = serviceSigningSecretVolumeMountPath
-	} else {
-		volumeMountPath = serviceSigningSecretVolumeMountPathPre170
+	serviceSigningCertificateVolumeMountPath, err := getServingCertificateMountPathFor(consoleVersion)
+	if err != nil {
+		reqLogger.Error(err, "Error getting service signing certificate mount path", "version", consoleVersion)
+		return reconcile.Result{}, err
 	}
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 		Name:      serviceSigningSecretVolumeName,
-		MountPath: volumeMountPath,
+		MountPath: serviceSigningCertificateVolumeMountPath,
 	})
 
 	if isOpenShift4 {
@@ -495,11 +482,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Reconcile service signing secret volume mount path
 	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretVolumeName)
-	if isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretVolumeMountPath {
+	if volumeMount.MountPath != serviceSigningCertificateVolumeMountPath {
 		volumeMount.MountPath = serviceSigningSecretVolumeMountPath
-		updateDeployment = true
-	} else if !isConsoleVersion170orHigher && volumeMount.MountPath != serviceSigningSecretVolumeMountPathPre170 {
-		volumeMount.MountPath = serviceSigningSecretVolumeMountPathPre170
 		updateDeployment = true
 	}
 
@@ -824,6 +808,31 @@ func getImageFor(version string) string {
 		}
 	}
 	return repository + ":" + tag
+}
+
+func getServingCertificateMountPathFor(version string) (string, error) {
+	if version != "latest" {
+		semVer, err := semver.NewVersion(version)
+		if err != nil {
+			return "", err
+		}
+		var constraints *semver.Constraints
+		if LegacyServingCertificateMountVersion == "" {
+			constraints, err = semver.NewConstraint("< 1.7.0")
+			if err != nil {
+				return "", err
+			}
+		} else {
+			constraints, err = semver.NewConstraint(LegacyServingCertificateMountVersion)
+			if err != nil {
+				return "", err
+			}
+		}
+		if constraints.Check(semVer) {
+			return serviceSigningSecretVolumeMountPathLegacy, nil
+		}
+	}
+	return serviceSigningSecretVolumeMountPath, nil
 }
 
 func getRuntimeObjects(exts []runtime.RawExtension) ([]runtime.Object, error) {
