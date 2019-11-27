@@ -73,6 +73,19 @@ type HawtioList struct {
 	Items           []Hawtio `json:"items"`
 }
 
+// Hawtconfig defines the hawtconfig.json structure
+type Hawtconfig struct {
+	Branding struct {
+		AppName     string `json:"appName"`
+		AppLogoURL  string `json:"appLogoUrl"`
+		ConsoleLink struct {
+			Text              string `json:"text"`
+			Section           string `json:"section"`
+			ImageRelativePath string `json:"imageRelativePath"`
+		} `json:"consoleLink"`
+	} `json:"branding"`
+}
+
 func init() {
 	SchemeBuilder.Register(&Hawtio{}, &HawtioList{})
 }
