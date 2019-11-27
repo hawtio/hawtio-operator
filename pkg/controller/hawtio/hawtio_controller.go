@@ -16,6 +16,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	consolev1 "github.com/openshift/api/console/v1"
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	templatev1 "github.com/openshift/api/template/v1"
@@ -47,6 +49,7 @@ var log = logf.Log.WithName("controller_hawtio")
 const (
 	hawtioFinalizer    = "finalizer.hawtio.hawt.io"
 	hawtioTemplatePath = "templates/deployment.yaml"
+	consoleLinkCrdName = "consolelinks.console.openshift.io"
 
 	configVersionAnnotation     = "hawtio.hawt.io/configversion"
 	deploymentRolloutAnnotation = "hawtio.hawt.io/restartedAt"
@@ -77,6 +80,14 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 	err = routev1.Install(mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	err = consolev1.AddToScheme(mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+	err = apiextensionsv1beta1.AddToScheme(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
@@ -452,8 +463,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Update phase
 
-	config := &corev1.ConfigMap{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, config)
+	configMap := &corev1.ConfigMap{}
+	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
@@ -535,7 +546,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	requestDeployment := false
-	if configVersion := config.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
+	if configVersion := configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
 		if len(deployment.Annotations[configVersionAnnotation]) > 0 {
 			requestDeployment = true
 		}
@@ -604,6 +615,49 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 		// And requeue to create a new route in the next reconcile loop
 		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// Reconcile console link in application menu
+	if isClusterDeployment {
+		consoleLinkCrd := &apiextensionsv1beta1.CustomResourceDefinition{}
+		err := r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkCrdName}, consoleLinkCrd)
+		if err != nil && errors.IsNotFound(err) {
+			reqLogger.Info("No support for console links")
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to get ConsoleLink CRD")
+		} else {
+			hawtconfig, err := osutil.GetHawtconfig(configMap)
+			if err != nil {
+				reqLogger.Error(err, "Failed to get hawtconfig")
+				return reconcile.Result{}, err
+			}
+			name := instance.ObjectMeta.Name
+			consoleLink := &consolev1.ConsoleLink{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: name}, consoleLink)
+			if err != nil && errors.IsNotFound(err) {
+				// If not found, create a console link
+				consoleLink := osutil.NewConsoleLink(name, route, hawtconfig)
+				err = r.client.Create(context.TODO(), consoleLink)
+				if err != nil {
+					reqLogger.Error(err, "Failed to create console link", "ConsoleLink.Name", consoleLink.Name)
+					return reconcile.Result{}, err
+				}
+				// Console link created successfully - return and requeue
+				return reconcile.Result{Requeue: true}, nil
+			} else if err != nil {
+				reqLogger.Error(err, "Failed to get console link")
+				return reconcile.Result{}, err
+			}
+			// If found, update it
+			consoleLinkCopy := consoleLink.DeepCopy()
+			osutil.UpdateLink(consoleLinkCopy, route, hawtconfig)
+			patch := client.MergeFrom(consoleLink)
+			err = r.client.Patch(context.TODO(), consoleLinkCopy, patch)
+			if err != nil {
+				reqLogger.Error(err, "Failed to update console link", "ConsoleLink.Name", consoleLink.Name)
+				return reconcile.Result{}, err
+			}
+		}
 	}
 
 	// Reconcile OAuth client
