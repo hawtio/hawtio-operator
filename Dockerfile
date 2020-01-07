@@ -1,7 +1,7 @@
 FROM golang:1.13.5-alpine3.11 AS builder
 
 RUN apk update
-RUN apk add git make mercurial
+RUN apk add git make
 
 WORKDIR /hawtio-operator
 
