@@ -497,6 +497,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				}
 			}
 			consoleLink = osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
+			err = controllerutil.SetControllerReference(instance, consoleLink, r.scheme)
+			if err != nil {
+				reqLogger.Error(err, "Failed to set console link owner", "name", consoleLink.Name)
+				return reconcile.Result{}, err
+			}
 			err = r.client.Create(context.TODO(), consoleLink)
 			if err != nil {
 				reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
@@ -674,6 +679,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				if errors.IsNotFound(err) {
 					// If not found, create a console link
 					consoleLink := osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
+					err = controllerutil.SetControllerReference(instance, consoleLink, r.scheme)
+					if err != nil {
+						reqLogger.Error(err, "Failed to set console link owner", "name", consoleLink.Name)
+						return reconcile.Result{}, err
+					}
 					err = r.client.Create(context.TODO(), consoleLink)
 					if err != nil {
 						reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
