@@ -264,7 +264,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	// Update status
 	if len(instance.Status.Phase) == 0 || instance.Status.Phase == hawtiov1alpha1.HawtioPhaseFailed {
 		instance.Status.Phase = hawtiov1alpha1.HawtioPhaseInitialized
 		err = r.client.Status().Update(context.TODO(), instance)
@@ -425,6 +424,24 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
+	configMap := &corev1.ConfigMap{}
+	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
+	if err != nil && errors.IsNotFound(err) {
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get config map")
+		return reconcile.Result{}, err
+	}
+
+	route := &routev1.Route{}
+	err = r.client.Get(context.TODO(), request.NamespacedName, route)
+	if err != nil && errors.IsNotFound(err) {
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get route")
+		return reconcile.Result{}, err
+	}
+
 	if isClusterDeployment {
 		// Clean-up service account as OAuth client if any.
 		// This happens when the deployment type is changed
@@ -449,6 +466,43 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
 		}
+
+		// Add console link in OpenShift console
+		consoleLinkCrd := &apiextensionsv1beta1.CustomResourceDefinition{}
+		// TODO: Use a direct client to avoid having an informer watching for CRDs
+		err := r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkCrdName}, consoleLinkCrd)
+		if err != nil && errors.IsNotFound(err) {
+			reqLogger.Info("No support for console links")
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to get ConsoleLink CRD")
+			return reconcile.Result{}, err
+		} else {
+			hawtconfig, err := osutil.GetHawtconfig(configMap)
+			if err != nil {
+				reqLogger.Error(err, "Failed to get hawtconfig")
+				return reconcile.Result{}, err
+			}
+			consoleLink := &consolev1.ConsoleLink{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
+			if err != nil {
+				if !errors.IsNotFound(err) {
+					reqLogger.Error(err, "Failed to get console link")
+					return reconcile.Result{}, err
+				}
+			} else {
+				err = r.client.Delete(context.TODO(), consoleLink)
+				if err != nil {
+					reqLogger.Error(err, "Failed to delete console link")
+					return reconcile.Result{}, err
+				}
+			}
+			consoleLink = osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
+			err = r.client.Create(context.TODO(), consoleLink)
+			if err != nil {
+				reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
+				return reconcile.Result{}, err
+			}
+		}
 	}
 
 	// Update status
@@ -462,15 +516,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Update phase
-
-	configMap := &corev1.ConfigMap{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
-	if err != nil && errors.IsNotFound(err) {
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get config map")
-		return reconcile.Result{}, err
-	}
 
 	// Reconcile deployment
 	deployment = &appsv1.Deployment{}
@@ -582,16 +627,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	// Reconcile route
-	route := &routev1.Route{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, route)
-	if err != nil && errors.IsNotFound(err) {
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get route")
-		return reconcile.Result{}, err
-	}
-
 	// Reconcile route host from routeHostName field
 	if hostName := instance.Spec.RouteHostName; len(hostName) > 0 && hostName != route.Spec.Host {
 		if _, ok := route.Annotations[hostGeneratedAnnotation]; ok {
@@ -617,45 +652,46 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	// Reconcile console link in application menu
+	// Reconcile console link in OpenShift console
 	if isClusterDeployment {
 		consoleLinkCrd := &apiextensionsv1beta1.CustomResourceDefinition{}
+		// TODO: Use a direct client to avoid having an informer watching for CRDs
 		err := r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkCrdName}, consoleLinkCrd)
-		if err != nil && errors.IsNotFound(err) {
-			reqLogger.Info("No support for console links")
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to get ConsoleLink CRD")
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				reqLogger.Error(err, "Failed to get ConsoleLink CRD")
+				return reconcile.Result{}, err
+			}
 		} else {
 			hawtconfig, err := osutil.GetHawtconfig(configMap)
 			if err != nil {
 				reqLogger.Error(err, "Failed to get hawtconfig")
 				return reconcile.Result{}, err
 			}
-			name := instance.ObjectMeta.Name
 			consoleLink := &consolev1.ConsoleLink{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: name}, consoleLink)
-			if err != nil && errors.IsNotFound(err) {
-				// If not found, create a console link
-				consoleLink := osutil.NewConsoleLink(name, route, hawtconfig)
-				err = r.client.Create(context.TODO(), consoleLink)
-				if err != nil {
-					reqLogger.Error(err, "Failed to create console link", "ConsoleLink.Name", consoleLink.Name)
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					// If not found, create a console link
+					consoleLink := osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
+					err = r.client.Create(context.TODO(), consoleLink)
+					if err != nil {
+						reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
+						return reconcile.Result{}, err
+					}
+				} else {
+					reqLogger.Error(err, "Failed to get console link")
 					return reconcile.Result{}, err
 				}
-				// Console link created successfully - return and requeue
-				return reconcile.Result{Requeue: true}, nil
-			} else if err != nil {
-				reqLogger.Error(err, "Failed to get console link")
-				return reconcile.Result{}, err
-			}
-			// If found, update it
-			consoleLinkCopy := consoleLink.DeepCopy()
-			osutil.UpdateLink(consoleLinkCopy, route, hawtconfig)
-			patch := client.MergeFrom(consoleLink)
-			err = r.client.Patch(context.TODO(), consoleLinkCopy, patch)
-			if err != nil {
-				reqLogger.Error(err, "Failed to update console link", "ConsoleLink.Name", consoleLink.Name)
-				return reconcile.Result{}, err
+			} else {
+				consoleLinkCopy := consoleLink.DeepCopy()
+				osutil.UpdateLink(consoleLinkCopy, route, hawtconfig)
+				patch := client.MergeFrom(consoleLink)
+				err = r.client.Patch(context.TODO(), consoleLinkCopy, patch)
+				if err != nil {
+					reqLogger.Error(err, "Failed to update console link", "name", consoleLink.Name)
+					return reconcile.Result{}, err
+				}
 			}
 		}
 	}
