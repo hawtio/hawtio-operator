@@ -320,7 +320,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			return reconcile.Result{}, err
 		}
 	}
-	constraint, _ := semver.NewConstraint(">= 4")
+	constraint, _ := semver.NewConstraint(">= 4-0")
 	isOpenShift4 := constraint.Check(openShiftSemVer)
 
 	// Check Hawtio console version
