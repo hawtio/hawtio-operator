@@ -18,7 +18,7 @@ func GetHawtconfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.Hawtconfig, err
 
 	hawtconfigJSON, ok := configMap.Data["hawtconfig.json"]
 	if !ok {
-		return hawtconfig, errors.New("Did not find hawtconfig.json in ConfigMap")
+		return hawtconfig, errors.New("did not find hawtconfig.json in ConfigMap")
 	}
 	err := json.Unmarshal([]byte(hawtconfigJSON), &hawtconfig)
 	if err != nil {
