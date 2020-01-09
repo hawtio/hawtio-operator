@@ -2,7 +2,7 @@
 ORG = hawtio
 NAMESPACE ?= hawtio
 PROJECT = operator
-TAG = latest
+TAG ?= latest
 
 .PHONY: build-image
 build-image: compile build
