@@ -30,3 +30,7 @@ spec:
       description: Hawtio console image
       type: string
       JSONPath: .status.image
+    - name: Phase
+      description: Hawtio console phase
+      type: string
+      JSONPath: .status.phase
