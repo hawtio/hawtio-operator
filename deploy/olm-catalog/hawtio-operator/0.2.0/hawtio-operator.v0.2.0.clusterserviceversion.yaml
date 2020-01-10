@@ -33,6 +33,7 @@ spec:
     name: Red Hat
   maturity: alpha
   version: 0.2.0
+  replaces: hawtio-operator.v0.1.0
   description: |
     Hawtio
     ==============
