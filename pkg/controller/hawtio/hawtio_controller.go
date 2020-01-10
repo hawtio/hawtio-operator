@@ -222,6 +222,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, nil
 	}
 
+	// TODO: only add the finalizer for cluster mode
 	ok, err := util.HasFinalizer(instance, hawtioFinalizer)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to read finalizer: %v", err)
@@ -497,11 +498,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				}
 			}
 			consoleLink = osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
-			err = controllerutil.SetControllerReference(instance, consoleLink, r.scheme)
-			if err != nil {
-				reqLogger.Error(err, "Failed to set console link owner", "name", consoleLink.Name)
-				return reconcile.Result{}, err
-			}
 			err = r.client.Create(context.TODO(), consoleLink)
 			if err != nil {
 				reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
@@ -679,11 +675,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				if errors.IsNotFound(err) {
 					// If not found, create a console link
 					consoleLink := osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
-					err = controllerutil.SetControllerReference(instance, consoleLink, r.scheme)
-					if err != nil {
-						reqLogger.Error(err, "Failed to set console link owner", "name", consoleLink.Name)
-						return reconcile.Result{}, err
-					}
 					err = r.client.Create(context.TODO(), consoleLink)
 					if err != nil {
 						reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
@@ -866,7 +857,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	}
 
 	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
-		// Remove URI for OAuth client
+		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
 		if err != nil && !errors.IsNotFound(err) {
@@ -878,6 +869,17 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 			if err != nil {
 				return fmt.Errorf("failed to remove redirect URI from OAuth client: %v", err)
 			}
+		}
+
+		// Remove OpenShift console link
+		consoleLink := &consolev1.ConsoleLink{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: cr.ObjectMeta.Name,
+			},
+		}
+		err = r.client.Delete(context.TODO(), consoleLink)
+		if err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete console link: %v", err)
 		}
 	}
 
