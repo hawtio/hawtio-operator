@@ -62,6 +62,5 @@ rules:
   - hawt.io
   resources:
   - '*'
-  - hawtios
   verbs:
   - '*'

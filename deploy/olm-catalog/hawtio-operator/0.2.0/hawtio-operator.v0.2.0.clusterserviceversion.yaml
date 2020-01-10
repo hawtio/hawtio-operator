@@ -212,7 +212,6 @@ spec:
           - hawt.io
           resources:
           - '*'
-          - hawtios
           verbs:
           - '*'
         serviceAccountName: hawtio-operator
