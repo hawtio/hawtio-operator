@@ -9,7 +9,7 @@ metadata:
     description: Hawtio eases the discovery and management of Java applications deployed on OpenShift.
     containerImage: docker.io/hawtio/operator:0.2.0
     repository: https://github.com/hawtio/hawtio-operator
-    createdAt: "2019-01-09T10:59:00Z"
+    createdAt: "2020-01-09T10:59:00Z"
     support: Red Hat
     alm-examples: |-
       [{
