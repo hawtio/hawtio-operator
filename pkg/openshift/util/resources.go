@@ -28,7 +28,7 @@ var (
 	scheme         = runtime.NewScheme()
 	codecs         = serializer.NewCodecFactory(scheme)
 	decoderFunc    = decoder
-	jsonSerializer = serializerjson.NewSerializer(serializerjson.DefaultMetaFactory, scheme, scheme, false)
+	jsonSerializer = serializerjson.NewSerializerWithOptions(serializerjson.DefaultMetaFactory, scheme, scheme, serializerjson.SerializerOptions{Yaml: false, Pretty: false, Strict: false})
 )
 
 func init() {
