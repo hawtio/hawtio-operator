@@ -74,7 +74,7 @@ func (p *TemplateProcessor) Process(template *v1template.Template, namespace str
 			return v1Temp.Objects, nil
 		}
 
-		return nil, fmt.Errorf("Wrong type returned by the server: %v", templ)
+		return nil, fmt.Errorf("wrong type returned by the server: %v", templ)
 	}
 
 	return nil, result.Error()

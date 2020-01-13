@@ -65,7 +65,7 @@ func (p *OAuthClientClient) Get(name string) (*oauthv1.OAuthClient, error) {
 			return res, nil
 		}
 
-		return nil, fmt.Errorf("Wrong type returned by the server: %v", res)
+		return nil, fmt.Errorf("wrong type returned by the server: %v", res)
 	}
 
 	return nil, result.Error()
