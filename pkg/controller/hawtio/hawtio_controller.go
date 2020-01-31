@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -878,7 +879,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 			},
 		}
 		err = r.client.Delete(context.TODO(), consoleLink)
-		if err != nil && !errors.IsNotFound(err) {
+		if err != nil && !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 			return fmt.Errorf("failed to delete console link: %v", err)
 		}
 	}
