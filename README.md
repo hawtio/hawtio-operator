@@ -8,7 +8,7 @@ A Kubernetes operator based on the Operator SDK that installs and maintains [Haw
 apiVersion: hawt.io/v1alpha1
 kind: Hawtio
 metadata:
-  name: example-hawtio
+  name: hawtio-online
 spec:
   # The deployment type, either "cluster" or "namespace":
   # - cluster: Hawtio is capable of discovering and managing
@@ -27,7 +27,7 @@ spec:
   # the cluster.
   # Note that the operator will recreate the route if the field is emptied,
   # so that the host is re-generated.
-  routeHostName: example-hawtio.192.168.64.38.nip.io
+  routeHostName: hawtio-online.192.168.64.38.nip.io
   # The version (default 'latest')
   version: latest
 ```
@@ -84,55 +84,55 @@ To create and operate a Hawtio console resource, you can run the following comma
 ```console
 # Create Hawtio
 $ kubectl apply -f deploy/crds/hawtio_v1alpha1_hawtio_cr.yaml
-hawtio.hawt.io/example-hawtio created
+hawtio.hawt.io/hawtio-online created
 
 # Get Hawtio info
 $ kubectl get hawtio
 NAME             AGE   URL                                           IMAGE
-example-hawtio   16s   https://example-hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:latest
+hawtio-online   16s   https://hawtio-online.192.168.64.38.nip.io   docker.io/hawtio/online:latest
 
 # Scale Hawtio
-$ kubectl scale hawtio example-hawtio --replicas=3
-hawtio.hawt.io/example-hawtio scaled
+$ kubectl scale hawtio hawtio-online --replicas=3
+hawtio.hawt.io/hawtio-online scaled
 
 # Edit Hawtio resource
-$ kubectl patch hawtio example-hawtio --type='merge' -p '{"spec":{"routeHostName":"hawtio.192.168.64.38.nip.io"}}'
-hawtio.hawt.io/example-hawtio patched
+$ kubectl patch hawtio hawtio-online --type='merge' -p '{"spec":{"routeHostName":"hawtio.192.168.64.38.nip.io"}}'
+hawtio.hawt.io/hawtio-online patched
 # Check the status has updated accordingly
 $ kubectl get hawtio
 NAME             AGE   URL                                   IMAGE
-example-hawtio   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:latest
+hawtio-online   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:latest
 
 # Edit Hawtio config
-$ kubectl edit configmap example-hawtio
-configmap/example-hawtio edited
+$ kubectl edit configmap hawtio-online
+configmap/hawtio-online edited
 # Watch rollout deployment triggered by config change
-$ kubectl rollout status deployment.v1.apps/example-hawtio
-Waiting for deployment "example-hawtio" rollout to finish: 1 out of 3 new replicas have been updated...
-Waiting for deployment "example-hawtio" rollout to finish: 2 out of 3 new replicas have been updated...
-Waiting for deployment "example-hawtio" rollout to finish: 1 old replicas are pending termination...
-deployment "example-hawtio" successfully rolled out
+$ kubectl rollout status deployment.v1.apps/hawtio-online
+Waiting for deployment "hawtio-online" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "hawtio-online" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "hawtio-online" rollout to finish: 1 old replicas are pending termination...
+deployment "hawtio-online" successfully rolled out
 
 # Change the Hawtio version
-$ kubectl patch hawtio example-hawtio --type='merge' -p '{"spec":{"version":"1.7.1"}}'
-hawtio.hawt.io/example-hawtio patched
+$ kubectl patch hawtio hawtio-online --type='merge' -p '{"spec":{"version":"1.7.1"}}'
+hawtio.hawt.io/hawtio-online patched
 # Check the status has updated accordingly
 $ kubectl get hawtio
 NAME             AGE   URL                                   IMAGE
-example-hawtio   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:1.7.1
+hawtio-online   1m    https://hawtio.192.168.64.38.nip.io   docker.io/hawtio/online:1.7.1
 # Watch rollout deployment triggered by version change
-$ kubectl rollout status deployment.v1.apps/example-hawtio
+$ kubectl rollout status deployment.v1.apps/hawtio-online
 ...
-deployment "example-hawtio" successfully rolled out
+deployment "hawtio-online" successfully rolled out
 
 # Delete Hawtio
-$ kubectl delete hawtio example-hawtio
-hawtio.hawt.io "example-hawtio" deleted
+$ kubectl delete hawtio hawtio-online
+hawtio.hawt.io "hawtio-online" deleted
 ```
 
 ## Development
 
-To run the operator locally in order to speed up development cycle, you can run the following command: 
+To run the operator locally in order to speed up development cycle, you can run the following command:
 
 ```console
 $ make run

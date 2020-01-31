@@ -16,7 +16,7 @@ metadata:
         "apiVersion": "hawt.io/v1alpha1",
         "kind": "Hawtio",
         "metadata": {
-          "name": "example-hawtio"
+          "name": "hawtio-online"
         },
         "spec": {
           "replicas": 1,
@@ -62,10 +62,10 @@ spec:
         prompt = no
         default_md = sha256
         distinguished_name = dn
-        
+
         [ dn ]
         CN = hawtio-online.hawtio.svc
-        
+
         [ v3_ext ]
         authorityKeyIdentifier=keyid,issuer:always
         keyUsage=keyEncipherment,dataEncipherment,digitalSignature
