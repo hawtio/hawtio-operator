@@ -322,8 +322,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			return reconcile.Result{}, err
 		}
 	}
-	constraint, _ := semver.NewConstraint(">= 4-0")
-	isOpenShift4 := constraint.Check(openShiftSemVer)
+	constraint4, _ := semver.NewConstraint(">= 4-0")
+	isOpenShift4 := constraint4.Check(openShiftSemVer)
+	constraint43, _ := semver.NewConstraint(">= 4.3")
+	isOpenShift43Plus := constraint43.Check(openShiftSemVer)
 
 	// Check Hawtio console version
 	consoleVersion := instance.Spec.Version
@@ -468,37 +470,38 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
 		}
+	}
 
-		// Add console link in OpenShift console
-		consoleLinkCrd := &apiextensionsv1beta1.CustomResourceDefinition{}
-		// TODO: Use a direct client to avoid having an informer watching for CRDs
-		err := r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkCrdName}, consoleLinkCrd)
-		if err != nil && errors.IsNotFound(err) {
-			reqLogger.Info("No support for console links")
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to get ConsoleLink CRD")
-			return reconcile.Result{}, err
-		} else {
-			hawtconfig, err := osutil.GetHawtconfig(configMap)
-			if err != nil {
-				reqLogger.Error(err, "Failed to get hawtconfig")
+	// Read Hawtio configuration
+	hawtconfig, err := osutil.GetHawtconfig(configMap)
+	if err != nil {
+		reqLogger.Error(err, "Failed to get hawtconfig")
+		return reconcile.Result{}, err
+	}
+
+	// Add link to OpenShift console
+	if isOpenShift4 && instance.Status.Phase == hawtiov1alpha1.HawtioPhaseInitialized {
+		consoleLink := &consolev1.ConsoleLink{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				reqLogger.Error(err, "Failed to get console link")
 				return reconcile.Result{}, err
 			}
-			consoleLink := &consolev1.ConsoleLink{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
+		} else {
+			err = r.client.Delete(context.TODO(), consoleLink)
 			if err != nil {
-				if !errors.IsNotFound(err) {
-					reqLogger.Error(err, "Failed to get console link")
-					return reconcile.Result{}, err
-				}
-			} else {
-				err = r.client.Delete(context.TODO(), consoleLink)
-				if err != nil {
-					reqLogger.Error(err, "Failed to delete console link")
-					return reconcile.Result{}, err
-				}
+				reqLogger.Error(err, "Failed to delete console link")
+				return reconcile.Result{}, err
 			}
-			consoleLink = osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
+		}
+		consoleLink = &consolev1.ConsoleLink{}
+		if isClusterDeployment {
+			consoleLink = osutil.NewApplicationMenuLink(instance.ObjectMeta.Name, route, hawtconfig)
+		} else if isOpenShift43Plus {
+			consoleLink = osutil.NewNamespaceDashboardLink(request.NamespacedName, route, hawtconfig)
+		}
+		if consoleLink.Spec.Location != "" {
 			err = r.client.Create(context.TODO(), consoleLink)
 			if err != nil {
 				reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
@@ -655,45 +658,40 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile console link in OpenShift console
-	if isClusterDeployment {
-		consoleLinkCrd := &apiextensionsv1beta1.CustomResourceDefinition{}
-		// TODO: Use a direct client to avoid having an informer watching for CRDs
-		err := r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkCrdName}, consoleLinkCrd)
+	if isOpenShift4 {
+		consoleLink := &consolev1.ConsoleLink{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
 		if err != nil {
-			if !errors.IsNotFound(err) {
-				reqLogger.Error(err, "Failed to get ConsoleLink CRD")
-				return reconcile.Result{}, err
-			}
-		} else {
-			hawtconfig, err := osutil.GetHawtconfig(configMap)
-			if err != nil {
-				reqLogger.Error(err, "Failed to get hawtconfig")
-				return reconcile.Result{}, err
-			}
-			consoleLink := &consolev1.ConsoleLink{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
-			if err != nil {
-				if errors.IsNotFound(err) {
-					// If not found, create a console link
-					consoleLink := osutil.NewConsoleLink(instance.ObjectMeta.Name, route, hawtconfig)
+			if errors.IsNotFound(err) {
+				// If not found, create a console link
+				if isClusterDeployment {
+					consoleLink = osutil.NewApplicationMenuLink(instance.ObjectMeta.Name, route, hawtconfig)
+				} else if isOpenShift43Plus {
+					consoleLink = osutil.NewNamespaceDashboardLink(request.NamespacedName, route, hawtconfig)
+				}
+				if consoleLink.Spec.Location != "" {
 					err = r.client.Create(context.TODO(), consoleLink)
 					if err != nil {
 						reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
 						return reconcile.Result{}, err
 					}
-				} else {
-					reqLogger.Error(err, "Failed to get console link")
-					return reconcile.Result{}, err
 				}
 			} else {
-				consoleLinkCopy := consoleLink.DeepCopy()
-				osutil.UpdateLink(consoleLinkCopy, route, hawtconfig)
-				patch := client.MergeFrom(consoleLink)
-				err = r.client.Patch(context.TODO(), consoleLinkCopy, patch)
-				if err != nil {
-					reqLogger.Error(err, "Failed to update console link", "name", consoleLink.Name)
-					return reconcile.Result{}, err
-				}
+				reqLogger.Error(err, "Failed to get console link")
+				return reconcile.Result{}, err
+			}
+		} else {
+			consoleLinkCopy := consoleLink.DeepCopy()
+			if isClusterDeployment {
+				osutil.UpdateApplicationMenuLink(consoleLinkCopy, route, hawtconfig)
+			} else if isOpenShift43Plus {
+				osutil.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
+			}
+			patch := client.MergeFrom(consoleLink)
+			err = r.client.Patch(context.TODO(), consoleLinkCopy, patch)
+			if err != nil {
+				reqLogger.Error(err, "Failed to update console link", "name", consoleLink.Name)
+				return reconcile.Result{}, err
 			}
 		}
 	}
@@ -871,17 +869,17 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 				return fmt.Errorf("failed to remove redirect URI from OAuth client: %v", err)
 			}
 		}
+	}
 
-		// Remove OpenShift console link
-		consoleLink := &consolev1.ConsoleLink{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: cr.ObjectMeta.Name,
-			},
-		}
-		err = r.client.Delete(context.TODO(), consoleLink)
-		if err != nil && !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
-			return fmt.Errorf("failed to delete console link: %v", err)
-		}
+	// Remove OpenShift console link
+	consoleLink := &consolev1.ConsoleLink{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cr.ObjectMeta.Name,
+		},
+	}
+	err = r.client.Delete(context.TODO(), consoleLink)
+	if err != nil && !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+		return fmt.Errorf("failed to delete console link: %v", err)
 	}
 
 	_, err = util.RemoveFinalizer(cr, hawtioFinalizer)
