@@ -10,7 +10,6 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // GetHawtconfig reads the console configuration from the config map
@@ -56,16 +55,16 @@ func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev
 }
 
 // NewNamespaceDashboardLink creates a NamespaceDashboard ConsoleLink instance
-func NewNamespaceDashboardLink(namespacedName types.NamespacedName, route *routev1.Route, hawtconfig *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
+func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Route, hawtconfig *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   namespacedName.Name,
+			Name:   name,
 			Labels: map[string]string{"app": "hawtio"},
 		},
 		Spec: consolev1.ConsoleLinkSpec{
 			Location: consolev1.NamespaceDashboard,
 			NamespaceDashboard: &consolev1.NamespaceDashboardSpec{
-				Namespaces: []string{namespacedName.Namespace},
+				Namespaces: []string{namespace},
 			},
 		},
 	}
