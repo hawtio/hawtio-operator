@@ -480,9 +480,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Add link to OpenShift console
+	consoleLinkName := request.Name + "-" + request.Namespace
 	if isOpenShift4 && instance.Status.Phase == hawtiov1alpha1.HawtioPhaseInitialized {
 		consoleLink := &consolev1.ConsoleLink{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
 			if !errors.IsNotFound(err) {
 				reqLogger.Error(err, "Failed to get console link")
@@ -497,9 +498,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 		consoleLink = &consolev1.ConsoleLink{}
 		if isClusterDeployment {
-			consoleLink = osutil.NewApplicationMenuLink(instance.ObjectMeta.Name, route, hawtconfig)
+			consoleLink = osutil.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
 		} else if isOpenShift43Plus {
-			consoleLink = osutil.NewNamespaceDashboardLink(request.NamespacedName, route, hawtconfig)
+			consoleLink = osutil.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 		}
 		if consoleLink.Spec.Location != "" {
 			err = r.client.Create(context.TODO(), consoleLink)
@@ -660,14 +661,14 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Reconcile console link in OpenShift console
 	if isOpenShift4 {
 		consoleLink := &consolev1.ConsoleLink{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.ObjectMeta.Name}, consoleLink)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// If not found, create a console link
 				if isClusterDeployment {
-					consoleLink = osutil.NewApplicationMenuLink(instance.ObjectMeta.Name, route, hawtconfig)
+					consoleLink = osutil.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
 				} else if isOpenShift43Plus {
-					consoleLink = osutil.NewNamespaceDashboardLink(request.NamespacedName, route, hawtconfig)
+					consoleLink = osutil.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 				}
 				if consoleLink.Spec.Location != "" {
 					err = r.client.Create(context.TODO(), consoleLink)
@@ -874,7 +875,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	// Remove OpenShift console link
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.ObjectMeta.Name,
+			Name: cr.ObjectMeta.Name + "-" + cr.ObjectMeta.Namespace,
 		},
 	}
 	err = r.client.Delete(context.TODO(), consoleLink)
