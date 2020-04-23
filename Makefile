@@ -10,7 +10,7 @@ default: build-image
 build-image: compile build
 
 .PHONY: build
-build:
+build: go-generate
 	operator-sdk build docker.io/${ORG}/${PROJECT}:${TAG}
 
 .PHONY: compile
@@ -20,6 +20,10 @@ compile:
 .PHONY: generate-csv
 generate-csv:
 	operator-sdk olm-catalog gen-csv --csv-version ${TAG}
+
+.PHONY: go-generate
+go-generate:
+	go generate ./...
 
 .PHONY: verify-csv
 verify-csv:
