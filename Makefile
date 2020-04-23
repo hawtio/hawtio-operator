@@ -4,6 +4,8 @@ NAMESPACE ?= hawtio
 PROJECT = operator
 TAG ?= latest
 
+default: build-image
+
 .PHONY: build-image
 build-image: compile build
 
@@ -13,7 +15,7 @@ build:
 
 .PHONY: compile
 compile:
-	go build -o=hawtio-operator ./cmd/manager/main.go
+	go build -o=build/_output/bin/hawtio-operator ./cmd/manager/main.go
 
 .PHONY: generate-csv
 generate-csv:
