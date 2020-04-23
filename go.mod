@@ -4,20 +4,23 @@ go 1.13
 
 require (
 	github.com/Masterminds/semver v1.5.0
+	github.com/RHsyseng/operator-utils v0.0.0-20200506183821-e3b4a2ba9c30
+	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
+	github.com/gobuffalo/packr/v2 v2.7.1
 	// OpenShift 4.4 (via replace statement)
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible
-	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240
+	github.com/openshift/client-go v3.9.0+incompatible
 	github.com/operator-framework/operator-sdk v0.13.0
-	k8s.io/api v0.17.1
+	k8s.io/api v0.17.2
 	k8s.io/apiextensions-apiserver v0.0.0
-	k8s.io/apimachinery v0.17.1
+	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v12.0.0+incompatible
 	sigs.k8s.io/controller-runtime v0.4.0
 )
 
 // Pinned to kubernetes-1.16.2
 replace (
-	github.com/openshift/api => github.com/openshift/api v0.0.0-20200127192224-ffde1bfabb9f
+	github.com/openshift/api => github.com/openshift/api v0.0.0-20200414152312-3e8f22fb0b56
 	k8s.io/api => k8s.io/api v0.0.0-20191016110408-35e52d86657a
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20191016113550-5357c4baaf65
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20191004115801-a2eda9f80ab8
@@ -40,3 +43,5 @@ replace (
 	k8s.io/metrics => k8s.io/metrics v0.0.0-20191016113814-3b1a734dba6e
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20191016112829-06bb3c9d77c9
 )
+
+replace github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240

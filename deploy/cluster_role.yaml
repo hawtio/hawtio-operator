@@ -27,6 +27,7 @@ rules:
   - console.openshift.io
   resources:
   - consolelinks
+  - consoleyamlsamples
   verbs:
   - create
   - delete

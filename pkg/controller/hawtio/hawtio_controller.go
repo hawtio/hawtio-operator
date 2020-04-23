@@ -123,6 +123,10 @@ func Add(mgr manager.Manager) error {
 	}
 	r.coreClient = coreClient
 
+	if err := openshift.ConsoleYAMLSampleExists(); err == nil {
+		openshift.CreateConsoleYAMLSamples(mgr.GetClient())
+	}
+
 	return add(mgr, r)
 }
 

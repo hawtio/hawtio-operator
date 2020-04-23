@@ -1,0 +1,25 @@
+apiVersion: hawt.io/v1alpha1
+kind: Hawtio
+metadata:
+  name: hawtio-online
+spec:
+  # The deployment type, either "cluster" or "namespace":
+  # - cluster: Hawtio is capable of discovering and managing
+  #   applications across all namespaces the authenticated user
+  #   has access to.
+  # - namespace: Hawtio is capable of discovering and managing
+  #   applications within the deployment namespace.
+  type: namespace
+  # The number of desired replicas
+  replicas: 1
+  # The edge host name of the route that exposes the Hawtio service
+  # externally. If not specified, it is automatically generated and
+  # is of the form:
+  #   <name>[-<namespace>].<suffix>
+  # where <suffix> is the default routing sub-domain as configured for
+  # the cluster.
+  # Note that the operator will recreate the route if the field is emptied,
+  # so that the host is re-generated.
+  # routeHostName: hawtio-online.192.168.64.38.nip.io
+  # The version (default 'latest')
+  version: latest
