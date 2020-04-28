@@ -23,10 +23,23 @@ github.com/RHsyseng/operator-utils/pkg/validation
 github.com/asaskevich/govalidator
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
+# github.com/blang/semver v3.5.1+incompatible
+github.com/blang/semver
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
+# github.com/coreos/go-semver v0.3.0
+github.com/coreos/go-semver/semver
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
+# github.com/docker/distribution v0.0.0-20171011171712-7484e51bf6af
+github.com/docker/distribution
+github.com/docker/distribution/digestset
+github.com/docker/distribution/manifest
+github.com/docker/distribution/manifest/schema1
+github.com/docker/distribution/manifest/schema2
+github.com/docker/distribution/reference
+# github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
+github.com/docker/libtrust
 # github.com/evanphx/json-patch v4.5.0+incompatible
 github.com/evanphx/json-patch
 # github.com/fsnotify/fsnotify v1.4.9
@@ -106,6 +119,8 @@ github.com/googleapis/gnostic/extensions
 # github.com/hashicorp/golang-lru v0.5.4
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
+# github.com/heroku/docker-registry-client v0.0.0-20190909225348-afc9e1acc3d5
+github.com/heroku/docker-registry-client/registry
 # github.com/imdario/mergo v0.3.9
 github.com/imdario/mergo
 # github.com/joho/godotenv v1.3.0
@@ -126,6 +141,8 @@ github.com/mitchellh/mapstructure
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
+# github.com/opencontainers/go-digest v1.0.0-rc1
+github.com/opencontainers/go-digest
 # github.com/openshift/api v0.0.0-20200521101457-60c476765272
 github.com/openshift/api/apps/v1
 github.com/openshift/api/build/v1
@@ -149,8 +166,13 @@ github.com/openshift/client-go/oauth/clientset/versioned/fake
 github.com/openshift/client-go/oauth/clientset/versioned/scheme
 github.com/openshift/client-go/oauth/clientset/versioned/typed/oauth/v1
 github.com/openshift/client-go/oauth/clientset/versioned/typed/oauth/v1/fake
+# github.com/operator-framework/api v0.3.15
+github.com/operator-framework/api/pkg/lib/version
 # github.com/operator-framework/operator-lib v0.1.0
 github.com/operator-framework/operator-lib/leader
+# github.com/operator-framework/operator-lifecycle-manager v3.11.0+incompatible
+github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators
+github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
@@ -180,6 +202,14 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.6.1
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
+# github.com/tidwall/gjson v1.6.0
+github.com/tidwall/gjson
+# github.com/tidwall/match v1.0.1
+github.com/tidwall/match
+# github.com/tidwall/pretty v1.0.1
+github.com/tidwall/pretty
+# github.com/tidwall/sjson v1.1.1
+github.com/tidwall/sjson
 # go.mongodb.org/mongo-driver v1.3.4
 go.mongodb.org/mongo-driver/bson
 go.mongodb.org/mongo-driver/bson/bsoncodec
@@ -378,7 +408,9 @@ k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
 # k8s.io/apiextensions-apiserver v0.18.6
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
+k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1
+k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
 # k8s.io/apimachinery v0.18.6
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors

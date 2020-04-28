@@ -1,5 +1,8 @@
+#! package-manifest: deploy/olm-catalog/hawtio-operator/0.4.0/hawtio-operator.v0.4.0.clusterserviceversion.yaml
 channels:
-- currentCSV: hawtio-operator.v0.3.0
+- currentCSV: hawtio-operator.v0.2.0
   name: alpha
+- currentCSV: hawtio-operator.v0.4.0
+  name: alpha-offline
 defaultChannel: alpha
 packageName: hawtio-operator

@@ -78,6 +78,8 @@ The above command must be executed on behalf of a privileged user, as the creati
 
 To create and operate a Hawtio resource, you can run the following commands:
 
+
+
 ```console
 # Create Hawtio
 $ kubectl apply -f deploy/crs/hawtio_v1alpha1_hawtio_cr.yaml
@@ -126,3 +128,13 @@ deployment "hawtio-online" successfully rolled out
 $ kubectl delete hawtio hawtio-online
 hawtio.hawt.io "hawtio-online" deleted
 ```
+## CSV Generation
+
+```bash
+make generate-csv
+
+# OR
+# w/ sha lookup/replacement against registry.redhat.io
+DIGESTS=true REDHATIO_TOKEN="<username>:<password>"  make generate-csv
+```
+
