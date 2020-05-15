@@ -3,16 +3,21 @@ package hawtio
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
-	"time"
+	"github.com/RHsyseng/operator-utils/pkg/resource/compare"
+	"github.com/RHsyseng/operator-utils/pkg/resource/read"
+	"github.com/RHsyseng/operator-utils/pkg/resource/write"
+	"github.com/hawtio/hawtio-operator/pkg/resources/configmaps"
+	"github.com/hawtio/hawtio-operator/pkg/resources/routes"
 
 	"github.com/Masterminds/semver"
-
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
 	"github.com/hawtio/hawtio-operator/pkg/util"
+
+	"reflect"
+	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -24,9 +29,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 
+	consolev1 "github.com/openshift/api/console/v1"
+	oauthv1 "github.com/openshift/api/oauth/v1"
+	routev1 "github.com/openshift/api/route/v1"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -35,13 +43,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	consolev1 "github.com/openshift/api/console/v1"
-	oauthv1 "github.com/openshift/api/oauth/v1"
-	routev1 "github.com/openshift/api/route/v1"
-	templatev1 "github.com/openshift/api/template/v1"
-
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-
+	"github.com/RHsyseng/operator-utils/pkg/resource"
+	"github.com/hawtio/hawtio-operator/pkg/resources/deployments"
+	svc "github.com/hawtio/hawtio-operator/pkg/resources/services"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 )
 
@@ -72,6 +76,7 @@ const (
 // Go build-time variables
 var ImageRepository string
 var LegacyServingCertificateMountVersion string
+var configVersion string
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -99,11 +104,11 @@ func Add(mgr manager.Manager) error {
 		scheme: mgr.GetScheme(),
 	}
 
-	processor, err := openshift.NewTemplateProcessor(mgr.GetConfig())
+	/*processor, err := openshift.NewTemplateProcessor(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
-	r.template = processor
+	r.template = processor*/
 
 	oauthClient, err := openshift.NewOAuthClientClient(mgr.GetConfig())
 	if err != nil {
@@ -188,7 +193,6 @@ type ReconcileHawtio struct {
 	client       client.Client
 	config       *rest.Config
 	scheme       *runtime.Scheme
-	template     *openshift.TemplateProcessor
 	coreClient   *corev1client.CoreV1Client
 	oauthClient  *openshift.OAuthClientClient
 	configClient *configv1client.Clientset
@@ -281,19 +285,20 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Install phase
 
-	exts, err := r.processTemplate(instance, request)
+	/*exts, err := r.processTemplate(instance, request)
 	if err != nil {
 		reqLogger.Error(err, "Error while processing template", "template", hawtioTemplatePath)
 		return reconcile.Result{}, err
-	}
+	}*/
 
-	objs, err := getRuntimeObjects(exts)
+	/*objs, err := getRuntimeObjects(exts)
 	if err != nil {
 		reqLogger.Error(err, "Error while retrieving runtime objects")
 		return reconcile.Result{}, err
-	}
+	}*/
 
-	if isNamespaceDeployment {
+	// this code moved into reconcileResources function
+	/*if isNamespaceDeployment {
 		// Add service account as OAuth client
 		sa, err := newServiceAccountAsOauthClient(request.Name)
 		if err != nil {
@@ -302,8 +307,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 		objs = append(objs, sa)
 	}
-
+	*/
 	// Check OpenShift version
+
+	// TODO(OpenShift version): will use operator util to repalce the below code.
+
 	var openShiftSemVer *semver.Version
 	clusterVersion, err := r.configClient.
 		ConfigV1().
@@ -353,7 +361,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	deployment := util.GetDeployment(objs)
+	/* this code move into container file under resources
+
+	deployment := deployments.GetDeployment(objs)
 	container := deployment.Spec.Template.Spec.Containers[0]
 
 	if isOpenShift4 {
@@ -374,7 +384,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				Value: openShiftConsoleUrl,
 			},
 		)
-	}
+	}*/
 
 	// Adjust service signing secret volume mount path
 	serviceSigningCertificateVolumeMountPath, err := getServingCertificateMountPathFor(consoleVersion)
@@ -382,14 +392,15 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Error getting service signing certificate mount path", "version", consoleVersion)
 		return reconcile.Result{}, err
 	}
-	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+	// this code moved into deployments file under resources
+	/*	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 		Name:      serviceSigningSecretVolumeName,
 		MountPath: serviceSigningCertificateVolumeMountPath,
-	})
+	})*/
 
 	if isOpenShift4 {
 		// Check whether client certificate secret exists
-		clientCertificateSecret, err := r.coreClient.
+		_, err := r.coreClient.
 			Secrets(request.Namespace).
 			Get(request.Name+"-tls-proxying", metav1.GetOptions{})
 		if err != nil {
@@ -404,9 +415,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				return reconcile.Result{}, err
 			}
 		}
-
+		// this code moved into deployments file function MakeVolumeMounts  & MakeVolumes
 		// Mount client certificate secret
-		volume := corev1.Volume{
+		/*volume := corev1.Volume{
 			Name: clientCertificateSecretVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
@@ -414,22 +425,33 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				},
 			},
 		}
+		*/
+		//	deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, volume)
 
-		deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, volume)
-
-		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+		/*	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 			Name:      clientCertificateSecretVolumeName,
 			MountPath: clientCertificateSecretVolumeMountPath,
-		})
+		})*/
 	}
 
-	deployment.Spec.Template.Spec.Containers[0] = container
+	//deployment.Spec.Template.Spec.Containers[0] = container
 
 	// Create runtime objects
-	err = r.createObjects(objs, request.Namespace, instance)
-	if err != nil {
+	//err = r.createObjects(objs, request.Namespace, instance)
+	/*if err != nil {
 		reqLogger.Error(err, "Error creating runtime objects")
 		return reconcile.Result{}, err
+	}*/
+
+	// TODO(func Paramertes): refactor to avoid pass more params from function
+
+	hasUpdates, err := r.reconcileResources(instance, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configVersion)
+
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if hasUpdates {
+		return r.UpdateObj(instance)
 	}
 
 	configMap := &corev1.ConfigMap{}
@@ -528,7 +550,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Update phase
 
 	// Reconcile deployment
-	deployment = &appsv1.Deployment{}
+	deployment := &appsv1.Deployment{}
+	updateDeployment := false
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
@@ -536,22 +559,22 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to get deployment")
 		return reconcile.Result{}, err
 	}
-	updateDeployment := false
 
-	container = deployment.Spec.Template.Spec.Containers[0]
+	container := deployment.Spec.Template.Spec.Containers[0]
 
 	// Reconcile image
-	if image := getImageFor(instance.Spec.Version); container.Image != image {
+	/*if image := getImageFor(instance.Spec.Version); container.Image != image {
 		container.Image = image
 		updateDeployment = true
-	}
-
-	// Reconcile service signing secret volume mount path
-	volumeMount, _ := util.GetVolumeMount(container, serviceSigningSecretVolumeName)
-	if volumeMount.MountPath != serviceSigningCertificateVolumeMountPath {
-		volumeMount.MountPath = serviceSigningSecretVolumeMountPath
-		updateDeployment = true
-	}
+	}*/
+	/*
+	      // this code moved into deployments file under resources
+	   	// Reconcile service signing secret volume mount path
+	   	volumeMount, _ := deployments.GetVolumeMount(container, serviceSigningSecretVolumeName)
+	   	if volumeMount.MountPath != serviceSigningCertificateVolumeMountPath {
+	   		volumeMount.MountPath = serviceSigningSecretVolumeMountPath
+	   		updateDeployment = true
+	   	}*/
 
 	// Reconcile replicas
 	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
@@ -572,7 +595,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile environment variables based on deployment type
-	envVar, _ := util.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
+	envVar, _ := deployments.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("environment variable not found: %s", hawtioTypeEnvVar)
 		return reconcile.Result{}, err
@@ -586,7 +609,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		updateDeployment = true
 	}
 
-	envVar, _ = util.GetEnvVarByName(container.Env, hawtioOAuthClientEnvVar)
+	envVar, _ = deployments.GetEnvVarByName(container.Env, hawtioOAuthClientEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("environment variable not found: %s", hawtioOAuthClientEnvVar)
 		return reconcile.Result{}, err
@@ -601,7 +624,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	requestDeployment := false
-	if configVersion := configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
+	/// Not sure still need these lines of the code from 621 to 647//
+	if configVersion = configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
 		if len(deployment.Annotations[configVersionAnnotation]) > 0 {
 			requestDeployment = true
 		}
@@ -619,7 +643,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if updateDeployment {
-		deployment.Spec.Template.Spec.Containers[0] = container
+
 		err := r.client.Update(context.TODO(), deployment)
 		if err != nil {
 			reqLogger.Error(err, "Failed to reconcile to deployment")
@@ -724,7 +748,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
 	// wait until the deployment is successful before deleting resources.
-	if url := osutil.GetRouteURL(route); instance.Status.URL != url {
+	if url := routes.GetRouteURL(route); instance.Status.URL != url {
 		if isClusterDeployment {
 			// First remove old URL from OAuthClient
 			if removeRedirectURIFromOauthClient(oc, instance.Status.URL) {
@@ -745,7 +769,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if isClusterDeployment {
 		// Add route URL to OAuthClient authorized redirect URIs
-		uri := osutil.GetRouteURL(route)
+		uri := routes.GetRouteURL(route)
 		if ok, _ := oauthClientContainsRedirectURI(oc, uri); !ok {
 			oc.RedirectURIs = append(oc.RedirectURIs, uri)
 			err := r.client.Update(context.TODO(), oc)
@@ -759,7 +783,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		// Clean-up OAuth client if any.
 		// This happens when the deployment type is changed
 		// from "cluster" to "namespace".
-		uri := osutil.GetRouteURL(route)
+		uri := routes.GetRouteURL(route)
 		if removeRedirectURIFromOauthClient(oc, uri) {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
@@ -768,7 +792,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 	}
-
+	/// Not sure still need these lines of the code from  788 to 805//
 	// Refresh the instance
 	instance = &hawtiov1alpha1.Hawtio{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
@@ -790,65 +814,125 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) processTemplate(cr *hawtiov1alpha1.Hawtio, request reconcile.Request) ([]runtime.RawExtension, error) {
-	res, err := osutil.LoadKubernetesResourceFromFile(hawtioTemplatePath)
+func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, resourceVersion string) (bool, error) {
+	reqLogger := log.WithName(cr.Name)
+
+	isNamespaceDeployment := strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
+
+	configmapDefinition := configmaps.NewConfigMapForCR(cr)
+	dep := deployments.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, resourceVersion)
+	serviceDefinition := svc.NewServiceDefinitionForCR(cr)
+	routeDefinition := routes.NewRouteDefinitionForCR(cr)
+
+	var requestedResources []resource.KubernetesResource
+	requestedResources = append(requestedResources, configmapDefinition)
+	requestedResources = append(requestedResources, dep)
+	requestedResources = append(requestedResources, serviceDefinition)
+	requestedResources = append(requestedResources, routeDefinition)
+
+	if isNamespaceDeployment {
+		// Add service account as OAuth client
+		sa, err := newServiceAccountAsOauthClient(request.Name)
+		if err != nil {
+			return false, fmt.Errorf("error UpdateResources : %s", err)
+		}
+		requestedResources = append(requestedResources, sa)
+	}
+
+	for index := range requestedResources {
+		requestedResources[index].SetNamespace(cr.Namespace)
+	}
+
+	deployed, err := getDeployedResources(cr, client)
 	if err != nil {
-		return nil, fmt.Errorf("error reading template: %s", err)
+
 	}
 
-	parameters := make(map[string]string)
-	parameters["APPLICATION_NAME"] = cr.Name
-	parameters["DEPLOYMENT_TYPE"] = strings.ToLower(cr.Spec.Type)
-	parameters["IMAGE"] = getImageFor(cr.Spec.Version)
-	parameters["REPLICAS"] = fmt.Sprint(cr.Spec.Replicas)
+	requested := compare.NewMapBuilder().Add(requestedResources...).ResourceMap()
 
-	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
-		parameters["OAUTH_CLIENT"] = oauthClientName
-	} else if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
-		parameters["OAUTH_CLIENT"] = cr.Name
+	var hasUpdates bool
+	writer := write.New(client).WithOwnerController(cr, scheme)
+	comparator := getComparator()
+	deltas := comparator.Compare(deployed, requested)
+	for resourceType, delta := range deltas {
+		if !delta.HasChanges() {
+			continue
+		}
+
+		reqLogger.Info("", "instances of ", resourceType, "Will create ", len(delta.Added), "update ", len(delta.Updated), "and delete", len(delta.Removed))
+
+		added, err := writer.AddResources(delta.Added)
+		if err != nil {
+			return false, fmt.Errorf("error AddResources: %s", err)
+		}
+		updated, err := writer.UpdateResources(deployed[resourceType], delta.Updated)
+		if err != nil {
+			return false, fmt.Errorf("error UpdateResources : %s", err)
+		}
+		removed, err := writer.RemoveResources(delta.Removed)
+		if err != nil {
+			return false, fmt.Errorf("error RemoveResources: %s", err)
+		}
+		hasUpdates = hasUpdates || added || updated || removed
 	}
-
-	if route := cr.Spec.RouteHostName; len(route) > 0 {
-		parameters["ROUTE_HOSTNAME"] = route
-	}
-
-	return r.template.Process(res.(*templatev1.Template), request.Namespace, parameters)
+	return hasUpdates, nil
 }
 
-func (r *ReconcileHawtio) createObjects(objects []runtime.Object, ns string, cr *hawtiov1alpha1.Hawtio) error {
-	for _, o := range objects {
-		uo, err := osutil.UnstructuredFromRuntimeObject(o)
-		if err != nil {
-			return fmt.Errorf("failed to transform object: %v", err)
-		}
+func getComparator() compare.MapComparator {
+	resourceComparator := compare.DefaultComparator()
 
-		uo.SetNamespace(ns)
-		err = controllerutil.SetControllerReference(cr, uo, r.scheme)
-		if err != nil {
-			return fmt.Errorf("failed to set owner in object: %v", err)
+	configMapType := reflect.TypeOf(corev1.ConfigMap{})
+	resourceComparator.SetComparator(configMapType, func(deployed resource.KubernetesResource, requested resource.KubernetesResource) bool {
+		configMap1 := deployed.(*corev1.ConfigMap)
+		configMap2 := requested.(*corev1.ConfigMap)
+		var pairs [][2]interface{}
+		pairs = append(pairs, [2]interface{}{configMap1.Name, configMap2.Name})
+		pairs = append(pairs, [2]interface{}{configMap1.Namespace, configMap2.Namespace})
+		pairs = append(pairs, [2]interface{}{configMap1.Labels, configMap2.Labels})
+		pairs = append(pairs, [2]interface{}{configMap1.Annotations, configMap2.Annotations})
+		pairs = append(pairs, [2]interface{}{configMap1.Data, configMap2.Data})
+		pairs = append(pairs, [2]interface{}{configMap1.BinaryData, configMap2.BinaryData})
+		equal := compare.EqualPairs(pairs)
+		if !equal {
+			log.Info("Resources are not equal", "deployed", deployed, "requested", requested)
 		}
+		return equal
+	})
 
-		annotations := uo.GetAnnotations()
-		if annotations == nil {
-			annotations = map[string]string{
-				hawtioVersionAnnotation: cr.GetResourceVersion(),
-			}
-		} else {
-			annotations[hawtioVersionAnnotation] = cr.GetResourceVersion()
-		}
-		uo.SetAnnotations(annotations)
+	return compare.MapComparator{Comparator: resourceComparator}
+}
 
-		err = r.client.Create(context.TODO(), uo.DeepCopyObject())
-		if err != nil {
-			if errors.IsAlreadyExists(err) {
-				// FIXME: apply CR spec to existing resources
-				continue
-			}
-			return fmt.Errorf("failed to create object: %v", err)
-		}
+func getDeployedResources(cr *hawtiov1alpha1.Hawtio, client client.Client) (map[reflect.Type][]resource.KubernetesResource, error) {
+	var log = logf.Log.WithName("getDeployedResources")
+
+	reader := read.New(client).WithNamespace(cr.Namespace).WithOwnerObject(cr)
+	resourceMap, err := reader.ListAll(
+		&corev1.ConfigMapList{},
+		&corev1.ServiceList{},
+		&appsv1.DeploymentList{},
+		&routev1.RouteList{},
+		&corev1.ServiceAccountList{},
+	)
+	if err != nil {
+		log.Error(err, "Failed to list deployed objects. ", err)
+		return nil, err
 	}
 
-	return nil
+	return resourceMap, nil
+
+}
+
+// UpdateObj reconciles the given object
+func (reconciler *ReconcileHawtio) UpdateObj(obj *hawtiov1alpha1.Hawtio) (reconcile.Result, error) {
+	//log := log.With("kind", obj.GetObjectKind().GroupVersionKind().Kind, "name", obj.GetName(), "namespace", obj.GetNamespace())
+	//log.Info("Updating")
+	err := reconciler.client.Update(context.TODO(), obj)
+	if err != nil {
+		//log.Warn("Failed to update object. ", err)
+		return reconcile.Result{}, err
+	}
+	// Object updated - return and requeue
+	return reconcile.Result{Requeue: true}, nil
 }
 
 func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
@@ -900,22 +984,6 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	return nil
 }
 
-func getImageFor(version string) string {
-	tag := "latest"
-	if len(version) > 0 {
-		tag = version
-	}
-	repository := os.Getenv("IMAGE_REPOSITORY")
-	if repository == "" {
-		if ImageRepository != "" {
-			repository = ImageRepository
-		} else {
-			repository = "docker.io/hawtio/online"
-		}
-	}
-	return repository + ":" + tag
-}
-
 func getServingCertificateMountPathFor(version string) (string, error) {
 	if version != "latest" {
 		semVer, err := semver.NewVersion(version)
@@ -939,18 +1007,4 @@ func getServingCertificateMountPathFor(version string) (string, error) {
 		}
 	}
 	return serviceSigningSecretVolumeMountPath, nil
-}
-
-func getRuntimeObjects(exts []runtime.RawExtension) ([]runtime.Object, error) {
-	objects := make([]runtime.Object, 0)
-
-	for _, ext := range exts {
-		res, err := osutil.LoadKubernetesResource(ext.Raw)
-		if err != nil {
-			return nil, err
-		}
-		objects = append(objects, res)
-	}
-
-	return objects, nil
 }

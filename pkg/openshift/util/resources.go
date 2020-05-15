@@ -124,3 +124,16 @@ func jsonIfYaml(source []byte, filename string) ([]byte, error) {
 
 	return source, nil
 }
+func LoadConfigFromFile(path string) ([]byte, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err = jsonIfYaml(data, path)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, err
+}
