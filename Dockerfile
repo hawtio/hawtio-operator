@@ -15,4 +15,4 @@ USER nobody
 
 COPY --from=builder /hawtio-operator/build/_output/bin/hawtio-operator /usr/local/bin/hawtio-operator
 
-COPY --from=builder /hawtio-operator/templates /templates
+COPY conf/config.yaml /conf/config.yaml
