@@ -52,3 +52,11 @@ run:
 .PHONY: deploy
 deploy:
 	kubectl apply -f deploy/operator.yaml -n ${NAMESPACE}
+
+.PHONY: test
+test:
+	go test -count=1 ./test/...
+
+.PHONY: compile
+compile:
+    compile: test
