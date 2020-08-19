@@ -11,8 +11,8 @@ func AddEnvVarForContainer(deploymentType string, OuthClient string) []corev1.En
 
 	namespaceEnvVarSource := corev1.EnvVarSource{
 		FieldRef: &corev1.ObjectFieldSelector{
-			APIVersion:"v1",
-			FieldPath: "metadata.namespace",
+			APIVersion: "v1",
+			FieldPath:  "metadata.namespace",
 		},
 	}
 

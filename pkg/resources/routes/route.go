@@ -38,12 +38,10 @@ func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
 		},
 	}
 
-	//if passthroughTLS {
 	route.Spec.TLS = &routev1.TLSConfig{
 		Termination:                   routev1.TLSTerminationReencrypt,
 		InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
 	}
-	//}
 
 	return route
 }
@@ -57,7 +55,7 @@ func GetRouteURL(route *routev1.Route) string {
 		scheme = "http"
 	}
 
-	host := GetRouteHost(route)
+	host := getRouteHost(route)
 
 	url := scheme + "://" + host
 	if len(route.Spec.Path) > 0 {
@@ -68,7 +66,7 @@ func GetRouteURL(route *routev1.Route) string {
 }
 
 //GetRouteHost
-func GetRouteHost(route *routev1.Route) string {
+func getRouteHost(route *routev1.Route) string {
 	if len(route.Status.Ingress) == 0 {
 		return route.Spec.Host
 	}

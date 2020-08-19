@@ -53,7 +53,7 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 		hawtioVersionAnnotation: cr.GetResourceVersion(),
 	}
 
-	dep, Spec := MakeDeployment(namespacedName, annotations, cr.Spec.Replicas, NewPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath))
+	dep, Spec := makeDeployment(namespacedName, annotations, cr.Spec.Replicas, newPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath))
 
 	dep.Spec = Spec
 
@@ -61,7 +61,7 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 
 }
 
-func MakeDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas int32, pts corev1.PodTemplateSpec) (deployment *appsv1.Deployment, spec appsv1.DeploymentSpec) {
+func makeDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas int32, pts corev1.PodTemplateSpec) (deployment *appsv1.Deployment, spec appsv1.DeploymentSpec) {
 
 	labels := selectors.LabelsForHawtio(namespacedName.Name)
 	dep := &appsv1.Deployment{
@@ -81,7 +81,7 @@ func MakeDeployment(namespacedName types.NamespacedName, annotations map[string]
 		Selector: &metav1.LabelSelector{
 			MatchLabels: labels,
 		},
-		Template: pts, //pods.NewPodTemplateSpecForCR(cr),
+		Template: pts,
 		Strategy: appsv1.DeploymentStrategy{
 			Type: "RollingUpdate",
 		},
@@ -91,7 +91,7 @@ func MakeDeployment(namespacedName types.NamespacedName, annotations map[string]
 
 }
 
-func NewPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string) corev1.PodTemplateSpec {
+func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string) corev1.PodTemplateSpec {
 	namespacedName := types.NamespacedName{
 		Name:      cr.Name,
 		Namespace: cr.Namespace,
@@ -103,13 +103,13 @@ func NewPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, opens
 
 	Spec := corev1.PodSpec{}
 	Containers := []corev1.Container{}
-	container := containers.MakeContainer(cr.Name, cr.Spec.Version, MakeEnvVarArrayForCR(cr, isOpenShift4, openshiftVersion, openshiftURL))
+	container := containers.NewContainer(cr.Name, cr.Spec.Version, makeEnvVarArrayForCR(cr, isOpenShift4, openshiftVersion, openshiftURL))
 
-	volumeMounts := MakeVolumeMounts(cr, isOpenShift4, volumePath)
+	volumeMounts := makeVolumeMounts(cr, isOpenShift4, volumePath)
 	if len(volumeMounts) > 0 {
 		container.VolumeMounts = volumeMounts
 	}
-	volumes := MakeVolumes(cr, isOpenShift4)
+	volumes := makeVolumes(cr, isOpenShift4)
 	if len(volumes) > 0 {
 		Spec.Volumes = volumes
 	}
@@ -120,7 +120,7 @@ func NewPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, opens
 
 }
 
-func MakeVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
+func makeVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Creating new Volume for custom resource")
@@ -153,7 +153,7 @@ func MakeVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 	return volumeDefinitions
 }
 
-func MakeEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string) []corev1.EnvVar {
+func makeEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string) []corev1.EnvVar {
 
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Adding Env variable ")
@@ -170,7 +170,7 @@ func MakeEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshif
 	return envVar
 }
 
-func MakeVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath string) []corev1.VolumeMount {
+func makeVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath string) []corev1.VolumeMount {
 
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Creating new Volume Mounts for custom resource")

@@ -20,7 +20,6 @@ func MakeVolumeMount(volumeMountName string, volumeMountPath string, volumeMount
 
 func MakeVolume(secretName string, volumeName string) corev1.Volume {
 
-	//volumeName := "hawtio-online-tls-serving"
 	volume := corev1.Volume{
 		Name: volumeName,
 		VolumeSource: corev1.VolumeSource{

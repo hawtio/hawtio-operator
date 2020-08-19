@@ -29,7 +29,7 @@ func validateField(entries []SchemaEntry, schema spec.Schema, context string, fi
 	if !field.Anonymous {
 		name := getFieldName(field)
 		context = fmt.Sprintf("%s/%s", context, name)
-		schema := schema.Properties[name]
+		schema = schema.Properties[name]
 		expectedType := equivalentSchemaType(reflectType.Kind())
 		if !schema.Type.Contains(expectedType) {
 			entries = append(entries, SchemaEntry{context, expectedType})

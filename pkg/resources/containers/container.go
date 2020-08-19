@@ -3,8 +3,6 @@ package containers
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	//"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"os"
 )
@@ -16,8 +14,8 @@ const (
 // Go build-time variables
 var ImageRepository string
 
-//func MakeContainer
-func MakeContainer(customResourceName string, version string, envVarArray []corev1.EnvVar) corev1.Container {
+//func NewContainer
+func NewContainer(customResourceName string, version string, envVarArray []corev1.EnvVar) corev1.Container {
 
 	container := corev1.Container{
 		Name:  customResourceName + "-container",
@@ -55,7 +53,7 @@ func MakeContainer(customResourceName string, version string, envVarArray []core
 		},
 		Resources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("900m"),
+				corev1.ResourceCPU:    resource.MustParse("1"),
 				corev1.ResourceMemory: resource.MustParse("32Mi"),
 			},
 			Requests: corev1.ResourceList{
