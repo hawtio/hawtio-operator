@@ -76,7 +76,6 @@ const (
 // Go build-time variables
 var ImageRepository string
 var LegacyServingCertificateMountVersion string
-var configVersion string
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -103,12 +102,6 @@ func Add(mgr manager.Manager) error {
 		config: mgr.GetConfig(),
 		scheme: mgr.GetScheme(),
 	}
-
-	/*processor, err := openshift.NewTemplateProcessor(mgr.GetConfig())
-	if err != nil {
-		return err
-	}
-	r.template = processor*/
 
 	oauthClient, err := openshift.NewOAuthClientClient(mgr.GetConfig())
 	if err != nil {
@@ -283,35 +276,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	// Install phase
 
-	/*exts, err := r.processTemplate(instance, request)
-	if err != nil {
-		reqLogger.Error(err, "Error while processing template", "template", hawtioTemplatePath)
-		return reconcile.Result{}, err
-	}*/
-
-	/*objs, err := getRuntimeObjects(exts)
-	if err != nil {
-		reqLogger.Error(err, "Error while retrieving runtime objects")
-		return reconcile.Result{}, err
-	}*/
-
-	// this code moved into reconcileResources function
-	/*if isNamespaceDeployment {
-		// Add service account as OAuth client
-		sa, err := newServiceAccountAsOauthClient(request.Name)
-		if err != nil {
-			reqLogger.Error(err, "Error while creating OAuth client")
-			return reconcile.Result{}, err
-		}
-		objs = append(objs, sa)
-	}
-	*/
 	// Check OpenShift version
-
-	// TODO(OpenShift version): will use operator util to repalce the below code.
-
 	var openShiftSemVer *semver.Version
 	clusterVersion, err := r.configClient.
 		ConfigV1().
@@ -361,43 +327,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	/* this code move into container file under resources
-
-	deployment := deployments.GetDeployment(objs)
-	container := deployment.Spec.Template.Spec.Containers[0]
-
-	if isOpenShift4 {
-		container.Env = append(container.Env,
-			// Activate console backend gateway
-			corev1.EnvVar{
-				Name:  "HAWTIO_ONLINE_GATEWAY",
-				Value: "true",
-			},
-			// Valuate the ClusterVersion environment variable
-			corev1.EnvVar{
-				Name:  "OPENSHIFT_CLUSTER_VERSION",
-				Value: openShiftSemVer.String(),
-			},
-			// Valuate the OpenShift Web Console URL environment variable
-			corev1.EnvVar{
-				Name:  "OPENSHIFT_WEB_CONSOLE_URL",
-				Value: openShiftConsoleUrl,
-			},
-		)
-	}*/
-
 	// Adjust service signing secret volume mount path
 	serviceSigningCertificateVolumeMountPath, err := getServingCertificateMountPathFor(consoleVersion)
 	if err != nil {
 		reqLogger.Error(err, "Error getting service signing certificate mount path", "version", consoleVersion)
 		return reconcile.Result{}, err
 	}
-	// this code moved into deployments file under resources
-	/*	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-		Name:      serviceSigningSecretVolumeName,
-		MountPath: serviceSigningCertificateVolumeMountPath,
-	})*/
-
 	if isOpenShift4 {
 		// Check whether client certificate secret exists
 		_, err := r.coreClient.
@@ -415,52 +350,30 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				return reconcile.Result{}, err
 			}
 		}
-		// this code moved into deployments file function MakeVolumeMounts  & MakeVolumes
-		// Mount client certificate secret
-		/*volume := corev1.Volume{
-			Name: clientCertificateSecretVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: clientCertificateSecret.Name,
-				},
-			},
-		}
-		*/
-		//	deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, volume)
-
-		/*	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-			Name:      clientCertificateSecretVolumeName,
-			MountPath: clientCertificateSecretVolumeMountPath,
-		})*/
-	}
-
-	//deployment.Spec.Template.Spec.Containers[0] = container
-
-	// Create runtime objects
-	//err = r.createObjects(objs, request.Namespace, instance)
-	/*if err != nil {
-		reqLogger.Error(err, "Error creating runtime objects")
-		return reconcile.Result{}, err
-	}*/
-
-	// TODO(func Paramertes): refactor to avoid pass more params from function
-
-	hasUpdates, err := r.reconcileResources(instance, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configVersion)
-
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	if hasUpdates {
-		return r.UpdateObj(instance)
 	}
 
 	configMap := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
 	if err != nil && errors.IsNotFound(err) {
-		return reconcile.Result{Requeue: true}, nil
+		configmapDefinition := configmaps.NewConfigMapForCR(instance)
+		err = r.client.Create(context.TODO(), configmapDefinition)
+		if err != nil {
+			reqLogger.Error(err, "Failed to create configmapDefinition")
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{}, err
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get config map")
 		return reconcile.Result{}, err
+	}
+
+	hasUpdates, err := r.reconcileResources(instance, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configMap)
+	if err != nil {
+		reqLogger.Error(err, "Error in Reconcile Resources ")
+		return reconcile.Result{}, err
+	}
+	if hasUpdates {
+		return r.UpdateObj(instance)
 	}
 
 	route := &routev1.Route{}
@@ -562,19 +475,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	container := deployment.Spec.Template.Spec.Containers[0]
 
-	// Reconcile image
-	/*if image := getImageFor(instance.Spec.Version); container.Image != image {
-		container.Image = image
-		updateDeployment = true
-	}*/
-	/*
-	      // this code moved into deployments file under resources
-	   	// Reconcile service signing secret volume mount path
-	   	volumeMount, _ := deployments.GetVolumeMount(container, serviceSigningSecretVolumeName)
-	   	if volumeMount.MountPath != serviceSigningCertificateVolumeMountPath {
-	   		volumeMount.MountPath = serviceSigningSecretVolumeMountPath
-	   		updateDeployment = true
-	   	}*/
 
 	// Reconcile replicas
 	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
@@ -624,8 +524,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	requestDeployment := false
-	/// Not sure still need these lines of the code from 621 to 647//
-	if configVersion = configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
+	if configVersion := configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
 		if len(deployment.Annotations[configVersionAnnotation]) > 0 {
 			requestDeployment = true
 		}
@@ -792,7 +691,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 	}
-	/// Not sure still need these lines of the code from  788 to 805//
 	// Refresh the instance
 	instance = &hawtiov1alpha1.Hawtio{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
@@ -814,18 +712,17 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, resourceVersion string) (bool, error) {
+func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configmapDefinition *corev1.ConfigMap) (bool, error) {
 	reqLogger := log.WithName(cr.Name)
 
 	isNamespaceDeployment := strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
-	configmapDefinition := configmaps.NewConfigMapForCR(cr)
-	dep := deployments.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, resourceVersion)
+	dep := deployments.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configmapDefinition.GetResourceVersion())
 	serviceDefinition := svc.NewServiceDefinitionForCR(cr)
 	routeDefinition := routes.NewRouteDefinitionForCR(cr)
 
 	var requestedResources []resource.KubernetesResource
-	requestedResources = append(requestedResources, configmapDefinition)
+	//requestedResources = append(requestedResources, configmapDefinition)
 	requestedResources = append(requestedResources, dep)
 	requestedResources = append(requestedResources, serviceDefinition)
 	requestedResources = append(requestedResources, routeDefinition)

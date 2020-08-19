@@ -15,7 +15,7 @@ func MakePodTemplateSpec(namespacedName types.NamespacedName, labels map[string]
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,
 			Namespace: namespacedName.Namespace,
-			Labels:    labels, //selectors.LabelBuilder.Labels(),
+			Labels:    labels,
 		},
 	}
 	return pts

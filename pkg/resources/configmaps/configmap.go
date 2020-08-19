@@ -20,7 +20,7 @@ const (
 )
 
 func NewConfigMapForCR(m *hawtiov1alpha1.Hawtio) *corev1.ConfigMap {
-	config := ConfigForHawtio(m)
+	config := configForHawtio(m)
 	configMap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -38,7 +38,7 @@ func NewConfigMapForCR(m *hawtiov1alpha1.Hawtio) *corev1.ConfigMap {
 	return configMap
 }
 
-func ConfigForHawtio(m *hawtiov1alpha1.Hawtio) string {
+func configForHawtio(m *hawtiov1alpha1.Hawtio) string {
 
 	data, err := osutil.LoadConfigFromFile(hawtioConfigPath)
 	if err != nil {

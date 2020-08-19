@@ -39,8 +39,6 @@ func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
 			},
 			Labels: map[string]string{"app": "hawtio"},
 			Name:   applicationName,
-
-			//Namespace:   namespacedName.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports:                    ports,
