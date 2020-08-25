@@ -409,7 +409,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Read Hawtio configuration
-	hawtconfig, err := osutil.GetHawtioConfig(configMap)
+	hawtconfig, err := resources.GetHawtioConfig(configMap)
 	if err != nil {
 		reqLogger.Error(err, "Failed to get hawtconfig")
 		return reconcile.Result{}, err

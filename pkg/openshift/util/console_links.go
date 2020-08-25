@@ -1,32 +1,13 @@
 package util
 
 import (
-	"encoding/json"
-	"errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	consolev1 "github.com/openshift/api/console/v1"
 	routev1 "github.com/openshift/api/route/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
-
-// GetHawtioConfig reads the console configuration from the config map
-func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.Hawtconfig, error) {
-	var config *hawtiov1alpha1.Hawtconfig
-
-	data, ok := configMap.Data["config.json"]
-	if !ok {
-		return config, errors.New("did not find config.json in ConfigMap")
-	}
-	err := json.Unmarshal([]byte(data), &config)
-	if err != nil {
-		return config, err
-	}
-
-	return config, nil
-}
 
 // NewApplicationMenuLink creates an ApplicationMenu ConsoleLink instance
 func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {

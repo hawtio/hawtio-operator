@@ -2,6 +2,8 @@ package resources
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"text/template"
 
 	corev1 "k8s.io/api/core/v1"
@@ -11,7 +13,27 @@ import (
 	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
 )
 
-const hawtioConfigPath = "config/config.yaml"
+const (
+	hawtioConfigPath = "config/config.yaml"
+	hawtioConfigKey  = "hawtconfig.json"
+)
+
+// GetHawtioConfig reads the console configuration from the config map
+func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.Hawtconfig, error) {
+	var config *hawtiov1alpha1.Hawtconfig
+
+	data, ok := configMap.Data[hawtioConfigKey]
+	if !ok {
+		return config, errors.New("did not find " + hawtioConfigKey + " in ConfigMap")
+	}
+
+	err := json.Unmarshal([]byte(data), &config)
+	if err != nil {
+		return config, err
+	}
+
+	return config, nil
+}
 
 // Create NewConfigMapForCR method to create configmap
 func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
@@ -30,7 +52,7 @@ func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
 			Namespace: cr.Namespace,
 		},
 		Data: map[string]string{
-			"hawtconfig.json": config,
+			hawtioConfigKey: config,
 		},
 	}
 

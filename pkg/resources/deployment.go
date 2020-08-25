@@ -1,8 +1,6 @@
 package resources
 
 import (
-	"github.com/hawtio/hawtio-operator/pkg/util/selectors"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,6 +8,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	"github.com/hawtio/hawtio-operator/pkg/util/selectors"
 )
 
 var log = logf.Log.WithName("resources")
@@ -154,13 +153,13 @@ func newVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath st
 
 	var volumeMounts []corev1.VolumeMount
 
-	volumeMountSubPath := "hawtconfig.json"
+	volumeMountSubPath := hawtioConfigKey
 	volumeMountName := "hawtio-online"
 	volumeMountNamepath := "/usr/share/nginx/html/online/hawtconfig.json"
 	volumeMount := newVolumeMount(volumeMountName, volumeMountNamepath, volumeMountSubPath)
 	volumeMounts = append(volumeMounts, volumeMount)
 
-	volumeMountSubPath = "hawtconfig.json"
+	volumeMountSubPath = hawtioConfigKey
 	volumeMountName = "hawtio-integration"
 	volumeMountNamepath = "/usr/share/nginx/html/integration/hawtconfig.json"
 	volumeMount = newVolumeMount(volumeMountName, volumeMountNamepath, volumeMountSubPath)
