@@ -6,7 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-	"github.com/hawtio/hawtio-operator/pkg/util/selectors"
 )
 
 //func NewServiceDefinitionForCR
@@ -39,7 +38,7 @@ func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports:                    ports,
-			Selector:                 selectors.LabelsForHawtio(applicationName),
+			Selector:                 labelsForHawtio(applicationName),
 			SessionAffinity:          "None",
 			PublishNotReadyAddresses: true,
 		},

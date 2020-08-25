@@ -8,7 +8,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-	"github.com/hawtio/hawtio-operator/pkg/util/selectors"
 )
 
 var log = logf.Log.WithName("resources")
@@ -44,7 +43,7 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 }
 
 func newDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
-	labels := selectors.LabelsForHawtio(namespacedName.Name)
+	labels := labelsForHawtio(namespacedName.Name)
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -79,7 +78,7 @@ func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, opens
 	reqLogger := log.WithName(namespacedName.Name)
 	reqLogger.Info("Creating new pod template spec for custom resource")
 
-	pts := newPodTemplateSpec(namespacedName, selectors.LabelsForHawtio(cr.Name))
+	pts := newPodTemplateSpec(namespacedName, labelsForHawtio(cr.Name))
 
 	spec := corev1.PodSpec{}
 	var Containers []corev1.Container
