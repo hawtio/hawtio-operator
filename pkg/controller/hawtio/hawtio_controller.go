@@ -349,7 +349,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	configMap := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
 	if err != nil && errors.IsNotFound(err) {
-		configMap = resources.NewConfigMapForCR(instance)
+		configMap, err = resources.NewConfigMapForCR(instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to generate config map")
+			return reconcile.Result{}, err
+		}
 		err = r.client.Create(context.TODO(), configMap)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create config map")

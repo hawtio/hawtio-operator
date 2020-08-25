@@ -2,7 +2,6 @@ package resources
 
 import (
 	"bytes"
-	"fmt"
 	"text/template"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,13 +11,15 @@ import (
 	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
 )
 
-const (
-	hawtioConfigPath = "config/config.yaml"
-)
+const hawtioConfigPath = "config/config.yaml"
 
 // Create NewConfigMapForCR method to create configmap
-func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) *corev1.ConfigMap {
-	config := configForHawtio(cr)
+func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
+	config, err := configForHawtio(cr)
+	if err != nil {
+		return nil, err
+	}
+
 	configMap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -33,17 +34,21 @@ func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) *corev1.ConfigMap {
 		},
 	}
 
-	return configMap
+	return configMap, nil
 }
 
-func configForHawtio(m *hawtiov1alpha1.Hawtio) string {
+func configForHawtio(m *hawtiov1alpha1.Hawtio) (string, error) {
 	data, err := osutil.LoadConfigFromFile(hawtioConfigPath)
 	if err != nil {
-		fmt.Errorf("error reading config file: %s")
+		return "", err
 	}
 
 	var buff bytes.Buffer
 	config := template.Must(template.New("config").Parse(string(data)))
-	config.Execute(&buff, m.Spec)
-	return buff.String()
+	err = config.Execute(&buff, m.Spec)
+	if err != nil {
+		return "", err
+	}
+
+	return buff.String(), nil
 }
