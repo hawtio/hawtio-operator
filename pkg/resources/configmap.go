@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 const (
@@ -60,7 +60,7 @@ func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
 }
 
 func configForHawtio(m *hawtiov1alpha1.Hawtio) (string, error) {
-	data, err := osutil.LoadConfigFromFile(hawtioConfigPath)
+	data, err := util.LoadConfigFromFile(hawtioConfigPath)
 	if err != nil {
 		return "", err
 	}

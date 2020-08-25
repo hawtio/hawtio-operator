@@ -1,9 +1,7 @@
-package util
+package openshift
 
 import (
 	"fmt"
-	"io/ioutil"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -11,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	serializerjson "k8s.io/apimachinery/pkg/runtime/serializer/json"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	cgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	apps "github.com/openshift/api/apps/v1"
@@ -24,13 +21,16 @@ import (
 )
 
 var (
-	scheme         = runtime.NewScheme()
-	codecs         = serializer.NewCodecFactory(scheme)
-	decoderFunc    = decoder
-	jsonSerializer = serializerjson.NewSerializerWithOptions(serializerjson.DefaultMetaFactory, scheme, scheme, serializerjson.SerializerOptions{Yaml: false, Pretty: false, Strict: false})
+	codecs         serializer.CodecFactory
+	jsonSerializer *serializerjson.Serializer
 )
 
 func init() {
+	scheme := runtime.NewScheme()
+
+	codecs = serializer.NewCodecFactory(scheme)
+	jsonSerializer = serializerjson.NewSerializerWithOptions(serializerjson.DefaultMetaFactory, scheme, scheme, serializerjson.SerializerOptions{Yaml: false, Pretty: false, Strict: false})
+
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
 	cgoscheme.AddToScheme(scheme)
 
@@ -62,9 +62,9 @@ func Encode(obj runtime.Object) ([]byte, error) {
 	return runtime.Encode(jsonSerializer, obj)
 }
 
-func RuntimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object, error) {
+func runtimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object, error) {
 	gvk := u.GroupVersionKind()
-	decoder := decoderFunc(gvk.GroupVersion(), codecs)
+	decoder := decoder(gvk.GroupVersion(), codecs)
 
 	b, err := u.MarshalJSON()
 	if err != nil {
@@ -79,7 +79,7 @@ func RuntimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object
 	return ro, nil
 }
 
-func LoadKubernetesResource(jsonData []byte) (runtime.Object, error) {
+func runtimeObjectFrom(jsonData []byte) (runtime.Object, error) {
 	u := unstructured.Unstructured{}
 
 	err := u.UnmarshalJSON(jsonData)
@@ -87,26 +87,5 @@ func LoadKubernetesResource(jsonData []byte) (runtime.Object, error) {
 		return nil, err
 	}
 
-	return RuntimeObjectFromUnstructured(&u)
-}
-
-func jsonIfYaml(source []byte, filename string) ([]byte, error) {
-	if strings.HasSuffix(filename, ".yaml") || strings.HasSuffix(filename, ".yml") {
-		return yaml.ToJSON(source)
-	}
-
-	return source, nil
-}
-func LoadConfigFromFile(path string) ([]byte, error) {
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err = jsonIfYaml(data, path)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, err
+	return runtimeObjectFromUnstructured(&u)
 }

@@ -6,7 +6,7 @@ import (
 
 	oauthv1 "github.com/openshift/api/oauth/v1"
 
-	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
+	"github.com/hawtio/hawtio-operator/pkg/openshift"
 )
 
 func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error) {
@@ -21,7 +21,7 @@ func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error)
 		},
 	}
 
-	ref, err := util.Encode(OAuthRedirectReference)
+	ref, err := openshift.Encode(OAuthRedirectReference)
 	if err != nil {
 		return nil, err
 	}

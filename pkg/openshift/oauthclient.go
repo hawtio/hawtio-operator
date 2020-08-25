@@ -8,8 +8,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	oauthv1 "github.com/openshift/api/oauth/v1"
-
-	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
 )
 
 type OAuthClientClient struct {
@@ -55,7 +53,7 @@ func (p *OAuthClientClient) Get(name string) (*oauthv1.OAuthClient, error) {
 			return nil, err
 		}
 
-		res, err := util.LoadKubernetesResource(data)
+		res, err := runtimeObjectFrom(data)
 		if err != nil {
 			return nil, err
 		}
