@@ -42,7 +42,6 @@ import (
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
-	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
@@ -434,9 +433,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 		consoleLink = &consolev1.ConsoleLink{}
 		if isClusterDeployment {
-			consoleLink = osutil.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
+			consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
 		} else if isOpenShift43Plus {
-			consoleLink = osutil.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
+			consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 		}
 		if consoleLink.Spec.Location != "" {
 			err = r.client.Create(context.TODO(), consoleLink)
@@ -588,9 +587,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			if errors.IsNotFound(err) {
 				// If not found, create a console link
 				if isClusterDeployment {
-					consoleLink = osutil.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
+					consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
 				} else if isOpenShift43Plus {
-					consoleLink = osutil.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
+					consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 				}
 				if consoleLink.Spec.Location != "" {
 					err = r.client.Create(context.TODO(), consoleLink)
@@ -606,9 +605,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		} else {
 			consoleLinkCopy := consoleLink.DeepCopy()
 			if isClusterDeployment {
-				osutil.UpdateApplicationMenuLink(consoleLinkCopy, route, hawtconfig)
+				openshift.UpdateApplicationMenuLink(consoleLinkCopy, route, hawtconfig)
 			} else if isOpenShift43Plus {
-				osutil.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
+				openshift.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
 			}
 			patch := client.MergeFrom(consoleLink)
 			err = r.client.Patch(context.TODO(), consoleLinkCopy, patch)
