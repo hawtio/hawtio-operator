@@ -1,4 +1,4 @@
-package hawtio
+package resources
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -9,7 +9,7 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/openshift/util"
 )
 
-func newServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error) {
+func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error) {
 	OAuthRedirectReference := &oauthv1.OAuthRedirectReference{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OAuthRedirectReference",
@@ -45,21 +45,21 @@ func newServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error)
 	return sa, nil
 }
 
-func newOAuthClient() *oauthv1.OAuthClient {
+func NewOAuthClient(name string) *oauthv1.OAuthClient {
 	oc := &oauthv1.OAuthClient{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OAuthClient",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: oauthClientName,
+			Name: name,
 		},
 		GrantMethod: oauthv1.GrantHandlerAuto,
 	}
 	return oc
 }
 
-func oauthClientContainsRedirectURI(oc *oauthv1.OAuthClient, uri string) (bool, int) {
+func OauthClientContainsRedirectURI(oc *oauthv1.OAuthClient, uri string) (bool, int) {
 	for i, u := range oc.RedirectURIs {
 		if u == uri {
 			return true, i
@@ -68,8 +68,8 @@ func oauthClientContainsRedirectURI(oc *oauthv1.OAuthClient, uri string) (bool, 
 	return false, -1
 }
 
-func removeRedirectURIFromOauthClient(oc *oauthv1.OAuthClient, uri string) bool {
-	ok, i := oauthClientContainsRedirectURI(oc, uri)
+func RemoveRedirectURIFromOauthClient(oc *oauthv1.OAuthClient, uri string) bool {
+	ok, i := OauthClientContainsRedirectURI(oc, uri)
 	if ok {
 		oc.RedirectURIs = append(oc.RedirectURIs[:i], oc.RedirectURIs[i+1:]...)
 		return true

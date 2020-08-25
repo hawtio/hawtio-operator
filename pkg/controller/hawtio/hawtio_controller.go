@@ -401,7 +401,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 		// Add OAuth client
-		oauthClient := newOAuthClient()
+		oauthClient := resources.NewOAuthClient(oauthClientName)
 		err = r.client.Create(context.TODO(), oauthClient)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
@@ -645,7 +645,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if url := resources.GetRouteURL(route); instance.Status.URL != url {
 		if isClusterDeployment {
 			// First remove old URL from OAuthClient
-			if removeRedirectURIFromOauthClient(oc, instance.Status.URL) {
+			if resources.RemoveRedirectURIFromOauthClient(oc, instance.Status.URL) {
 				err := r.client.Update(context.TODO(), oc)
 				if err != nil {
 					reqLogger.Error(err, "Failed to reconcile OAuth client")
@@ -664,7 +664,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if isClusterDeployment {
 		// Add route URL to OAuthClient authorized redirect URIs
 		uri := resources.GetRouteURL(route)
-		if ok, _ := oauthClientContainsRedirectURI(oc, uri); !ok {
+		if ok, _ := resources.OauthClientContainsRedirectURI(oc, uri); !ok {
 			oc.RedirectURIs = append(oc.RedirectURIs, uri)
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
@@ -678,7 +678,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		// This happens when the deployment type is changed
 		// from "cluster" to "namespace".
 		uri := resources.GetRouteURL(route)
-		if removeRedirectURIFromOauthClient(oc, uri) {
+		if resources.RemoveRedirectURIFromOauthClient(oc, uri) {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
@@ -724,7 +724,7 @@ func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request 
 
 	if isNamespaceDeployment {
 		// Add service account as OAuth client
-		sa, err := newServiceAccountAsOauthClient(request.Name)
+		sa, err := resources.NewServiceAccountAsOauthClient(request.Name)
 		if err != nil {
 			return false, fmt.Errorf("error UpdateResources : %s", err)
 		}
@@ -835,7 +835,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get OAuth client: %v", err)
 		}
-		updated := removeRedirectURIFromOauthClient(oc, cr.Status.URL)
+		updated := resources.RemoveRedirectURIFromOauthClient(oc, cr.Status.URL)
 		if updated {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
