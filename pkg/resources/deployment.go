@@ -103,31 +103,31 @@ func newVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Creating new Volume for custom resource")
 
-	var volumeDefinitions []corev1.Volume
+	var volumes []corev1.Volume
 
 	secretName := cr.Name + "-tls-serving"
 	volumeName := serviceSigningSecretVolumeName
 	volume := newVolume(secretName, volumeName)
-	volumeDefinitions = append(volumeDefinitions, volume)
+	volumes = append(volumes, volume)
 
 	if isOpenShift4 {
 		secretName = cr.Name + "-tls-proxying"
 		volumeName = clientCertificateSecretVolumeName
 		volume = newVolume(secretName, volumeName)
-		volumeDefinitions = append(volumeDefinitions, volume)
+		volumes = append(volumes, volume)
 	}
 
 	configMapName := cr.Name
 	volumeName = "hawtio-online"
 	volume = newConfigMapVolume(configMapName, volumeName)
-	volumeDefinitions = append(volumeDefinitions, volume)
+	volumes = append(volumes, volume)
 
 	configMapName = cr.Name
 	volumeName = "hawtio-integration"
 	volume = newConfigMapVolume(configMapName, volumeName)
-	volumeDefinitions = append(volumeDefinitions, volume)
+	volumes = append(volumes, volume)
 
-	return volumeDefinitions
+	return volumes
 }
 
 func newEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string) []corev1.EnvVar {
@@ -155,26 +155,26 @@ func newVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath st
 
 	volumeMountSubPath := hawtioConfigKey
 	volumeMountName := "hawtio-online"
-	volumeMountNamepath := "/usr/share/nginx/html/online/hawtconfig.json"
-	volumeMount := newVolumeMount(volumeMountName, volumeMountNamepath, volumeMountSubPath)
+	volumeMountPath := "/usr/share/nginx/html/online/hawtconfig.json"
+	volumeMount := newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	volumeMountSubPath = hawtioConfigKey
 	volumeMountName = "hawtio-integration"
-	volumeMountNamepath = "/usr/share/nginx/html/integration/hawtconfig.json"
-	volumeMount = newVolumeMount(volumeMountName, volumeMountNamepath, volumeMountSubPath)
+	volumeMountPath = "/usr/share/nginx/html/integration/hawtconfig.json"
+	volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	volumeMountSubPath = ""
 	volumeMountName = serviceSigningSecretVolumeName
-	volumeMountNamepath = volumePath
-	volumeMount = newVolumeMount(volumeMountName, volumeMountNamepath, volumeMountSubPath)
+	volumeMountPath = volumePath
+	volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	if isOpenShift4 {
 		volumeMountName = clientCertificateSecretVolumeName
-		volumeMountNamepath = clientCertificateSecretVolumeMountPath
-		volumeMount = newVolumeMount(volumeMountName, volumeMountNamepath, volumeMountSubPath)
+		volumeMountPath = clientCertificateSecretVolumeMountPath
+		volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
 		volumeMounts = append(volumeMounts, volumeMount)
 	}
 
