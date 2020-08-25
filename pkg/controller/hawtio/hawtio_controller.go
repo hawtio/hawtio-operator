@@ -41,9 +41,9 @@ import (
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	"github.com/hawtio/hawtio-operator/pkg/kubernetes"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
-	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 var log = logf.Log.WithName("controller_hawtio")
@@ -219,12 +219,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// TODO: only add the finalizer for cluster mode
-	ok, err := util.HasFinalizer(instance, hawtioFinalizer)
+	ok, err := kubernetes.HasFinalizer(instance, hawtioFinalizer)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to read finalizer: %v", err)
 	}
 	if !ok {
-		err = util.AddFinalizer(instance, hawtioFinalizer)
+		err = kubernetes.AddFinalizer(instance, hawtioFinalizer)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to set finalizer: %v", err)
 		}
@@ -819,7 +819,7 @@ func (r *ReconcileHawtio) update(cr *hawtiov1alpha1.Hawtio) (reconcile.Result, e
 }
 
 func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
-	ok, err := util.HasFinalizer(cr, "foregroundDeletion")
+	ok, err := kubernetes.HasFinalizer(cr, "foregroundDeletion")
 	if err != nil {
 		return err
 	}
@@ -854,7 +854,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 		return fmt.Errorf("failed to delete console link: %v", err)
 	}
 
-	_, err = util.RemoveFinalizer(cr, hawtioFinalizer)
+	_, err = kubernetes.RemoveFinalizer(cr, hawtioFinalizer)
 	if err != nil {
 		return err
 	}
