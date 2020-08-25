@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/gobuffalo/packr/v2/jam"
 	"os"
+
+	"github.com/gobuffalo/packr/v2/jam"
 )
 
 func main() {

@@ -1,18 +1,19 @@
 package deployments
 
 import (
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/resources/containers"
 	"github.com/hawtio/hawtio-operator/pkg/resources/environments"
 	"github.com/hawtio/hawtio-operator/pkg/resources/pods"
 	"github.com/hawtio/hawtio-operator/pkg/resources/volumes"
 	"github.com/hawtio/hawtio-operator/pkg/util/selectors"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+
+	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
 var log = logf.Log.WithName("package deployments")
@@ -21,24 +22,13 @@ const (
 	serviceSigningSecretVolumeName         = "hawtio-online-tls-serving"
 	clientCertificateSecretVolumeName      = "hawtio-online-tls-proxying"
 	clientCertificateSecretVolumeMountPath = "/etc/tls/private/proxying"
-	deploymentRolloutAnnotation            = "hawtio.hawt.io/restartedAt"
 	hawtioVersionAnnotation                = "hawtio.hawt.io/hawtioversion"
 	hawtioTypeAnnotation                   = "hawtio.hawt.io/hawtioType"
 	configVersionAnnotation                = "hawtio.hawt.io/configversion"
 )
 
-// move this to util
-// Set labels in a map
-func labelsForInterconnect(name string) map[string]string {
-	return map[string]string{
-		selectors.LabelAppKey:      name,
-		selectors.LabelResourceKey: name,
-	}
-}
-
 // Create NewDeploymentForCR method to create deployment
 func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configResourceVersion string) *appsv1.Deployment {
-
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Creating new Deployment for custom resource")
 
@@ -58,11 +48,9 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 	dep.Spec = Spec
 
 	return dep
-
 }
 
 func makeDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas int32, pts corev1.PodTemplateSpec) (deployment *appsv1.Deployment, spec appsv1.DeploymentSpec) {
-
 	labels := selectors.LabelsForHawtio(namespacedName.Name)
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -88,7 +76,6 @@ func makeDeployment(namespacedName types.NamespacedName, annotations map[string]
 	}
 
 	return dep, Spec
-
 }
 
 func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string) corev1.PodTemplateSpec {
@@ -101,31 +88,29 @@ func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, opens
 
 	pts := pods.MakePodTemplateSpec(namespacedName, selectors.LabelsForHawtio(cr.Name))
 
-	Spec := corev1.PodSpec{}
-	Containers := []corev1.Container{}
+	spec := corev1.PodSpec{}
+	var Containers []corev1.Container
 	container := containers.NewContainer(cr.Name, cr.Spec.Version, makeEnvVarArrayForCR(cr, isOpenShift4, openshiftVersion, openshiftURL))
 
 	volumeMounts := makeVolumeMounts(cr, isOpenShift4, volumePath)
 	if len(volumeMounts) > 0 {
 		container.VolumeMounts = volumeMounts
 	}
-	volumes := makeVolumes(cr, isOpenShift4)
-	if len(volumes) > 0 {
-		Spec.Volumes = volumes
+	v := makeVolumes(cr, isOpenShift4)
+	if len(v) > 0 {
+		spec.Volumes = v
 	}
-	Spec.Containers = append(Containers, container)
-	pts.Spec = Spec
+	spec.Containers = append(Containers, container)
+	pts.Spec = spec
 
 	return pts
-
 }
 
 func makeVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
-
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Creating new Volume for custom resource")
 
-	volumeDefinitions := []corev1.Volume{}
+	var volumeDefinitions []corev1.Volume
 
 	secretName := cr.Name + "-tls-serving"
 	volumeName := serviceSigningSecretVolumeName
@@ -133,13 +118,12 @@ func makeVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 	volumeDefinitions = append(volumeDefinitions, volume)
 
 	if isOpenShift4 {
-
 		secretName = cr.Name + "-tls-proxying"
 		volumeName = clientCertificateSecretVolumeName
 		volume = volumes.MakeVolume(secretName, volumeName)
 		volumeDefinitions = append(volumeDefinitions, volume)
-
 	}
+
 	configMapName := cr.Name
 	volumeName = "hawtio-online"
 	volume = volumes.MakeConfigMapVolume(configMapName, volumeName)
@@ -154,15 +138,15 @@ func makeVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 }
 
 func makeEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string) []corev1.EnvVar {
-
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Adding Env variable ")
-	envVar := []corev1.EnvVar{}
+
+	var envVar []corev1.EnvVar
+
 	envVarArrayForCluster := environments.AddEnvVarForContainer(cr.Spec.Type, cr.Name)
 	envVar = append(envVar, envVarArrayForCluster...)
 
 	if isOpenShift4 {
-
 		envVarArrayFoOpenShift := environments.AddEnvVarForOpenshift(openshiftVersion, openshiftURL)
 		envVar = append(envVar, envVarArrayFoOpenShift...)
 	}
@@ -171,11 +155,10 @@ func makeEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshif
 }
 
 func makeVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath string) []corev1.VolumeMount {
-
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Creating new Volume Mounts for custom resource")
 
-	volumeMounts := []corev1.VolumeMount{}
+	var volumeMounts []corev1.VolumeMount
 
 	volumeMountSubPath := "hawtconfig.json"
 	volumeMountName := "hawtio-online"
@@ -196,7 +179,6 @@ func makeVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath s
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	if isOpenShift4 {
-
 		volumeMountName = clientCertificateSecretVolumeName
 		volumeMountNamepath = clientCertificateSecretVolumeMountPath
 		volumeMount = volumes.MakeVolumeMount(volumeMountName, volumeMountNamepath, volumeMountSubPath)
@@ -214,22 +196,4 @@ func GetEnvVarByName(env []corev1.EnvVar, name string) (*corev1.EnvVar, int) {
 		}
 	}
 	return nil, -1
-}
-
-func GetVolumeMount(container corev1.Container, name string) (*corev1.VolumeMount, int) {
-	for i, vm := range container.VolumeMounts {
-		if vm.Name == name {
-			return &container.VolumeMounts[i], i
-		}
-	}
-	return nil, -1
-}
-
-func GetDeployment(objects []runtime.Object) *appsv1.Deployment {
-	for _, object := range objects {
-		if deployment, ok := object.(*appsv1.Deployment); ok {
-			return deployment
-		}
-	}
-	return nil
 }

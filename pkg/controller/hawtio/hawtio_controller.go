@@ -3,21 +3,16 @@ package hawtio
 import (
 	"context"
 	"fmt"
-	"github.com/RHsyseng/operator-utils/pkg/resource/compare"
-	"github.com/RHsyseng/operator-utils/pkg/resource/read"
-	"github.com/RHsyseng/operator-utils/pkg/resource/write"
-	"github.com/hawtio/hawtio-operator/pkg/resources/configmaps"
-	"github.com/hawtio/hawtio-operator/pkg/resources/routes"
-
-	"github.com/Masterminds/semver"
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-	"github.com/hawtio/hawtio-operator/pkg/openshift"
-	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
-	"github.com/hawtio/hawtio-operator/pkg/util"
-
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/Masterminds/semver"
+
+	"github.com/RHsyseng/operator-utils/pkg/resource"
+	"github.com/RHsyseng/operator-utils/pkg/resource/compare"
+	"github.com/RHsyseng/operator-utils/pkg/resource/read"
+	"github.com/RHsyseng/operator-utils/pkg/resource/write"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -27,12 +22,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
-	consolev1 "github.com/openshift/api/console/v1"
-	oauthv1 "github.com/openshift/api/oauth/v1"
-	routev1 "github.com/openshift/api/route/v1"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -43,18 +35,25 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/RHsyseng/operator-utils/pkg/resource"
-	"github.com/hawtio/hawtio-operator/pkg/resources/deployments"
-	svc "github.com/hawtio/hawtio-operator/pkg/resources/services"
+	consolev1 "github.com/openshift/api/console/v1"
+	oauthv1 "github.com/openshift/api/oauth/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
+
+	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	"github.com/hawtio/hawtio-operator/pkg/openshift"
+	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
+	"github.com/hawtio/hawtio-operator/pkg/resources/configmaps"
+	"github.com/hawtio/hawtio-operator/pkg/resources/deployments"
+	"github.com/hawtio/hawtio-operator/pkg/resources/routes"
+	svc "github.com/hawtio/hawtio-operator/pkg/resources/services"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	hawtioFinalizer    = "finalizer.hawtio.hawt.io"
-	hawtioTemplatePath = "templates/deployment.yaml"
-	consoleLinkCrdName = "consolelinks.console.openshift.io"
+	hawtioFinalizer = "finalizer.hawtio.hawt.io"
 
 	configVersionAnnotation     = "hawtio.hawt.io/configversion"
 	deploymentRolloutAnnotation = "hawtio.hawt.io/restartedAt"
@@ -74,7 +73,6 @@ const (
 )
 
 // Go build-time variables
-var ImageRepository string
 var LegacyServingCertificateMountVersion string
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -182,7 +180,7 @@ var _ reconcile.Reconciler = &ReconcileHawtio{}
 // ReconcileHawtio reconciles a Hawtio object
 type ReconcileHawtio struct {
 	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
+	// that reads objects from the cache and writes to the API server
 	client       client.Client
 	config       *rest.Config
 	scheme       *runtime.Scheme
@@ -275,7 +273,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 		return reconcile.Result{Requeue: true}, nil
 	}
-
 
 	// Check OpenShift version
 	var openShiftSemVer *semver.Version
@@ -373,7 +370,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 	if hasUpdates {
-		return r.UpdateObj(instance)
+		return r.update(instance)
 	}
 
 	route := &routev1.Route{}
@@ -412,7 +409,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Read Hawtio configuration
-	hawtconfig, err := osutil.GetHawtconfig(configMap)
+	hawtconfig, err := osutil.GetHawtioConfig(configMap)
 	if err != nil {
 		reqLogger.Error(err, "Failed to get hawtconfig")
 		return reconcile.Result{}, err
@@ -474,7 +471,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	container := deployment.Spec.Template.Spec.Containers[0]
-
 
 	// Reconcile replicas
 	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
@@ -542,7 +538,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if updateDeployment {
-
 		err := r.client.Update(context.TODO(), deployment)
 		if err != nil {
 			reqLogger.Error(err, "Failed to reconcile to deployment")
@@ -800,8 +795,6 @@ func getComparator() compare.MapComparator {
 }
 
 func getDeployedResources(cr *hawtiov1alpha1.Hawtio, client client.Client) (map[reflect.Type][]resource.KubernetesResource, error) {
-	var log = logf.Log.WithName("getDeployedResources")
-
 	reader := read.New(client).WithNamespace(cr.Namespace).WithOwnerObject(cr)
 	resourceMap, err := reader.ListAll(
 		&corev1.ConfigMapList{},
@@ -816,19 +809,13 @@ func getDeployedResources(cr *hawtiov1alpha1.Hawtio, client client.Client) (map[
 	}
 
 	return resourceMap, nil
-
 }
 
-// UpdateObj reconciles the given object
-func (reconciler *ReconcileHawtio) UpdateObj(obj *hawtiov1alpha1.Hawtio) (reconcile.Result, error) {
-	//log := log.With("kind", obj.GetObjectKind().GroupVersionKind().Kind, "name", obj.GetName(), "namespace", obj.GetNamespace())
-	//log.Info("Updating")
-	err := reconciler.client.Update(context.TODO(), obj)
+func (r *ReconcileHawtio) update(cr *hawtiov1alpha1.Hawtio) (reconcile.Result, error) {
+	err := r.client.Update(context.TODO(), cr)
 	if err != nil {
-		//log.Warn("Failed to update object. ", err)
 		return reconcile.Result{}, err
 	}
-	// Object updated - return and requeue
 	return reconcile.Result{Requeue: true}, nil
 }
 

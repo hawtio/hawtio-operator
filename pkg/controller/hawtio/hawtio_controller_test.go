@@ -2,16 +2,18 @@ package hawtio
 
 import (
 	"context"
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
-	"github.com/stretchr/testify/require"
-	appsv1 "k8s.io/api/apps/v1"
-	"testing"
+	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
 func TestNonWatchedResourceNameNotFound(t *testing.T) {
@@ -30,7 +32,6 @@ func TestNonWatchedResourceNameNotFound(t *testing.T) {
 	result, err := r.Reconcile(request)
 	assert.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, result)
-
 }
 
 func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
@@ -50,7 +51,6 @@ func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
 	result, err := r.Reconcile(request)
 	assert.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, result)
-
 }
 
 func TestHawtioController_Reconcile(t *testing.T) {
@@ -67,6 +67,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 	r := buildReconcileWithFakeClientWithMocks(objs, t)
 
 	res, err := r.Reconcile(request)
+	res, err = r.Reconcile(request)
 	assert.NoError(t, err, "reconcile Error ")
 	assert.Equal(t, reconcile.Result{}, res)
 	NamespacedName := types.NamespacedName{Name: HawtioInstance.Name, Namespace: HawtioInstance.Namespace}
@@ -82,9 +83,6 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			err = r.client.Get(context.TODO(), deploymentName, deployment)
 
 			require.NoError(t, err)
-
 		})
-
 	})
-
 }

@@ -1,8 +1,7 @@
 package selectors
 
 const (
-	LabelAppKey = "app"
-
+	LabelAppKey      = "app"
 	LabelResourceKey = "deployment"
 )
 

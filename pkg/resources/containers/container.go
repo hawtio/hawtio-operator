@@ -1,30 +1,28 @@
 package containers
 
 import (
+	"os"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"os"
 )
 
-const (
-	TimeInSeconds = 5
-)
+const timeInSeconds = 5
 
 // Go build-time variables
 var ImageRepository string
 
 //func NewContainer
 func NewContainer(customResourceName string, version string, envVarArray []corev1.EnvVar) corev1.Container {
-
 	container := corev1.Container{
 		Name:  customResourceName + "-container",
 		Image: getImageForCR(version),
 		Env:   envVarArray,
 		ReadinessProbe: &corev1.Probe{
-			InitialDelaySeconds: TimeInSeconds,
+			InitialDelaySeconds: timeInSeconds,
 			TimeoutSeconds:      1,
-			PeriodSeconds:       TimeInSeconds,
+			PeriodSeconds:       timeInSeconds,
 			Handler: corev1.Handler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString("nginx"),
@@ -66,10 +64,8 @@ func NewContainer(customResourceName string, version string, envVarArray []corev
 	return container
 }
 
-//TODO(): will replace that function with update code commited in PR #23
-
+//TODO(): will replace that function with update code committed in PR #23
 func getImageForCR(version string) string {
-
 	tag := "latest"
 	if len(version) > 0 {
 		tag = version

@@ -1,20 +1,21 @@
 package routes
 
 import (
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-	routev1 "github.com/openshift/api/route/v1"
+	"time"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
-	"time"
+	routev1 "github.com/openshift/api/route/v1"
+
+	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
 var log = logf.Log.WithName("package routes")
 
 // Create newRouteForCR method to create exposed route
 func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
-
 	reqLogger := log.WithName(cr.Name)
 	reqLogger.Info("Creating new Route Definition for custom resource")
 

@@ -1,15 +1,17 @@
 package test
 
 import (
-	"github.com/RHsyseng/operator-utils/pkg/validation"
-	"github.com/ghodss/yaml"
-	"github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/RHsyseng/operator-utils/pkg/validation"
+	"github.com/ghodss/yaml"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
 func TestSampleCustomResources(t *testing.T) {

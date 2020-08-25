@@ -1,7 +1,6 @@
 package util
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -78,32 +77,6 @@ func RuntimeObjectFromUnstructured(u *unstructured.Unstructured) (runtime.Object
 	}
 
 	return ro, nil
-}
-
-func UnstructuredFromRuntimeObject(ro runtime.Object) (*unstructured.Unstructured, error) {
-	b, err := json.Marshal(ro)
-	if err != nil {
-		return nil, fmt.Errorf("error running MarshalJSON on runtime object: %v", err)
-	}
-	var u unstructured.Unstructured
-	if err := json.Unmarshal(b, &u.Object); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal json into unstructured object: %v", err)
-	}
-	return &u, nil
-}
-
-func LoadKubernetesResourceFromFile(path string) (runtime.Object, error) {
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err = jsonIfYaml(data, path)
-	if err != nil {
-		return nil, err
-	}
-
-	return LoadKubernetesResource(data)
 }
 
 func LoadKubernetesResource(jsonData []byte) (runtime.Object, error) {

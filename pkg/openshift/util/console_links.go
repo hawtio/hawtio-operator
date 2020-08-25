@@ -4,32 +4,32 @@ import (
 	"encoding/json"
 	"errors"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-
 	consolev1 "github.com/openshift/api/console/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
-// GetHawtconfig reads the console configuration from the config map
-func GetHawtconfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.Hawtconfig, error) {
-	var hawtconfig *hawtiov1alpha1.Hawtconfig
+// GetHawtioConfig reads the console configuration from the config map
+func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.Hawtconfig, error) {
+	var config *hawtiov1alpha1.Hawtconfig
 
-	hawtconfigJSON, ok := configMap.Data["hawtconfig.json"]
+	data, ok := configMap.Data["config.json"]
 	if !ok {
-		return hawtconfig, errors.New("did not find hawtconfig.json in ConfigMap")
+		return config, errors.New("did not find config.json in ConfigMap")
 	}
-	err := json.Unmarshal([]byte(hawtconfigJSON), &hawtconfig)
+	err := json.Unmarshal([]byte(data), &config)
 	if err != nil {
-		return hawtconfig, err
+		return config, err
 	}
 
-	return hawtconfig, nil
+	return config, nil
 }
 
 // NewApplicationMenuLink creates an ApplicationMenu ConsoleLink instance
-func NewApplicationMenuLink(name string, route *routev1.Route, hawtconfig *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
+func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -41,21 +41,21 @@ func NewApplicationMenuLink(name string, route *routev1.Route, hawtconfig *hawti
 		},
 	}
 
-	UpdateApplicationMenuLink(consoleLink, route, hawtconfig)
+	UpdateApplicationMenuLink(consoleLink, route, config)
 
 	return consoleLink
 }
 
 // UpdateApplicationMenuLink updates the ApplicationMenu ConsoleLink properties
-func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, hawtconfig *hawtiov1alpha1.Hawtconfig) {
-	consoleLink.Spec.Link.Text = hawtconfig.Branding.ConsoleLink.Text
+func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) {
+	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
-	consoleLink.Spec.ApplicationMenu.Section = hawtconfig.Branding.ConsoleLink.Section
-	consoleLink.Spec.ApplicationMenu.ImageURL = "https://" + route.Spec.Host + hawtconfig.Branding.ConsoleLink.ImageRelativePath
+	consoleLink.Spec.ApplicationMenu.Section = config.Branding.ConsoleLink.Section
+	consoleLink.Spec.ApplicationMenu.ImageURL = "https://" + route.Spec.Host + config.Branding.ConsoleLink.ImageRelativePath
 }
 
 // NewNamespaceDashboardLink creates a NamespaceDashboard ConsoleLink instance
-func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Route, hawtconfig *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
+func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -69,13 +69,13 @@ func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Rou
 		},
 	}
 
-	UpdateNamespaceDashboardLink(consoleLink, route, hawtconfig)
+	UpdateNamespaceDashboardLink(consoleLink, route, config)
 
 	return consoleLink
 }
 
 // UpdateNamespaceDashboardLink updates the NamespaceDashboard ConsoleLink properties
-func UpdateNamespaceDashboardLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, hawtconfig *hawtiov1alpha1.Hawtconfig) {
-	consoleLink.Spec.Link.Text = hawtconfig.Branding.ConsoleLink.Text
+func UpdateNamespaceDashboardLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) {
+	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
 }
