@@ -1,10 +1,10 @@
-package environments
+package resources
 
 import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func AddEnvVarForContainer(deploymentType string, oauthClientId string) []corev1.EnvVar {
+func addEnvVarForContainer(deploymentType string, oauthClientId string) []corev1.EnvVar {
 	namespaceEnvVarSource := corev1.EnvVarSource{
 		FieldRef: &corev1.ObjectFieldSelector{
 			APIVersion: "v1",
@@ -33,7 +33,7 @@ func AddEnvVarForContainer(deploymentType string, oauthClientId string) []corev1
 	return envVarArray
 }
 
-func AddEnvVarForOpenshift(openshiftVersion string, openshiftURL string) []corev1.EnvVar {
+func addEnvVarForOpenshift(openshiftVersion string, openshiftURL string) []corev1.EnvVar {
 	envVarArray := []corev1.EnvVar{
 		{
 			// Activate console backend gateway

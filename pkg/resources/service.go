@@ -1,16 +1,13 @@
-package services
+package resources
 
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/util/selectors"
 )
-
-var log = logf.Log.WithName("package services")
 
 //func NewServiceDefinitionForCR
 func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {

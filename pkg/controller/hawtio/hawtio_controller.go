@@ -43,10 +43,7 @@ import (
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	osutil "github.com/hawtio/hawtio-operator/pkg/openshift/util"
-	"github.com/hawtio/hawtio-operator/pkg/resources/configmaps"
-	"github.com/hawtio/hawtio-operator/pkg/resources/deployments"
-	"github.com/hawtio/hawtio-operator/pkg/resources/routes"
-	svc "github.com/hawtio/hawtio-operator/pkg/resources/services"
+	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -352,10 +349,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	configMap := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
 	if err != nil && errors.IsNotFound(err) {
-		configmapDefinition := configmaps.NewConfigMapForCR(instance)
-		err = r.client.Create(context.TODO(), configmapDefinition)
+		err = r.client.Create(context.TODO(), resources.NewConfigMapForCR(instance))
 		if err != nil {
-			reqLogger.Error(err, "Failed to create configmapDefinition")
+			reqLogger.Error(err, "Failed to create config map")
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{}, err
@@ -366,7 +362,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	hasUpdates, err := r.reconcileResources(instance, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configMap)
 	if err != nil {
-		reqLogger.Error(err, "Error in Reconcile Resources ")
+		reqLogger.Error(err, "Error reconciling resources")
 		return reconcile.Result{}, err
 	}
 	if hasUpdates {
@@ -491,7 +487,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile environment variables based on deployment type
-	envVar, _ := deployments.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
+	envVar, _ := resources.GetEnvVarByName(container.Env, hawtioTypeEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("environment variable not found: %s", hawtioTypeEnvVar)
 		return reconcile.Result{}, err
@@ -505,7 +501,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		updateDeployment = true
 	}
 
-	envVar, _ = deployments.GetEnvVarByName(container.Env, hawtioOAuthClientEnvVar)
+	envVar, _ = resources.GetEnvVarByName(container.Env, hawtioOAuthClientEnvVar)
 	if envVar == nil {
 		err := fmt.Errorf("environment variable not found: %s", hawtioOAuthClientEnvVar)
 		return reconcile.Result{}, err
@@ -642,7 +638,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
 	// wait until the deployment is successful before deleting resources.
-	if url := routes.GetRouteURL(route); instance.Status.URL != url {
+	if url := resources.GetRouteURL(route); instance.Status.URL != url {
 		if isClusterDeployment {
 			// First remove old URL from OAuthClient
 			if removeRedirectURIFromOauthClient(oc, instance.Status.URL) {
@@ -663,7 +659,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if isClusterDeployment {
 		// Add route URL to OAuthClient authorized redirect URIs
-		uri := routes.GetRouteURL(route)
+		uri := resources.GetRouteURL(route)
 		if ok, _ := oauthClientContainsRedirectURI(oc, uri); !ok {
 			oc.RedirectURIs = append(oc.RedirectURIs, uri)
 			err := r.client.Update(context.TODO(), oc)
@@ -677,7 +673,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		// Clean-up OAuth client if any.
 		// This happens when the deployment type is changed
 		// from "cluster" to "namespace".
-		uri := routes.GetRouteURL(route)
+		uri := resources.GetRouteURL(route)
 		if removeRedirectURIFromOauthClient(oc, uri) {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
@@ -707,17 +703,17 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configmapDefinition *corev1.ConfigMap) (bool, error) {
+func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMap *corev1.ConfigMap) (bool, error) {
 	reqLogger := log.WithName(cr.Name)
 
 	isNamespaceDeployment := strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
-	dep := deployments.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configmapDefinition.GetResourceVersion())
-	serviceDefinition := svc.NewServiceDefinitionForCR(cr)
-	routeDefinition := routes.NewRouteDefinitionForCR(cr)
+	dep := resources.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMap.GetResourceVersion())
+	serviceDefinition := resources.NewServiceDefinitionForCR(cr)
+	routeDefinition := resources.NewRouteDefinitionForCR(cr)
 
 	var requestedResources []resource.KubernetesResource
-	//requestedResources = append(requestedResources, configmapDefinition)
+	//requestedResources = append(requestedResources, configMap)
 	requestedResources = append(requestedResources, dep)
 	requestedResources = append(requestedResources, serviceDefinition)
 	requestedResources = append(requestedResources, routeDefinition)

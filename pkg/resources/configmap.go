@@ -1,4 +1,4 @@
-package configmaps
+package resources
 
 import (
 	"bytes"

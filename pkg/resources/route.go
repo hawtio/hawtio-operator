@@ -1,18 +1,14 @@
-package routes
+package resources
 
 import (
 	"time"
 
+	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-
-	routev1 "github.com/openshift/api/route/v1"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
-
-var log = logf.Log.WithName("package routes")
 
 // Create newRouteForCR method to create exposed route
 func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
@@ -66,7 +62,6 @@ func GetRouteURL(route *routev1.Route) string {
 	return url
 }
 
-//GetRouteHost
 func getRouteHost(route *routev1.Route) string {
 	if len(route.Status.Ingress) == 0 {
 		return route.Spec.Host
