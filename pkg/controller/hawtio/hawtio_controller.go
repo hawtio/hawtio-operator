@@ -733,7 +733,7 @@ func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request 
 
 	deployed, err := getDeployedResources(cr, client)
 	if err != nil {
-
+		return false, err
 	}
 
 	requested := compare.NewMapBuilder().Add(requestedResources...).ResourceMap()
