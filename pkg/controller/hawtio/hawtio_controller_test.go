@@ -66,12 +66,8 @@ func TestHawtioController_Reconcile(t *testing.T) {
 
 	r := buildReconcileWithFakeClientWithMocks(objs, t)
 
-	request := reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      HawtioInstance.Name,
-			Namespace: HawtioInstance.Namespace,
-		},
-	}
+	NamespacedName := types.NamespacedName{Name: HawtioInstance.Name, Namespace: HawtioInstance.Namespace}
+	request := reconcile.Request{NamespacedName: NamespacedName}
 
 	// Created phase
 	res, err := r.Reconcile(request)
@@ -86,7 +82,6 @@ func TestHawtioController_Reconcile(t *testing.T) {
 	assert.NoError(t, err, "reconcile Error")
 	assert.Equal(t, reconcile.Result{}, res)
 
-	NamespacedName := types.NamespacedName{Name: HawtioInstance.Name, Namespace: HawtioInstance.Namespace}
 	t.Run("hawtio-online", func(t *testing.T) {
 		t.Run("check if the Hawtio has been created", func(t *testing.T) {
 			hawtio := hawtiov1alpha1.Hawtio{}
