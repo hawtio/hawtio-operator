@@ -10,12 +10,10 @@ import (
 
 //func NewServiceDefinitionForCR
 func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
-	reqLogger := log.WithName(cr.Name)
-	reqLogger.Info("Creating new Service Definition for custom resource")
-	applicationName := cr.Name
+	name := cr.Name
 
 	port := corev1.ServicePort{
-		Name:       applicationName,
+		Name:       name,
 		Protocol:   "TCP",
 		Port:       443,
 		TargetPort: intstr.FromString("nginx"),
@@ -30,15 +28,15 @@ func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				"service.alpha.openshift.io/serving-cert-secret-name": applicationName + "-tls-serving",
+				"service.alpha.openshift.io/serving-cert-secret-name": name + "-tls-serving",
 				"hawtio.hawt.io/hawtioversion":                        cr.GetResourceVersion(),
 			},
 			Labels: map[string]string{"app": "hawtio"},
-			Name:   applicationName,
+			Name:   name,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports:                    ports,
-			Selector:                 labelsForHawtio(applicationName),
+			Selector:                 labelsForHawtio(name),
 			SessionAffinity:          "None",
 			PublishNotReadyAddresses: true,
 		},

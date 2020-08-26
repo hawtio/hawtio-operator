@@ -12,9 +12,6 @@ import (
 
 // Create newRouteForCR method to create exposed route
 func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
-	reqLogger := log.WithName(cr.Name)
-	reqLogger.Info("Creating new Route Definition for custom resource")
-
 	route := &routev1.Route{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",

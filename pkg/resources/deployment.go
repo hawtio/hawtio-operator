@@ -5,12 +5,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
-
-var log = logf.Log.WithName("resources")
 
 const (
 	serviceSigningSecretVolumeName         = "hawtio-online-tls-serving"
@@ -23,9 +20,6 @@ const (
 
 // Create NewDeploymentForCR method to create deployment
 func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configResourceVersion string) *appsv1.Deployment {
-	reqLogger := log.WithName(cr.Name)
-	reqLogger.Info("Creating new Deployment for custom resource")
-
 	namespacedName := types.NamespacedName{
 		Name:      cr.Name,
 		Namespace: cr.Namespace,
@@ -75,8 +69,6 @@ func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, opens
 		Name:      cr.Name,
 		Namespace: cr.Namespace,
 	}
-	reqLogger := log.WithName(namespacedName.Name)
-	reqLogger.Info("Creating new pod template spec for custom resource")
 
 	pts := newPodTemplateSpec(namespacedName, labelsForHawtio(cr.Name))
 
@@ -99,9 +91,6 @@ func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, opens
 }
 
 func newVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
-	reqLogger := log.WithName(cr.Name)
-	reqLogger.Info("Creating new Volume for custom resource")
-
 	var volumes []corev1.Volume
 
 	secretName := cr.Name + "-tls-serving"
@@ -130,9 +119,6 @@ func newVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 }
 
 func newEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string) []corev1.EnvVar {
-	reqLogger := log.WithName(cr.Name)
-	reqLogger.Info("Adding Env variable ")
-
 	var envVar []corev1.EnvVar
 
 	envVarArrayForCluster := addEnvVarForContainer(cr.Spec.Type, cr.Name)
@@ -147,9 +133,6 @@ func newEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshift
 }
 
 func newVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath string) []corev1.VolumeMount {
-	reqLogger := log.WithName(cr.Name)
-	reqLogger.Info("Creating new Volume Mounts for custom resource")
-
 	var volumeMounts []corev1.VolumeMount
 
 	volumeMountSubPath := hawtioConfigKey
