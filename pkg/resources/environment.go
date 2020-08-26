@@ -4,29 +4,20 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+
+	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
 const (
-	hawtioTypeEnvVar = "HAWTIO_ONLINE_MODE"
+	hawtioTypeEnvVar      = "HAWTIO_ONLINE_MODE"
+	hawtioNamespaceEnvVar = "HAWTIO_ONLINE_NAMESPACE"
 )
 
 func addEnvVarForContainer(deploymentType string, oauthClientId string) []corev1.EnvVar {
-	namespaceEnvVarSource := corev1.EnvVarSource{
-		FieldRef: &corev1.ObjectFieldSelector{
-			APIVersion: "v1",
-			FieldPath:  "metadata.namespace",
-		},
-	}
-
-	envVarArray := []corev1.EnvVar{
+	envVars := []corev1.EnvVar{
 		{
 			Name:  hawtioTypeEnvVar,
 			Value: strings.ToLower(deploymentType),
-		},
-		{
-			"HAWTIO_ONLINE_NAMESPACE",
-			"",
-			&namespaceEnvVarSource,
 		},
 		{
 			"HAWTIO_OAUTH_CLIENT_ID",
@@ -35,11 +26,23 @@ func addEnvVarForContainer(deploymentType string, oauthClientId string) []corev1
 		},
 	}
 
-	return envVarArray
+	if deploymentType == hawtiov1alpha1.NamespaceHawtioDeploymentType {
+		envVars = append(envVars, corev1.EnvVar{
+			Name: hawtioNamespaceEnvVar,
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					APIVersion: "v1",
+					FieldPath:  "metadata.namespace",
+				},
+			},
+		})
+	}
+
+	return envVars
 }
 
 func addEnvVarForOpenshift(openshiftVersion string, openshiftURL string) []corev1.EnvVar {
-	envVarArray := []corev1.EnvVar{
+	envVars := []corev1.EnvVar{
 		{
 			// Activate console backend gateway
 			Name:  "HAWTIO_ONLINE_GATEWAY",
@@ -54,5 +57,5 @@ func addEnvVarForOpenshift(openshiftVersion string, openshiftURL string) []corev
 			Value: openshiftURL,
 		},
 	}
-	return envVarArray
+	return envVars
 }
