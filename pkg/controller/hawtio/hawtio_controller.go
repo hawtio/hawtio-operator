@@ -39,6 +39,7 @@ import (
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
+	oauthclient "github.com/openshift/client-go/oauth/clientset/versioned"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/kubernetes"
@@ -97,7 +98,7 @@ func Add(mgr manager.Manager) error {
 		scheme: mgr.GetScheme(),
 	}
 
-	oauthClient, err := openshift.NewOAuthClientClient(mgr.GetConfig())
+	oauthClient, err := oauthclient.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
@@ -181,7 +182,7 @@ type ReconcileHawtio struct {
 	config       *rest.Config
 	scheme       *runtime.Scheme
 	coreClient   *corev1client.CoreV1Client
-	oauthClient  *openshift.OAuthClientClient
+	oauthClient  oauthclient.Interface
 	configClient configclient.Interface
 }
 
@@ -272,10 +273,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Check OpenShift version
 	var openShiftSemVer *semver.Version
-	clusterVersion, err := r.configClient.
-		ConfigV1().
-		ClusterVersions().
-		Get("version", metav1.GetOptions{})
+	clusterVersion, err := r.configClient.ConfigV1().ClusterVersions().Get("version", metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Let's default to OpenShift 3 as ClusterVersion API was introduced in OpenShift 4
@@ -307,9 +305,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	var openShiftConsoleUrl string
 	if isOpenShift4 {
 		// Retrieve OpenShift Web console public URL
-		cm, err := r.coreClient.
-			ConfigMaps("openshift-config-managed").
-			Get("console-public", metav1.GetOptions{})
+		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get("console-public", metav1.GetOptions{})
 		if err != nil {
 			if !errors.IsNotFound(err) && !errors.IsForbidden(err) {
 				reqLogger.Error(err, "Error getting OpenShift managed configuration")
@@ -619,7 +615,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Do not use the default client whose cached informers require
 	// permission to list cluster wide oauth clients
 	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
-	oc, err := r.oauthClient.Get(oauthClientName)
+	oc, err := r.oauthClient.OauthV1().OAuthClients().Get(oauthClientName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// OAuth client should not be found for namespace deployment type
