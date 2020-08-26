@@ -64,4 +64,6 @@ func UpdateNamespaceDashboardLink(consoleLink *consolev1.ConsoleLink, route *rou
 	consoleLink.Spec.Location = consolev1.NamespaceDashboard
 	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
+	// ApplicationMenu can be set when the Hawtio type changes from 'cluster' to 'namespace'
+	consoleLink.Spec.ApplicationMenu = nil
 }
