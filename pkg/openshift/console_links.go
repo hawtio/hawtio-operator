@@ -10,7 +10,7 @@ import (
 )
 
 // NewApplicationMenuLink creates an ApplicationMenu ConsoleLink instance
-func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
+func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1alpha1.HawtioConfig) *consolev1.ConsoleLink {
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -28,7 +28,7 @@ func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1a
 }
 
 // UpdateApplicationMenuLink updates the ApplicationMenu ConsoleLink properties
-func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) {
+func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.HawtioConfig) {
 	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
 	consoleLink.Spec.ApplicationMenu.Section = config.Branding.ConsoleLink.Section
@@ -36,7 +36,7 @@ func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev
 }
 
 // NewNamespaceDashboardLink creates a NamespaceDashboard ConsoleLink instance
-func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) *consolev1.ConsoleLink {
+func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Route, config *hawtiov1alpha1.HawtioConfig) *consolev1.ConsoleLink {
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -56,7 +56,7 @@ func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Rou
 }
 
 // UpdateNamespaceDashboardLink updates the NamespaceDashboard ConsoleLink properties
-func UpdateNamespaceDashboardLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.Hawtconfig) {
+func UpdateNamespaceDashboardLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.HawtioConfig) {
 	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
 }

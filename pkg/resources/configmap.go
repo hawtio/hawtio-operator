@@ -19,8 +19,8 @@ const (
 )
 
 // GetHawtioConfig reads the console configuration from the config map
-func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.Hawtconfig, error) {
-	var config *hawtiov1alpha1.Hawtconfig
+func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.HawtioConfig, error) {
+	var config *hawtiov1alpha1.HawtioConfig
 
 	data, ok := configMap.Data[hawtioConfigKey]
 	if !ok {
