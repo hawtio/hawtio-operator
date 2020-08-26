@@ -83,7 +83,7 @@ func Add(mgr manager.Manager) error {
 	if err != nil {
 		return err
 	}
-	err = consolev1.AddToScheme(mgr.GetScheme())
+	err = consolev1.Install(mgr.GetScheme())
 	if err != nil {
 		return err
 	}
