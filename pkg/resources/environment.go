@@ -9,24 +9,32 @@ import (
 )
 
 const (
-	hawtioTypeEnvVar      = "HAWTIO_ONLINE_MODE"
-	hawtioNamespaceEnvVar = "HAWTIO_ONLINE_NAMESPACE"
+	hawtioTypeEnvVar        = "HAWTIO_ONLINE_MODE"
+	hawtioNamespaceEnvVar   = "HAWTIO_ONLINE_NAMESPACE"
+	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
+
+	OAuthClientName = "hawtio"
 )
 
-func addEnvVarForContainer(deploymentType string, oauthClientId string) []corev1.EnvVar {
+func addEnvVarForContainer(deploymentType string, name string) []corev1.EnvVar {
+	oauthClientId := name
+	if strings.EqualFold(deploymentType, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+		// Pin to a known name for cluster-wide OAuthClient
+		oauthClientId = OAuthClientName
+	}
+
 	envVars := []corev1.EnvVar{
 		{
 			Name:  hawtioTypeEnvVar,
 			Value: strings.ToLower(deploymentType),
 		},
 		{
-			"HAWTIO_OAUTH_CLIENT_ID",
-			oauthClientId,
-			nil,
+			Name:  hawtioOAuthClientEnvVar,
+			Value: oauthClientId,
 		},
 	}
 
-	if deploymentType == hawtiov1alpha1.NamespaceHawtioDeploymentType {
+	if strings.EqualFold(deploymentType, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
 		envVars = append(envVars, corev1.EnvVar{
 			Name: hawtioNamespaceEnvVar,
 			ValueFrom: &corev1.EnvVarSource{

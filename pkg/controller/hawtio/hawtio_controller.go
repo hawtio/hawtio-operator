@@ -58,9 +58,6 @@ const (
 	hawtioTypeAnnotation        = "hawtio.hawt.io/hawtioType"
 	hostGeneratedAnnotation     = "openshift.io/host.generated"
 
-	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
-
-	oauthClientName                           = "hawtio"
 	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
 	serviceSigningSecretVolumeName            = "hawtio-online-tls-serving"
 	serviceSigningSecretVolumeMountPathLegacy = "/etc/tls/private"
@@ -392,7 +389,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 		// Add OAuth client
-		oauthClient := resources.NewOAuthClient(oauthClientName)
+		oauthClient := resources.NewOAuthClient(resources.OAuthClientName)
 		err = r.client.Create(context.TODO(), oauthClient)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
@@ -479,21 +476,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			deployment.Spec.Replicas = &replicas
 			updateDeployment = true
 		}
-	}
-
-	// Reconcile environment variables based on deployment type
-	envVar, _ := resources.GetEnvVarByName(container.Env, hawtioOAuthClientEnvVar)
-	if envVar == nil {
-		err := fmt.Errorf("environment variable not found: %s", hawtioOAuthClientEnvVar)
-		return reconcile.Result{}, err
-	}
-	if isClusterDeployment && envVar.Value != oauthClientName {
-		envVar.Value = oauthClientName
-		updateDeployment = true
-	}
-	if isNamespaceDeployment && envVar.Value != instance.Name {
-		envVar.Value = instance.Name
-		updateDeployment = true
 	}
 
 	requestDeployment := false
@@ -599,8 +581,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Reconcile OAuth client
 	// Do not use the default client whose cached informers require
 	// permission to list cluster wide oauth clients
-	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
-	oc, err := r.oauthClient.OauthV1().OAuthClients().Get(oauthClientName, metav1.GetOptions{})
+	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: resources.OAuthClientName}, oc)
+	oc, err := r.oauthClient.OauthV1().OAuthClients().Get(resources.OAuthClientName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// OAuth client should not be found for namespace deployment type
@@ -808,7 +790,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: oauthClientName}, oc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: resources.OAuthClientName}, oc)
 		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get OAuth client: %v", err)
 		}
