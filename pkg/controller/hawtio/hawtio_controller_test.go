@@ -18,9 +18,12 @@ import (
 
 func TestNonWatchedResourceNameNotFound(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
+
 	objs := []runtime.Object{
 		&HawtioInstance,
 	}
+
+	r := buildReconcileWithFakeClientWithMocks(objs, t)
 
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{
@@ -28,7 +31,7 @@ func TestNonWatchedResourceNameNotFound(t *testing.T) {
 			Namespace: HawtioInstance.Namespace,
 		},
 	}
-	r := buildReconcileWithFakeClientWithMocks(objs, t)
+
 	result, err := r.Reconcile(request)
 	assert.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, result)
@@ -41,13 +44,15 @@ func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
 		&HawtioInstance,
 	}
 
+	r := buildReconcileWithFakeClientWithMocks(objs, t)
+
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      HawtioInstance.Name,
 			Namespace: "doesn't exist",
 		},
 	}
-	r := buildReconcileWithFakeClientWithMocks(objs, t)
+
 	result, err := r.Reconcile(request)
 	assert.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, result)
@@ -58,30 +63,39 @@ func TestHawtioController_Reconcile(t *testing.T) {
 	objs := []runtime.Object{
 		&HawtioInstance,
 	}
+
+	r := buildReconcileWithFakeClientWithMocks(objs, t)
+
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      HawtioInstance.Name,
 			Namespace: HawtioInstance.Namespace,
 		},
 	}
-	r := buildReconcileWithFakeClientWithMocks(objs, t)
 
+	// Created phase
 	res, err := r.Reconcile(request)
+	assert.NoError(t, err, "reconcile Error")
+	assert.Equal(t, reconcile.Result{Requeue: true}, res)
+	// Initialized phase
 	res, err = r.Reconcile(request)
-	assert.NoError(t, err, "reconcile Error ")
+	assert.NoError(t, err, "reconcile Error")
+	assert.Equal(t, reconcile.Result{Requeue: true}, res)
+	// Deployed phase
+	res, err = r.Reconcile(request)
+	assert.NoError(t, err, "reconcile Error")
 	assert.Equal(t, reconcile.Result{}, res)
+
 	NamespacedName := types.NamespacedName{Name: HawtioInstance.Name, Namespace: HawtioInstance.Namespace}
 	t.Run("hawtio-online", func(t *testing.T) {
-		t.Run("cluster", func(t *testing.T) {
+		t.Run("check if the Hawtio has been created", func(t *testing.T) {
 			hawtio := hawtiov1alpha1.Hawtio{}
 			err = r.client.Get(context.TODO(), NamespacedName, &hawtio)
 			require.NoError(t, err)
 		})
-		deployment := &appsv1.Deployment{}
 		t.Run("check if the Deployment has been created", func(t *testing.T) {
-			deploymentName := types.NamespacedName{Name: HawtioInstance.Name, Namespace: HawtioInstance.Namespace}
-			err = r.client.Get(context.TODO(), deploymentName, deployment)
-
+			deployment := appsv1.Deployment{}
+			err = r.client.Get(context.TODO(), NamespacedName, &deployment)
 			require.NoError(t, err)
 		})
 	})

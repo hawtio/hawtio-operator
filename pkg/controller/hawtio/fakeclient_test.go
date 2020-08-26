@@ -11,18 +11,34 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	routev1 "github.com/openshift/api/route/v1"
+
+	fakeconfig "github.com/openshift/client-go/config/clientset/versioned/fake"
+	fakeoauth "github.com/openshift/client-go/oauth/clientset/versioned/fake"
+
+	"github.com/hawtio/hawtio-operator/pkg/apis"
 )
 
-//buildReconcileWithFakeClientWithMocks return reconcile with fake client, schemes and mock objects
+//buildReconcileWithFakeClientWithMocks return *ReconcileHawtio with fake client, scheme and mock objects
 func buildReconcileWithFakeClientWithMocks(objs []runtime.Object, t *testing.T) *ReconcileHawtio {
-	registerObjs := []runtime.Object{&corev1.Service{}, &corev1.ServiceList{}, &appsv1.Deployment{}, &appsv1.DeploymentList{}, &corev1.ConfigMapList{}, &corev1.Pod{}, &routev1.Route{}, &routev1.RouteList{}}
-	registerObjs = append(registerObjs)
-	hawtiov1alpha1.SchemeBuilder.Register(registerObjs...)
-	hawtiov1alpha1.SchemeBuilder.Register()
+	var scheme = runtime.NewScheme()
 
-	scheme, err := hawtiov1alpha1.SchemeBuilder.Build()
+	err := corev1.AddToScheme(scheme)
+	if err != nil {
+		assert.Fail(t, "unable to build scheme")
+	}
+
+	err = appsv1.AddToScheme(scheme)
+	if err != nil {
+		assert.Fail(t, "unable to build scheme")
+	}
+
+	err = routev1.Install(scheme)
+	if err != nil {
+		assert.Fail(t, "unable to build scheme")
+	}
+
+	err = apis.AddToScheme(scheme)
 	if err != nil {
 		assert.Fail(t, "unable to build scheme")
 	}
@@ -30,7 +46,9 @@ func buildReconcileWithFakeClientWithMocks(objs []runtime.Object, t *testing.T) 
 	client := fake.NewFakeClientWithScheme(scheme, objs...)
 
 	return &ReconcileHawtio{
-		scheme: scheme,
-		client: client,
+		scheme:       scheme,
+		client:       client,
+		configClient: fakeconfig.NewSimpleClientset(),
+		oauthClient:  fakeoauth.NewSimpleClientset(),
 	}
 }
