@@ -38,7 +38,7 @@ import (
 	consolev1 "github.com/openshift/api/console/v1"
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
-	configv1client "github.com/openshift/client-go/config/clientset/versioned"
+	configclient "github.com/openshift/client-go/config/clientset/versioned"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/kubernetes"
@@ -103,7 +103,7 @@ func Add(mgr manager.Manager) error {
 	}
 	r.oauthClient = oauthClient
 
-	configClient, err := configv1client.NewForConfig(mgr.GetConfig())
+	configClient, err := configclient.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ type ReconcileHawtio struct {
 	scheme       *runtime.Scheme
 	coreClient   *corev1client.CoreV1Client
 	oauthClient  *openshift.OAuthClientClient
-	configClient *configv1client.Clientset
+	configClient configclient.Interface
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
