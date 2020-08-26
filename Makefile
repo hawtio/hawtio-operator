@@ -14,7 +14,7 @@ build: go-generate
 	operator-sdk build docker.io/${ORG}/${PROJECT}:${TAG}
 
 .PHONY: compile
-compile:
+compile: test
 	go build -o=build/_output/bin/hawtio-operator ./cmd/manager/main.go
 
 .PHONY: generate-csv
@@ -55,8 +55,4 @@ deploy:
 
 .PHONY: test
 test:
-	go test -count=1 ./test/...
-
-.PHONY: compile
-compile:
-    compile: test
+	go test -count=1 ./...
