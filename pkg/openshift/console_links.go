@@ -31,6 +31,9 @@ func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1a
 func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.HawtioConfig) {
 	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
+	if consoleLink.Spec.ApplicationMenu == nil {
+		consoleLink.Spec.ApplicationMenu = &consolev1.ApplicationMenuSpec{}
+	}
 	consoleLink.Spec.ApplicationMenu.Section = config.Branding.ConsoleLink.Section
 	consoleLink.Spec.ApplicationMenu.ImageURL = "https://" + route.Spec.Host + config.Branding.ConsoleLink.ImageRelativePath
 }
