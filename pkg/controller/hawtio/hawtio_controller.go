@@ -363,13 +363,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	hasUpdates, err := r.reconcileResources(instance, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configMap)
+	_, err = r.reconcileResources(instance, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configMap)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling resources")
 		return reconcile.Result{}, err
-	}
-	if hasUpdates {
-		return r.update(instance)
 	}
 
 	route := &routev1.Route{}
