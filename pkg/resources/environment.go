@@ -1,7 +1,13 @@
 package resources
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
+)
+
+const (
+	hawtioTypeEnvVar = "HAWTIO_ONLINE_MODE"
 )
 
 func addEnvVarForContainer(deploymentType string, oauthClientId string) []corev1.EnvVar {
@@ -14,9 +20,8 @@ func addEnvVarForContainer(deploymentType string, oauthClientId string) []corev1
 
 	envVarArray := []corev1.EnvVar{
 		{
-			"HAWTIO_ONLINE_MODE",
-			deploymentType,
-			nil,
+			Name:  hawtioTypeEnvVar,
+			Value: strings.ToLower(deploymentType),
 		},
 		{
 			"HAWTIO_ONLINE_NAMESPACE",
