@@ -158,6 +158,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &hawtiov1alpha1.Hawtio{},
+	}, predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldDeployment := e.ObjectOld.(*appsv1.Deployment)
+			newDeployment := e.ObjectNew.(*appsv1.Deployment)
+			// Ignore updates to the Deployment other than the replicas one,
+			// that are used to reconcile the Hawtio replicas.
+			return oldDeployment.Status.Replicas != newDeployment.Status.Replicas
+		},
 	})
 	if err != nil {
 		return err
