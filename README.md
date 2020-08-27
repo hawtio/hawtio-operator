@@ -45,7 +45,6 @@ The operator covers the following cases:
   * Reconcile the route host from the `routeHostName` field
   * Support emptying the `routeHostName` field (recreate the route to re-generate the host)
   * Reconcile the `replicas` count into the deployment config
-  * Reconcile the `replicas` count from deployment config changes
   * Support changing deployment type from / to `namespace` or `cluster`
   * Remove previous route host from OAuth client in `cluster` deployment
   * Trigger a rollout deployment on config map change

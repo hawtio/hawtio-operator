@@ -457,20 +457,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	container := deployment.Spec.Template.Spec.Containers[0]
-
-	// Reconcile replicas
-	if annotations := deployment.GetAnnotations(); annotations != nil && annotations[hawtioVersionAnnotation] == instance.GetResourceVersion() {
-		if replicas := deployment.Spec.Replicas; replicas != nil && instance.Spec.Replicas != *replicas {
-			instance.Spec.Replicas = *replicas
-			err := r.client.Update(context.TODO(), instance)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile from deployment")
-				return reconcile.Result{}, err
-			}
-		}
-	}
-
 	requestDeployment := false
 	if configVersion := configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
 		if len(deployment.Annotations[configVersionAnnotation]) > 0 {
@@ -498,7 +484,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Update CR status image field from deployment container image
-	if instance.Status.Image != container.Image {
+	if container := deployment.Spec.Template.Spec.Containers[0]; instance.Status.Image != container.Image {
 		instance.Status.Image = container.Image
 		err := r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
