@@ -26,7 +26,7 @@ type HawtioSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	Type          HawtioDeploymentType `json:"type,omitempty"`
-	Replicas      int32                `json:"replicas,omitempty"`
+	Replicas      *int32               `json:"replicas,omitempty"`
 	RouteHostName string               `json:"routeHostName,omitempty"`
 	Version       string               `json:"version,omitempty"`
 }

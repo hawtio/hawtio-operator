@@ -32,7 +32,7 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 	return dep
 }
 
-func newDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
+func newDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
 	labels := labelsForHawtio(namespacedName.Name)
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -46,7 +46,7 @@ func newDeployment(namespacedName types.NamespacedName, annotations map[string]s
 			Annotations: annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
+			Replicas: replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},

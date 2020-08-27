@@ -22,7 +22,6 @@ var (
 		},
 		Spec: hawtiov1alpha1.HawtioSpec{
 			Type:     "namespace",
-			Replicas: 1,
 			Version:  "latest",
 		},
 	}
