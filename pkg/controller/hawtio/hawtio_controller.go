@@ -445,9 +445,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Update phase
 
-	// Reconcile deployment
 	deployment := &appsv1.Deployment{}
-	updateDeployment := false
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
@@ -456,7 +454,18 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
+	// Reconcile replicas into status
+	if replicas := deployment.Status.Replicas; instance.Status.Replicas != replicas {
+		instance.Status.Replicas = replicas
+		err = r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to update replicas: %v", err)
+		}
+	}
+
+	// Trigger a rollout deployment if config changed
 	requestDeployment := false
+	updateDeployment := false
 	if configVersion := configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
 		if len(deployment.Annotations[configVersionAnnotation]) > 0 {
 			requestDeployment = true

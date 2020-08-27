@@ -35,9 +35,10 @@ type HawtioSpec struct {
 type HawtioStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	Image string      `json:"image,omitempty"`
-	Phase HawtioPhase `json:"phase,omitempty"`
-	URL   string      `json:"URL,omitempty"`
+	Image    string      `json:"image,omitempty"`
+	Phase    HawtioPhase `json:"phase,omitempty"`
+	URL      string      `json:"URL,omitempty"`
+	Replicas int32       `json:"replicas,omitempty"`
 }
 
 // HawtioPhase --
