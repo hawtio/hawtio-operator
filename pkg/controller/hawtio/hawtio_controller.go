@@ -55,7 +55,6 @@ const (
 	configVersionAnnotation     = "hawtio.hawt.io/configversion"
 	deploymentRolloutAnnotation = "hawtio.hawt.io/restartedAt"
 	hawtioVersionAnnotation     = "hawtio.hawt.io/hawtioversion"
-	hawtioTypeAnnotation        = "hawtio.hawt.io/hawtioType"
 	hostGeneratedAnnotation     = "openshift.io/host.generated"
 
 	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
@@ -646,9 +645,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		reqLogger.Error(err, "Failed to refresh CR")
 		return reconcile.Result{}, err
 	}
-	// and report back the type and version into the owned deployment
-	if annotations := deployment.GetAnnotations(); annotations != nil && (!strings.EqualFold(annotations[hawtioTypeAnnotation], instance.Spec.Type) || annotations[hawtioVersionAnnotation] != instance.GetResourceVersion()) {
-		deployment.Annotations[hawtioTypeAnnotation] = instance.Spec.Type
+	// and report back the version into the owned deployment
+	if annotations := deployment.GetAnnotations(); annotations != nil && (annotations[hawtioVersionAnnotation] != instance.GetResourceVersion()) {
 		deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
 		err := r.client.Update(context.TODO(), deployment)
 		if err != nil {

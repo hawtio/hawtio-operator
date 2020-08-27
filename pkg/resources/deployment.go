@@ -14,7 +14,6 @@ const (
 	clientCertificateSecretVolumeName      = "hawtio-online-tls-proxying"
 	clientCertificateSecretVolumeMountPath = "/etc/tls/private/proxying"
 	hawtioVersionAnnotation                = "hawtio.hawt.io/hawtioversion"
-	hawtioTypeAnnotation                   = "hawtio.hawt.io/hawtioType"
 	configVersionAnnotation                = "hawtio.hawt.io/configversion"
 )
 
@@ -27,7 +26,6 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 
 	annotations := map[string]string{
 		configVersionAnnotation: configResourceVersion,
-		hawtioTypeAnnotation:    cr.Spec.Type,
 		hawtioVersionAnnotation: cr.GetResourceVersion(),
 	}
 
