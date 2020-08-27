@@ -318,9 +318,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 	if isOpenShift4 {
 		// Check whether client certificate secret exists
-		_, err := r.coreClient.
-			Secrets(request.Namespace).
-			Get(request.Name+"-tls-proxying", metav1.GetOptions{})
+		_, err := r.coreClient.Secrets(request.Namespace).Get(request.Name+"-tls-proxying", metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				reqLogger.Info("Client certificate secret must be created", "secret", request.Name+"-tls-proxying")
@@ -463,6 +461,19 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
+	// Reconcile scale sub-resource labelSelectorPath from deployment spec to CR status
+	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to parse selector: %v", err)
+	}
+	if s := selector.String(); instance.Status.Selector != s {
+		instance.Status.Selector = s
+		err = r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to update selector: %v", err)
+		}
+	}
+
 	// Trigger a rollout deployment if config changed
 	requestDeployment := false
 	updateDeployment := false
@@ -556,8 +567,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			} else if isOpenShift43Plus {
 				openshift.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
 			}
-			patch := client.MergeFrom(consoleLink)
-			err = r.client.Patch(context.TODO(), consoleLinkCopy, patch)
+			err = r.client.Patch(context.TODO(), consoleLinkCopy, client.MergeFrom(consoleLink))
 			if err != nil {
 				reqLogger.Error(err, "Failed to update console link", "name", consoleLink.Name)
 				return reconcile.Result{}, err
@@ -587,7 +597,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
-	// wait until the deployment is successful before deleting resources.
+	// wait until the deployment is successful before deleting resources
 	if url := resources.GetRouteURL(route); instance.Status.URL != url {
 		if isClusterDeployment {
 			// First remove old URL from OAuthClient

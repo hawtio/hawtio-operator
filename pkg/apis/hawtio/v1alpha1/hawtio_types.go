@@ -39,6 +39,7 @@ type HawtioStatus struct {
 	Phase    HawtioPhase `json:"phase,omitempty"`
 	URL      string      `json:"URL,omitempty"`
 	Replicas int32       `json:"replicas,omitempty"`
+	Selector string      `json:"selector,omitempty"`
 }
 
 // HawtioPhase --

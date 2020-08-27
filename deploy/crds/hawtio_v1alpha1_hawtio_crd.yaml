@@ -16,7 +16,7 @@ spec:
     scale:
       specReplicasPath: .spec.replicas
       statusReplicasPath: .status.replicas
-      labelSelectorPath: .status.labelSelector
+      labelSelectorPath: .status.selector
   additionalPrinterColumns:
     - name: Age
       description: Creation date
