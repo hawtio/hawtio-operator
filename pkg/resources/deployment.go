@@ -158,12 +158,3 @@ func newVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath st
 
 	return volumeMounts
 }
-
-func GetEnvVarByName(env []corev1.EnvVar, name string) (*corev1.EnvVar, int) {
-	for i, v := range env {
-		if v.Name == name {
-			return &env[i], i
-		}
-	}
-	return nil, -1
-}
