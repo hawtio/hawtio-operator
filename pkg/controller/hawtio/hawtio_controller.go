@@ -213,7 +213,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, nil
 	}
 
-	// TODO: only add the finalizer for cluster mode
+	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
 	ok, err := kubernetes.HasFinalizer(instance, hawtioFinalizer)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to read finalizer: %v", err)
