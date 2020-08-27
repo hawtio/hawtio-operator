@@ -34,6 +34,15 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 
 func newDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
 	labels := labelsForHawtio(namespacedName.Name)
+	var r int32
+	if replicas != nil {
+		r = *replicas
+	} else {
+		// Deployment replicas field is defaulted to '1', so we have to equal that defaults, otherwise
+		// the comparison algorithm assumes the requested resource is different, which leads to an infinite
+		// reconciliation loop
+		r = 1
+	}
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -46,7 +55,7 @@ func newDeployment(namespacedName types.NamespacedName, annotations map[string]s
 			Annotations: annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: replicas,
+			Replicas: &r,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
