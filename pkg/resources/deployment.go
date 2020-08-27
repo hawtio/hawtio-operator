@@ -13,7 +13,6 @@ const (
 	serviceSigningSecretVolumeName         = "hawtio-online-tls-serving"
 	clientCertificateSecretVolumeName      = "hawtio-online-tls-proxying"
 	clientCertificateSecretVolumeMountPath = "/etc/tls/private/proxying"
-	hawtioVersionAnnotation                = "hawtio.hawt.io/hawtioversion"
 	configVersionAnnotation                = "hawtio.hawt.io/configversion"
 )
 
@@ -26,7 +25,6 @@ func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftV
 
 	annotations := map[string]string{
 		configVersionAnnotation: configResourceVersion,
-		hawtioVersionAnnotation: cr.GetResourceVersion(),
 	}
 
 	dep := newDeployment(namespacedName, annotations, cr.Spec.Replicas, newPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath))
