@@ -470,12 +470,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				return reconcile.Result{}, err
 			}
 		}
-	} else {
-		if replicas := instance.Spec.Replicas; deployment.Spec.Replicas == nil || *deployment.Spec.Replicas != replicas {
-			deployment.Annotations[hawtioVersionAnnotation] = instance.GetResourceVersion()
-			deployment.Spec.Replicas = &replicas
-			updateDeployment = true
-		}
 	}
 
 	requestDeployment := false
