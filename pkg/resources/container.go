@@ -8,24 +8,24 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-const timeInSeconds = 5
+const containerPortName = "https"
 
 // Go build-time variables
 var ImageRepository string
 
 //func NewContainer
-func NewContainer(customResourceName string, version string, envVarArray []corev1.EnvVar) corev1.Container {
+func NewContainer(name string, version string, envVarArray []corev1.EnvVar) corev1.Container {
 	container := corev1.Container{
-		Name:  customResourceName + "-container",
+		Name:  name + "-container",
 		Image: getImageForCR(version),
 		Env:   envVarArray,
 		ReadinessProbe: &corev1.Probe{
-			InitialDelaySeconds: timeInSeconds,
+			InitialDelaySeconds: 5,
 			TimeoutSeconds:      1,
-			PeriodSeconds:       timeInSeconds,
+			PeriodSeconds:       5,
 			Handler: corev1.Handler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Port:   intstr.FromString("nginx"),
+					Port:   intstr.FromString(containerPortName),
 					Path:   "/online",
 					Scheme: "HTTPS",
 				},
@@ -36,7 +36,7 @@ func NewContainer(customResourceName string, version string, envVarArray []corev
 			PeriodSeconds:  10,
 			Handler: corev1.Handler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Port:   intstr.FromString("nginx"),
+					Port:   intstr.FromString(containerPortName),
 					Path:   "/online",
 					Scheme: "HTTPS",
 				},
@@ -44,7 +44,7 @@ func NewContainer(customResourceName string, version string, envVarArray []corev
 		},
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          "nginx",
+				Name:          containerPortName,
 				ContainerPort: 8443,
 				Protocol:      "TCP",
 			},

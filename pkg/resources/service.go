@@ -12,16 +12,7 @@ import (
 func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
 	name := cr.Name
 
-	port := corev1.ServicePort{
-		Name:       name,
-		Protocol:   "TCP",
-		Port:       443,
-		TargetPort: intstr.FromString("nginx"),
-	}
-	var ports []corev1.ServicePort
-	ports = append(ports, port)
-
-	svc := &corev1.Service{
+	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Service",
@@ -34,12 +25,17 @@ func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
 			Name:   name,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports:                    ports,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       name,
+					Protocol:   "TCP",
+					Port:       443,
+					TargetPort: intstr.FromString(containerPortName),
+				},
+			},
 			Selector:                 labelsForHawtio(name),
 			SessionAffinity:          "None",
 			PublishNotReadyAddresses: true,
 		},
 	}
-
-	return svc
 }
