@@ -53,9 +53,7 @@ var log = logf.Log.WithName("controller_hawtio")
 const (
 	hawtioFinalizer = "finalizer.hawtio.hawt.io"
 
-	configVersionAnnotation     = "hawtio.hawt.io/configversion"
-	deploymentRolloutAnnotation = "hawtio.hawt.io/restartedAt"
-	hostGeneratedAnnotation     = "openshift.io/host.generated"
+	hostGeneratedAnnotation = "openshift.io/host.generated"
 
 	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
 	serviceSigningSecretVolumeName            = "hawtio-online-tls-serving"
@@ -466,34 +464,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		err = r.client.Status().Update(context.TODO(), instance)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update selector: %v", err)
-		}
-	}
-
-	// Trigger a rollout deployment if config changed
-	requestDeployment := false
-	updateDeployment := false
-	if configVersion := configMap.GetResourceVersion(); deployment.Annotations[configVersionAnnotation] != configVersion {
-		if len(deployment.Annotations[configVersionAnnotation]) > 0 {
-			requestDeployment = true
-		}
-		deployment.Annotations[configVersionAnnotation] = configVersion
-		updateDeployment = true
-	}
-
-	if requestDeployment {
-		// similar to `kubectl rollout restart`
-		if deployment.Spec.Template.ObjectMeta.Annotations == nil {
-			deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
-		}
-		deployment.Spec.Template.ObjectMeta.Annotations[deploymentRolloutAnnotation] = time.Now().Format(time.RFC3339)
-		updateDeployment = true
-	}
-
-	if updateDeployment {
-		err := r.client.Update(context.TODO(), deployment)
-		if err != nil {
-			reqLogger.Error(err, "Failed to reconcile to deployment")
-			return reconcile.Result{}, err
 		}
 	}
 
