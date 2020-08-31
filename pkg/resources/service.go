@@ -29,7 +29,6 @@ func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
 				"service.alpha.openshift.io/serving-cert-secret-name": name + "-tls-serving",
-				"hawtio.hawt.io/hawtioversion":                        cr.GetResourceVersion(),
 			},
 			Labels: map[string]string{"app": "hawtio"},
 			Name:   name,

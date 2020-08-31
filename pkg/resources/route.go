@@ -3,9 +3,10 @@ package resources
 import (
 	"time"
 
-	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	routev1 "github.com/openshift/api/route/v1"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
@@ -18,10 +19,8 @@ func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
 			Kind:       "Route",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:      map[string]string{"app": "hawtio"},
-			Name:        cr.Name,
-			Annotations: map[string]string{"hawtio.hawt.io/hawtioversion": cr.GetResourceVersion()},
-			//Namespace: namespacedName.Namespace,
+			Labels: map[string]string{"app": "hawtio"},
+			Name:   cr.Name,
 		},
 		Spec: routev1.RouteSpec{
 			Host: cr.Spec.RouteHostName,
