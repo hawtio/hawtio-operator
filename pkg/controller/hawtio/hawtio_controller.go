@@ -27,6 +27,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -349,6 +350,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			reqLogger.Error(err, "Failed to generate config map")
 			return reconcile.Result{}, err
 		}
+		err := controllerutil.SetControllerReference(instance, configMap, r.scheme)
+		if err != nil {
+			reqLogger.Error(err, "Failed to set config map owner")
+			return reconcile.Result{}, err
+		}
 		err = r.client.Create(context.TODO(), configMap)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create config map")
@@ -631,15 +637,14 @@ func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request 
 
 	isNamespaceDeployment := strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
-	dep := resources.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMap.GetResourceVersion())
-	serviceDefinition := resources.NewServiceDefinitionForCR(cr)
-	routeDefinition := resources.NewRouteDefinitionForCR(cr)
+	deployment := resources.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMap.GetResourceVersion())
+	service := resources.NewServiceDefinitionForCR(cr)
+	route := resources.NewRouteDefinitionForCR(cr)
 
 	var requestedResources []resource.KubernetesResource
-	//requestedResources = append(requestedResources, configMap)
-	requestedResources = append(requestedResources, dep)
-	requestedResources = append(requestedResources, serviceDefinition)
-	requestedResources = append(requestedResources, routeDefinition)
+	requestedResources = append(requestedResources, deployment)
+	requestedResources = append(requestedResources, service)
+	requestedResources = append(requestedResources, route)
 
 	if isNamespaceDeployment {
 		// Add service account as OAuth client
@@ -716,7 +721,6 @@ func getComparator() compare.MapComparator {
 func getDeployedResources(cr *hawtiov1alpha1.Hawtio, client client.Client) (map[reflect.Type][]resource.KubernetesResource, error) {
 	reader := read.New(client).WithNamespace(cr.Namespace).WithOwnerObject(cr)
 	resourceMap, err := reader.ListAll(
-		&corev1.ConfigMapList{},
 		&corev1.ServiceList{},
 		&appsv1.DeploymentList{},
 		&routev1.RouteList{},
