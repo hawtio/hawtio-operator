@@ -195,8 +195,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	reqLogger.Info("Reconciling Hawtio")
 
 	// Fetch the Hawtio instance
-	instance := &hawtiov1alpha1.Hawtio{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	hawtio := &hawtiov1alpha1.Hawtio{}
+	err := r.client.Get(context.TODO(), request.NamespacedName, hawtio)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -210,8 +210,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Delete phase
 
-	if instance.GetDeletionTimestamp() != nil {
-		err = r.deletion(instance)
+	if hawtio.GetDeletionTimestamp() != nil {
+		err = r.deletion(hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("deletion failed: %v", err)
 		}
@@ -219,16 +219,16 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
-	ok, err := kubernetes.HasFinalizer(instance, hawtioFinalizer)
+	ok, err := kubernetes.HasFinalizer(hawtio, hawtioFinalizer)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to read finalizer: %v", err)
 	}
 	if !ok {
-		err = kubernetes.AddFinalizer(instance, hawtioFinalizer)
+		err = kubernetes.AddFinalizer(hawtio, hawtioFinalizer)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to set finalizer: %v", err)
 		}
-		err = r.client.Update(context.TODO(), instance)
+		err = r.client.Update(context.TODO(), hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update finalizer: %v", err)
 		}
@@ -236,9 +236,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Init phase
 
-	if len(instance.Spec.Type) == 0 {
-		instance.Spec.Type = hawtiov1alpha1.ClusterHawtioDeploymentType
-		err = r.client.Update(context.TODO(), instance)
+	if len(hawtio.Spec.Type) == 0 {
+		hawtio.Spec.Type = hawtiov1alpha1.ClusterHawtioDeploymentType
+		err = r.client.Update(context.TODO(), hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update type: %v", err)
 		}
@@ -246,14 +246,14 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Invariant checks
-	isClusterDeployment := strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType)
-	isNamespaceDeployment := strings.EqualFold(instance.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
+	isClusterDeployment := strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType)
+	isNamespaceDeployment := strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
 	if !isNamespaceDeployment && !isClusterDeployment {
-		err := fmt.Errorf("unsupported type: %s", instance.Spec.Type)
-		if instance.Status.Phase != hawtiov1alpha1.HawtioPhaseFailed {
-			instance.Status.Phase = hawtiov1alpha1.HawtioPhaseFailed
-			err = r.client.Status().Update(context.TODO(), instance)
+		err := fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
+		if hawtio.Status.Phase != hawtiov1alpha1.HawtioPhaseFailed {
+			hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseFailed
+			err = r.client.Status().Update(context.TODO(), hawtio)
 			if err != nil {
 				return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 			}
@@ -261,9 +261,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	if len(instance.Status.Phase) == 0 || instance.Status.Phase == hawtiov1alpha1.HawtioPhaseFailed {
-		instance.Status.Phase = hawtiov1alpha1.HawtioPhaseInitialized
-		err = r.client.Status().Update(context.TODO(), instance)
+	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov1alpha1.HawtioPhaseFailed {
+		hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseInitialized
+		err = r.client.Status().Update(context.TODO(), hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 		}
@@ -296,7 +296,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	isOpenShift43Plus := constraint43.Check(openShiftSemVer)
 
 	// Check Hawtio console version
-	consoleVersion := instance.Spec.Version
+	consoleVersion := hawtio.Spec.Version
 	if len(consoleVersion) == 0 {
 		consoleVersion = "latest"
 	}
@@ -341,12 +341,12 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	configMap := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
 	if err != nil && errors.IsNotFound(err) {
-		configMap, err = resources.NewConfigMapForCR(instance)
+		configMap, err = resources.NewConfigMapForCR(hawtio)
 		if err != nil {
 			reqLogger.Error(err, "Failed to generate config map")
 			return reconcile.Result{}, err
 		}
-		err := controllerutil.SetControllerReference(instance, configMap, r.scheme)
+		err := controllerutil.SetControllerReference(hawtio, configMap, r.scheme)
 		if err != nil {
 			reqLogger.Error(err, "Failed to set config map owner")
 			return reconcile.Result{}, err
@@ -361,7 +361,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	_, err = r.reconcileResources(instance, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configMap)
+	_, err = r.reconcileResources(hawtio, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configMap)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling resources")
 		return reconcile.Result{}, err
@@ -394,7 +394,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Add link to OpenShift console
 	consoleLinkName := request.Name + "-" + request.Namespace
-	if isOpenShift4 && instance.Status.Phase == hawtiov1alpha1.HawtioPhaseInitialized {
+	if isOpenShift4 && hawtio.Status.Phase == hawtiov1alpha1.HawtioPhaseInitialized {
 		consoleLink := &consolev1.ConsoleLink{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
@@ -425,9 +425,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Update status
-	if instance.Status.Phase != hawtiov1alpha1.HawtioPhaseDeployed {
-		instance.Status.Phase = hawtiov1alpha1.HawtioPhaseDeployed
-		err = r.client.Status().Update(context.TODO(), instance)
+	if hawtio.Status.Phase != hawtiov1alpha1.HawtioPhaseDeployed {
+		hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseDeployed
+		err = r.client.Status().Update(context.TODO(), hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 		}
@@ -435,6 +435,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Update phase
+
+	hawtioCopy := hawtio.DeepCopy()
 
 	deployment := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
@@ -445,40 +447,25 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	// Reconcile replicas into status
-	if replicas := deployment.Status.Replicas; instance.Status.Replicas != replicas {
-		instance.Status.Replicas = replicas
-		err = r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to update replicas: %v", err)
-		}
-	}
+	// Reconcile replicas into Hawtio status
+	hawtioCopy.Status.Replicas = deployment.Status.Replicas
 
 	// Reconcile scale sub-resource labelSelectorPath from deployment spec to CR status
 	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to parse selector: %v", err)
 	}
-	if s := selector.String(); instance.Status.Selector != s {
-		instance.Status.Selector = s
-		err = r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to update selector: %v", err)
-		}
-	}
+	hawtioCopy.Status.Selector = selector.String()
 
-	// Update CR status image field from deployment container image
-	if container := deployment.Spec.Template.Spec.Containers[0]; instance.Status.Image != container.Image {
-		instance.Status.Image = container.Image
-		err := r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to reconcile image status from deployment")
-			return reconcile.Result{}, err
-		}
-	}
+	// Reconcile Hawtio status image field from deployment container image
+	hawtioCopy.Status.Image = deployment.Spec.Template.Spec.Containers[0].Image
+
+	// Reconcile route URL into Hawtio status
+	url := resources.GetRouteURL(route)
+	hawtioCopy.Status.URL = url
 
 	// Reconcile route host from routeHostName field
-	if hostName := instance.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
+	if hostName := hawtio.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
 		// Emptying route host is ignored so it's not possible to re-generate the host
 		// See https://github.com/openshift/origin/pull/9425
 		// In that case, let's delete the route
@@ -549,33 +536,20 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			return reconcile.Result{}, err
 		}
 	}
-
 	// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
 	// wait until the deployment is successful before deleting resources
-	if url := resources.GetRouteURL(route); instance.Status.URL != url {
-		if isClusterDeployment {
-			// First remove old URL from OAuthClient
-			if resources.RemoveRedirectURIFromOauthClient(oc, instance.Status.URL) {
-				err := r.client.Update(context.TODO(), oc)
-				if err != nil {
-					reqLogger.Error(err, "Failed to reconcile OAuth client")
-					return reconcile.Result{}, err
-				}
+	if isClusterDeployment {
+		// First remove old URL from OAuthClient
+		if resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL) {
+			err := r.client.Update(context.TODO(), oc)
+			if err != nil {
+				reqLogger.Error(err, "Failed to reconcile OAuth client")
+				return reconcile.Result{}, err
 			}
 		}
-		instance.Status.URL = url
-		err := r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to reconcile from route")
-			return reconcile.Result{}, err
-		}
-	}
-
-	if isClusterDeployment {
 		// Add route URL to OAuthClient authorized redirect URIs
-		uri := resources.GetRouteURL(route)
-		if ok, _ := resources.OauthClientContainsRedirectURI(oc, uri); !ok {
-			oc.RedirectURIs = append(oc.RedirectURIs, uri)
+		if ok, _ := resources.OauthClientContainsRedirectURI(oc, url); !ok {
+			oc.RedirectURIs = append(oc.RedirectURIs, url)
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
@@ -584,17 +558,20 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 	if isNamespaceDeployment && oc != nil {
-		// Clean-up OAuth client if any.
-		// This happens when the deployment type is changed
+		// Clean-up OAuth client if any. This happens when the deployment type is changed
 		// from "cluster" to "namespace".
-		uri := resources.GetRouteURL(route)
-		if resources.RemoveRedirectURIFromOauthClient(oc, uri) {
+		if resources.RemoveRedirectURIFromOauthClient(oc, url) {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
 				return reconcile.Result{}, err
 			}
 		}
+	}
+
+	err = r.client.Status().Patch(context.TODO(), hawtioCopy, client.MergeFrom(hawtio))
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to patch status: %v", err)
 	}
 
 	return reconcile.Result{}, nil
