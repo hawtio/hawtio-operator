@@ -504,7 +504,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Reconcile route host from routeHostName field
-	if hostName := instance.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") && route.Generation > 0 {
+	if hostName := instance.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
 		// Emptying route host is ignored so it's not possible to re-generate the host
 		// See https://github.com/openshift/origin/pull/9425
 		// In that case, let's delete the route
