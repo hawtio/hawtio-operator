@@ -17,22 +17,16 @@ const (
 )
 
 // Create NewDeploymentForCR method to create deployment
-func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configResourceVersion string) *appsv1.Deployment {
+func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string) *appsv1.Deployment {
 	namespacedName := types.NamespacedName{
 		Name:      cr.Name,
 		Namespace: cr.Namespace,
 	}
 
-	annotations := map[string]string{
-		configVersionAnnotation: configResourceVersion,
-	}
-
-	dep := newDeployment(namespacedName, annotations, cr.Spec.Replicas, newPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath))
-
-	return dep
+	return newDeployment(namespacedName, cr.Spec.Replicas, newPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMapVersion))
 }
 
-func newDeployment(namespacedName types.NamespacedName, annotations map[string]string, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
+func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
 	labels := labelsForHawtio(namespacedName.Name)
 	var r int32
 	if replicas != nil {
@@ -43,16 +37,15 @@ func newDeployment(namespacedName types.NamespacedName, annotations map[string]s
 		// reconciliation loop
 		r = 1
 	}
-	dep := &appsv1.Deployment{
+	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
 			Kind:       "Deployment",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        namespacedName.Name,
-			Namespace:   namespacedName.Namespace,
-			Labels:      labels,
-			Annotations: annotations,
+			Name:      namespacedName.Name,
+			Namespace: namespacedName.Namespace,
+			Labels:    labels,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &r,
@@ -65,23 +58,21 @@ func newDeployment(namespacedName types.NamespacedName, annotations map[string]s
 			},
 		},
 	}
-
-	return dep
 }
 
-func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string) corev1.PodTemplateSpec {
+func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string) corev1.PodTemplateSpec {
 	namespacedName := types.NamespacedName{
 		Name:      cr.Name,
 		Namespace: cr.Namespace,
 	}
 
-	pts := newPodTemplateSpec(namespacedName, labelsForHawtio(cr.Name))
+	pts := newPodTemplateSpec(namespacedName, labelsForHawtio(cr.Name), configMapVersion)
 
 	spec := corev1.PodSpec{}
 	var Containers []corev1.Container
 	container := NewContainer(cr.Name, cr.Spec.Version, newEnvVarArrayForCR(cr, isOpenShift4, openshiftVersion, openshiftURL))
 
-	volumeMounts := newVolumeMounts(cr, isOpenShift4, volumePath)
+	volumeMounts := newVolumeMounts(isOpenShift4, volumePath)
 	if len(volumeMounts) > 0 {
 		container.VolumeMounts = volumeMounts
 	}
@@ -137,7 +128,7 @@ func newEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshift
 	return envVar
 }
 
-func newVolumeMounts(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, volumePath string) []corev1.VolumeMount {
+func newVolumeMounts(isOpenShift4 bool, volumePath string) []corev1.VolumeMount {
 	var volumeMounts []corev1.VolumeMount
 
 	volumeMountSubPath := hawtioConfigKey
