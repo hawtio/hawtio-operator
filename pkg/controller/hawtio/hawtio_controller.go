@@ -142,10 +142,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to secondary resources and requeue the owner Hawtio
-	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &hawtiov1alpha1.Hawtio{},
-	})
+	// TODO: The handler should be changed to EnqueueRequestForOwner when the configuration is embedded into Hawtio
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
