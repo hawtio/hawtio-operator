@@ -375,23 +375,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if isClusterDeployment {
-		// Clean-up service account as OAuth client if any.
-		// This happens when the deployment type is changed
-		// from "namespace" to "cluster".
-		sa := &corev1.ServiceAccount{}
-		err = r.client.Get(context.TODO(), request.NamespacedName, sa)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				reqLogger.Error(err, "Failed to get service account")
-				return reconcile.Result{}, err
-			}
-		} else {
-			err = r.client.Delete(context.TODO(), sa)
-			if err != nil {
-				reqLogger.Error(err, "Failed to delete service account")
-				return reconcile.Result{}, err
-			}
-		}
 		// Add OAuth client
 		oauthClient := resources.NewOAuthClient(resources.OAuthClientName)
 		err = r.client.Create(context.TODO(), oauthClient)
