@@ -46,6 +46,7 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/kubernetes"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 var log = logf.Log.WithName("controller_hawtio")
@@ -62,12 +63,9 @@ const (
 	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
 )
 
-// Go build-time variables
-var LegacyServingCertificateMountVersion string
-
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, bv util.BuildVariables) error {
 	err := oauthv1.Install(mgr.GetScheme())
 	if err != nil {
 		return err
@@ -86,9 +84,10 @@ func Add(mgr manager.Manager) error {
 	}
 
 	r := &ReconcileHawtio{
-		client: mgr.GetClient(),
-		config: mgr.GetConfig(),
-		scheme: mgr.GetScheme(),
+		BuildVariables: bv,
+		client:         mgr.GetClient(),
+		restConfig:     mgr.GetConfig(),
+		scheme:         mgr.GetScheme(),
 	}
 
 	oauthClient, err := oauthclient.NewForConfig(mgr.GetConfig())
@@ -175,10 +174,11 @@ var _ reconcile.Reconciler = &ReconcileHawtio{}
 
 // ReconcileHawtio reconciles a Hawtio object
 type ReconcileHawtio struct {
+	util.BuildVariables
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the API server
 	client       client.Client
-	config       *rest.Config
+	restConfig   *rest.Config
 	scheme       *runtime.Scheme
 	coreClient   *corev1client.CoreV1Client
 	oauthClient  oauthclient.Interface
@@ -316,7 +316,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Adjust service signing secret volume mount path
-	serviceSigningCertificateVolumeMountPath, err := getServingCertificateMountPathFor(consoleVersion)
+	serviceSigningCertificateVolumeMountPath, err := getServingCertificateMountPathFor(consoleVersion, r.LegacyServingCertificateMountVersion)
 	if err != nil {
 		reqLogger.Error(err, "Error getting service signing certificate mount path", "version", consoleVersion)
 		return reconcile.Result{}, err
@@ -582,7 +582,7 @@ func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request 
 
 	isNamespaceDeployment := strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
-	deployment := resources.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMap.GetResourceVersion())
+	deployment := resources.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMap.GetResourceVersion(), r.ImageRepository)
 	service := resources.NewServiceDefinitionForCR(cr)
 	route := resources.NewRouteDefinitionForCR(cr)
 
@@ -736,20 +736,20 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	return nil
 }
 
-func getServingCertificateMountPathFor(version string) (string, error) {
+func getServingCertificateMountPathFor(version string, legacyServingCertificateMountVersion string) (string, error) {
 	if version != "latest" {
 		semVer, err := semver.NewVersion(version)
 		if err != nil {
 			return "", err
 		}
 		var constraints *semver.Constraints
-		if LegacyServingCertificateMountVersion == "" {
+		if legacyServingCertificateMountVersion == "" {
 			constraints, err = semver.NewConstraint("< 1.7.0")
 			if err != nil {
 				return "", err
 			}
 		} else {
-			constraints, err = semver.NewConstraint(LegacyServingCertificateMountVersion)
+			constraints, err = semver.NewConstraint(legacyServingCertificateMountVersion)
 			if err != nil {
 				return "", err
 			}

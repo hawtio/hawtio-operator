@@ -17,13 +17,13 @@ const (
 )
 
 // Create NewDeploymentForCR method to create deployment
-func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string) *appsv1.Deployment {
+func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string, imageRepository string) *appsv1.Deployment {
 	namespacedName := types.NamespacedName{
 		Name:      cr.Name,
 		Namespace: cr.Namespace,
 	}
 
-	return newDeployment(namespacedName, cr.Spec.Replicas, newPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMapVersion))
+	return newDeployment(namespacedName, cr.Spec.Replicas, newPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMapVersion, imageRepository))
 }
 
 func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
@@ -60,7 +60,7 @@ func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts cor
 	}
 }
 
-func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string) corev1.PodTemplateSpec {
+func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string, imageRepository string) corev1.PodTemplateSpec {
 	namespacedName := types.NamespacedName{
 		Name:      cr.Name,
 		Namespace: cr.Namespace,
@@ -70,7 +70,7 @@ func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, opens
 
 	spec := corev1.PodSpec{}
 	var Containers []corev1.Container
-	container := NewContainer(cr.Name, cr.Spec.Version, newEnvVarArrayForCR(cr, isOpenShift4, openshiftVersion, openshiftURL))
+	container := NewContainer(cr.Name, cr.Spec.Version, newEnvVarArrayForCR(cr, isOpenShift4, openshiftVersion, openshiftURL), imageRepository)
 
 	volumeMounts := newVolumeMounts(isOpenShift4, volumePath)
 	if len(volumeMounts) > 0 {

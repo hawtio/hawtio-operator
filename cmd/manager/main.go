@@ -7,9 +7,6 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/hawtio/hawtio-operator/pkg/apis"
-	"github.com/hawtio/hawtio-operator/pkg/controller"
-
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
 	"github.com/operator-framework/operator-sdk/pkg/ready"
@@ -19,6 +16,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
+
+	"github.com/hawtio/hawtio-operator/pkg/apis"
+	"github.com/hawtio/hawtio-operator/pkg/controller"
+	"github.com/hawtio/hawtio-operator/pkg/util"
+)
+
+// Go build-time variables
+var (
+	ImageRepository                      string
+	LegacyServingCertificateMountVersion string
 )
 
 var log = logf.Log.WithName("cmd")
@@ -84,7 +91,11 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := controller.AddToManager(mgr); err != nil {
+	bv := util.BuildVariables{
+		ImageRepository:                      ImageRepository,
+		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
+	}
+	if err := controller.AddToManager(mgr, bv); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
