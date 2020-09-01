@@ -26,6 +26,7 @@ import (
 var (
 	ImageRepository                      string
 	LegacyServingCertificateMountVersion string
+	ProductName                          string
 )
 
 var log = logf.Log.WithName("cmd")
@@ -94,6 +95,7 @@ func main() {
 	bv := util.BuildVariables{
 		ImageRepository:                      ImageRepository,
 		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
+		ProductName:                          ProductName,
 	}
 	if err := controller.AddToManager(mgr, bv); err != nil {
 		log.Error(err, "")

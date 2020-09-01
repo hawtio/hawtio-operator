@@ -6,4 +6,6 @@ type BuildVariables struct {
 	ImageRepository string
 	// Legacy serving certificate version
 	LegacyServingCertificateMountVersion string
+	// Product name
+	ProductName string
 }

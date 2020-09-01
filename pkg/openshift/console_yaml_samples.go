@@ -20,15 +20,12 @@ import (
 
 var log = logs.GetLogger("openshift-webconsole")
 
-// Go build-time variables
-var ProductName string
-
 func ConsoleYAMLSampleExists() error {
 	gvk := schema.GroupVersionKind{Group: "console.openshift.io", Version: "v1", Kind: "ConsoleYAMLSample"}
 	return kubernetes.CustomResourceDefinitionExists(gvk)
 }
 
-func CreateConsoleYAMLSamples(c client.Client) {
+func CreateConsoleYAMLSamples(c client.Client, productName string) {
 	log.Info("Loading CR YAML samples.")
 	box := packr.New("cryamlsamples", "../../deploy/crs")
 	if box.List() == nil {
@@ -47,8 +44,8 @@ func CreateConsoleYAMLSamples(c client.Client) {
 			log.Info("yaml", " name: ", filename, " not created:  ", err.Error())
 			continue
 		}
-		if ProductName != "" {
-			hawtio.ObjectMeta.Name = ProductName
+		if productName != "" {
+			hawtio.ObjectMeta.Name = productName
 		}
 		yamlSample, err := openshift.GetConsoleYAMLSample(&hawtio)
 		if err != nil {
