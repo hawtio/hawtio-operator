@@ -1,6 +1,8 @@
 package resources
 
 import (
+	"path"
+
 	"github.com/Masterminds/semver"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -19,6 +21,7 @@ const (
 	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
 	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
 	configVersionAnnotation                   = "hawtio.hawt.io/configversion"
+	serverRootDirectory                       = "/usr/share/nginx/html"
 )
 
 // Create NewDeploymentForCR method to create deployment
@@ -81,7 +84,7 @@ func newPodTemplateSpecForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, o
 	var Containers []corev1.Container
 	container := NewContainer(hawtio.Name, hawtio.Spec.Version, newEnvVarArrayForCR(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
 
-	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
+	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, buildVariables)
 	if err != nil {
 		return corev1.PodTemplateSpec{}, err
 	}
@@ -140,24 +143,33 @@ func newEnvVarArrayForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openS
 	return envVar
 }
 
-func newVolumeMounts(isOpenShift4 bool, hawtioVersion string, legacyServingCertificateMountVersion string) ([]corev1.VolumeMount, error) {
+func newVolumeMounts(isOpenShift4 bool, hawtioVersion string, buildVariables util.BuildVariables) ([]corev1.VolumeMount, error) {
 	var volumeMounts []corev1.VolumeMount
+	var volumeMountPath string
 
 	volumeMountSubPath := hawtioConfigKey
 	volumeMountName := "hawtio-online"
-	volumeMountPath := "/usr/share/nginx/html/online/hawtconfig.json"
+	if buildVariables.ServerRootDirectory != "" {
+		volumeMountPath = path.Join(buildVariables.ServerRootDirectory, "online", hawtioConfigKey)
+	} else {
+		volumeMountPath = path.Join(serverRootDirectory, "online", hawtioConfigKey)
+	}
 	volumeMount := newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	volumeMountSubPath = hawtioConfigKey
 	volumeMountName = "hawtio-integration"
-	volumeMountPath = "/usr/share/nginx/html/integration/hawtconfig.json"
+	if buildVariables.ServerRootDirectory != "" {
+		volumeMountPath = path.Join(buildVariables.ServerRootDirectory, "integration", hawtioConfigKey)
+	} else {
+		volumeMountPath = path.Join(serverRootDirectory, "integration", hawtioConfigKey)
+	}
 	volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	volumeMountSubPath = ""
 	volumeMountName = serviceSigningSecretVolumeName
-	volumeMountPath, err := getServingCertificateMountPathFor(hawtioVersion, legacyServingCertificateMountVersion)
+	volumeMountPath, err := getServingCertificateMountPathFor(hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
 	if err != nil {
 		return nil, err
 	}

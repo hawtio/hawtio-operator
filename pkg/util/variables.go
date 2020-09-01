@@ -8,4 +8,6 @@ type BuildVariables struct {
 	LegacyServingCertificateMountVersion string
 	// Product name
 	ProductName string
+	// The hawtio-online server root directory
+	ServerRootDirectory string
 }

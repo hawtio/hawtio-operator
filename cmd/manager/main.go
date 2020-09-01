@@ -27,6 +27,7 @@ var (
 	ImageRepository                      string
 	LegacyServingCertificateMountVersion string
 	ProductName                          string
+	ServerRootDirectory                  string
 )
 
 var log = logf.Log.WithName("cmd")
@@ -96,6 +97,7 @@ func main() {
 		ImageRepository:                      ImageRepository,
 		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
 		ProductName:                          ProductName,
+		ServerRootDirectory:                  ServerRootDirectory,
 	}
 	if err := controller.AddToManager(mgr, bv); err != nil {
 		log.Error(err, "")
