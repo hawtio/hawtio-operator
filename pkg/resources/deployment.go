@@ -1,29 +1,38 @@
 package resources
 
 import (
+	"github.com/Masterminds/semver"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 const (
-	serviceSigningSecretVolumeName         = "hawtio-online-tls-serving"
-	clientCertificateSecretVolumeName      = "hawtio-online-tls-proxying"
-	clientCertificateSecretVolumeMountPath = "/etc/tls/private/proxying"
-	configVersionAnnotation                = "hawtio.hawt.io/configversion"
+	serviceSigningSecretVolumeName            = "hawtio-online-tls-serving"
+	serviceSigningSecretVolumeMountPath       = "/etc/tls/private/serving"
+	serviceSigningSecretVolumeMountPathLegacy = "/etc/tls/private"
+	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
+	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
+	configVersionAnnotation                   = "hawtio.hawt.io/configversion"
 )
 
 // Create NewDeploymentForCR method to create deployment
-func NewDeploymentForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string, imageRepository string) *appsv1.Deployment {
+func NewDeploymentForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
 	namespacedName := types.NamespacedName{
-		Name:      cr.Name,
-		Namespace: cr.Namespace,
+		Name:      hawtio.Name,
+		Namespace: hawtio.Namespace,
 	}
 
-	return newDeployment(namespacedName, cr.Spec.Replicas, newPodTemplateSpecForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMapVersion, imageRepository))
+	podTemplateSpec, err := newPodTemplateSpecForCR(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMapVersion, buildVariables)
+	if err != nil {
+		return nil, err
+	}
+	return newDeployment(namespacedName, hawtio.Spec.Replicas, podTemplateSpec), nil
 }
 
 func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
@@ -60,53 +69,56 @@ func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts cor
 	}
 }
 
-func newPodTemplateSpecForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMapVersion string, imageRepository string) corev1.PodTemplateSpec {
+func newPodTemplateSpecForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
 	namespacedName := types.NamespacedName{
-		Name:      cr.Name,
-		Namespace: cr.Namespace,
+		Name:      hawtio.Name,
+		Namespace: hawtio.Namespace,
 	}
 
-	pts := newPodTemplateSpec(namespacedName, labelsForHawtio(cr.Name), configMapVersion)
+	pts := newPodTemplateSpec(namespacedName, labelsForHawtio(hawtio.Name), configMapVersion)
 
 	spec := corev1.PodSpec{}
 	var Containers []corev1.Container
-	container := NewContainer(cr.Name, cr.Spec.Version, newEnvVarArrayForCR(cr, isOpenShift4, openshiftVersion, openshiftURL), imageRepository)
+	container := NewContainer(hawtio.Name, hawtio.Spec.Version, newEnvVarArrayForCR(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
 
-	volumeMounts := newVolumeMounts(isOpenShift4, volumePath)
+	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
+	if err != nil {
+		return corev1.PodTemplateSpec{}, err
+	}
 	if len(volumeMounts) > 0 {
 		container.VolumeMounts = volumeMounts
 	}
-	v := newVolumes(cr, isOpenShift4)
+	v := newVolumes(hawtio, isOpenShift4)
 	if len(v) > 0 {
 		spec.Volumes = v
 	}
 	spec.Containers = append(Containers, container)
 	pts.Spec = spec
 
-	return pts
+	return pts, err
 }
 
-func newVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
+func newVolumes(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 	var volumes []corev1.Volume
 
-	secretName := cr.Name + "-tls-serving"
+	secretName := hawtio.Name + "-tls-serving"
 	volumeName := serviceSigningSecretVolumeName
 	volume := newVolume(secretName, volumeName)
 	volumes = append(volumes, volume)
 
 	if isOpenShift4 {
-		secretName = cr.Name + "-tls-proxying"
+		secretName = hawtio.Name + "-tls-proxying"
 		volumeName = clientCertificateSecretVolumeName
 		volume = newVolume(secretName, volumeName)
 		volumes = append(volumes, volume)
 	}
 
-	configMapName := cr.Name
+	configMapName := hawtio.Name
 	volumeName = "hawtio-online"
 	volume = newConfigMapVolume(configMapName, volumeName)
 	volumes = append(volumes, volume)
 
-	configMapName = cr.Name
+	configMapName = hawtio.Name
 	volumeName = "hawtio-integration"
 	volume = newConfigMapVolume(configMapName, volumeName)
 	volumes = append(volumes, volume)
@@ -114,21 +126,21 @@ func newVolumes(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 	return volumes
 }
 
-func newEnvVarArrayForCR(cr *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openshiftVersion string, openshiftURL string) []corev1.EnvVar {
+func newEnvVarArrayForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string) []corev1.EnvVar {
 	var envVar []corev1.EnvVar
 
-	envVarArrayForCluster := addEnvVarForContainer(cr.Spec.Type, cr.Name)
+	envVarArrayForCluster := addEnvVarForContainer(hawtio.Spec.Type, hawtio.Name)
 	envVar = append(envVar, envVarArrayForCluster...)
 
 	if isOpenShift4 {
-		envVarArrayFoOpenShift := addEnvVarForOpenshift(openshiftVersion, openshiftURL)
+		envVarArrayFoOpenShift := addEnvVarForOpenshift(openShiftVersion, openShiftConsoleURL)
 		envVar = append(envVar, envVarArrayFoOpenShift...)
 	}
 
 	return envVar
 }
 
-func newVolumeMounts(isOpenShift4 bool, volumePath string) []corev1.VolumeMount {
+func newVolumeMounts(isOpenShift4 bool, hawtioVersion string, legacyServingCertificateMountVersion string) ([]corev1.VolumeMount, error) {
 	var volumeMounts []corev1.VolumeMount
 
 	volumeMountSubPath := hawtioConfigKey
@@ -145,7 +157,10 @@ func newVolumeMounts(isOpenShift4 bool, volumePath string) []corev1.VolumeMount 
 
 	volumeMountSubPath = ""
 	volumeMountName = serviceSigningSecretVolumeName
-	volumeMountPath = volumePath
+	volumeMountPath, err := getServingCertificateMountPathFor(hawtioVersion, legacyServingCertificateMountVersion)
+	if err != nil {
+		return nil, err
+	}
 	volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
 	volumeMounts = append(volumeMounts, volumeMount)
 
@@ -156,5 +171,33 @@ func newVolumeMounts(isOpenShift4 bool, volumePath string) []corev1.VolumeMount 
 		volumeMounts = append(volumeMounts, volumeMount)
 	}
 
-	return volumeMounts
+	return volumeMounts, nil
+}
+
+func getServingCertificateMountPathFor(version string, legacyServingCertificateMountVersion string) (string, error) {
+	if len(version) == 0 {
+		version = "latest"
+	}
+	if version != "latest" {
+		semVer, err := semver.NewVersion(version)
+		if err != nil {
+			return "", err
+		}
+		var constraints *semver.Constraints
+		if legacyServingCertificateMountVersion == "" {
+			constraints, err = semver.NewConstraint("< 1.7.0")
+			if err != nil {
+				return "", err
+			}
+		} else {
+			constraints, err = semver.NewConstraint(legacyServingCertificateMountVersion)
+			if err != nil {
+				return "", err
+			}
+		}
+		if constraints.Check(semVer) {
+			return serviceSigningSecretVolumeMountPathLegacy, nil
+		}
+	}
+	return serviceSigningSecretVolumeMountPath, nil
 }

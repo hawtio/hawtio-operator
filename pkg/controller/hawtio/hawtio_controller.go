@@ -50,15 +50,8 @@ import (
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	hawtioFinalizer = "finalizer.hawtio.hawt.io"
-
+	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
 	hostGeneratedAnnotation = "openshift.io/host.generated"
-
-	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
-	serviceSigningSecretVolumeName            = "hawtio-online-tls-serving"
-	serviceSigningSecretVolumeMountPathLegacy = "/etc/tls/private"
-	serviceSigningSecretVolumeMountPath       = "/etc/tls/private/serving"
-	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -291,12 +284,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	constraint43, _ := semver.NewConstraint(">= 4.3")
 	isOpenShift43Plus := constraint43.Check(openShiftSemVer)
 
-	// Check Hawtio console version
-	consoleVersion := hawtio.Spec.Version
-	if len(consoleVersion) == 0 {
-		consoleVersion = "latest"
-	}
-
 	var openShiftConsoleUrl string
 	if isOpenShift4 {
 		// Retrieve OpenShift Web console public URL
@@ -311,12 +298,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	// Adjust service signing secret volume mount path
-	serviceSigningCertificateVolumeMountPath, err := getServingCertificateMountPathFor(consoleVersion, r.LegacyServingCertificateMountVersion)
-	if err != nil {
-		reqLogger.Error(err, "Error getting service signing certificate mount path", "version", consoleVersion)
-		return reconcile.Result{}, err
-	}
 	if isOpenShift4 {
 		// Check whether client certificate secret exists
 		_, err := r.coreClient.Secrets(request.Namespace).Get(request.Name+"-tls-proxying", metav1.GetOptions{})
@@ -357,7 +338,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	_, err = r.reconcileResources(hawtio, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, serviceSigningCertificateVolumeMountPath, configMap)
+	_, err = r.reconcileResources(hawtio, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, hawtio.Spec.Version, configMap)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling resources")
 		return reconcile.Result{}, err
@@ -573,12 +554,15 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openshiftVersion string, openshiftURL string, volumePath string, configMap *corev1.ConfigMap) (bool, error) {
+func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap) (bool, error) {
 	reqLogger := log.WithName(cr.Name)
 
 	isNamespaceDeployment := strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
-	deployment := resources.NewDeploymentForCR(cr, isOpenShift4, openshiftVersion, openshiftURL, volumePath, configMap.GetResourceVersion(), r.ImageRepository)
+	deployment, err := resources.NewDeploymentForCR(cr, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), r.BuildVariables)
+	if err != nil {
+		return false, err
+	}
 	service := resources.NewServiceDefinitionForCR(cr)
 	route := resources.NewRouteDefinitionForCR(cr)
 
@@ -730,29 +714,4 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	}
 
 	return nil
-}
-
-func getServingCertificateMountPathFor(version string, legacyServingCertificateMountVersion string) (string, error) {
-	if version != "latest" {
-		semVer, err := semver.NewVersion(version)
-		if err != nil {
-			return "", err
-		}
-		var constraints *semver.Constraints
-		if legacyServingCertificateMountVersion == "" {
-			constraints, err = semver.NewConstraint("< 1.7.0")
-			if err != nil {
-				return "", err
-			}
-		} else {
-			constraints, err = semver.NewConstraint(legacyServingCertificateMountVersion)
-			if err != nil {
-				return "", err
-			}
-		}
-		if constraints.Check(semVer) {
-			return serviceSigningSecretVolumeMountPathLegacy, nil
-		}
-	}
-	return serviceSigningSecretVolumeMountPath, nil
 }
