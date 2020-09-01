@@ -23,8 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -86,7 +84,6 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 	r := &ReconcileHawtio{
 		BuildVariables: bv,
 		client:         mgr.GetClient(),
-		restConfig:     mgr.GetConfig(),
 		scheme:         mgr.GetScheme(),
 	}
 
@@ -178,7 +175,6 @@ type ReconcileHawtio struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the API server
 	client       client.Client
-	restConfig   *rest.Config
 	scheme       *runtime.Scheme
 	coreClient   *corev1client.CoreV1Client
 	oauthClient  oauthclient.Interface
