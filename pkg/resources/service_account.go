@@ -1,12 +1,12 @@
 package resources
 
 import (
+	"encoding/json"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	oauthv1 "github.com/openshift/api/oauth/v1"
-
-	"github.com/hawtio/hawtio-operator/pkg/openshift"
 )
 
 func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error) {
@@ -21,7 +21,7 @@ func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error)
 		},
 	}
 
-	ref, err := openshift.Encode(OAuthRedirectReference)
+	ref, err := json.Marshal(OAuthRedirectReference)
 	if err != nil {
 		return nil, err
 	}
