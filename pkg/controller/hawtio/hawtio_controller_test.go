@@ -20,7 +20,7 @@ func TestNonWatchedResourceNameNotFound(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 
 	objs := []runtime.Object{
-		&HawtioInstance,
+		&hawtio,
 	}
 
 	r := buildReconcileWithFakeClientWithMocks(objs, t)
@@ -28,7 +28,7 @@ func TestNonWatchedResourceNameNotFound(t *testing.T) {
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "doesn't exist",
-			Namespace: HawtioInstance.Namespace,
+			Namespace: hawtio.Namespace,
 		},
 	}
 
@@ -41,14 +41,14 @@ func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 
 	objs := []runtime.Object{
-		&HawtioInstance,
+		&hawtio,
 	}
 
 	r := buildReconcileWithFakeClientWithMocks(objs, t)
 
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{
-			Name:      HawtioInstance.Name,
+			Name:      hawtio.Name,
 			Namespace: "doesn't exist",
 		},
 	}
@@ -61,12 +61,12 @@ func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
 func TestHawtioController_Reconcile(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 	objs := []runtime.Object{
-		&HawtioInstance,
+		&hawtio,
 	}
 
 	r := buildReconcileWithFakeClientWithMocks(objs, t)
 
-	NamespacedName := types.NamespacedName{Name: HawtioInstance.Name, Namespace: HawtioInstance.Namespace}
+	NamespacedName := types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}
 	request := reconcile.Request{NamespacedName: NamespacedName}
 
 	// Created phase
@@ -92,6 +92,14 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			deployment := appsv1.Deployment{}
 			err = r.client.Get(context.TODO(), NamespacedName, &deployment)
 			require.NoError(t, err)
+		})
+		t.Run("check if the Container resources have been set", func(t *testing.T) {
+			deployment := appsv1.Deployment{}
+			err = r.client.Get(context.TODO(), NamespacedName, &deployment)
+			require.NoError(t, err)
+
+			container := deployment.Spec.Template.Spec.Containers[0]
+			assert.Equal(t, container.Resources, hawtio.Spec.Resources)
 		})
 	})
 }

@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,10 +26,11 @@ const (
 type HawtioSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	Type          HawtioDeploymentType `json:"type,omitempty"`
-	Replicas      *int32               `json:"replicas,omitempty"`
-	RouteHostName string               `json:"routeHostName,omitempty"`
-	Version       string               `json:"version,omitempty"`
+	Type          HawtioDeploymentType        `json:"type,omitempty"`
+	Replicas      *int32                      `json:"replicas,omitempty"`
+	RouteHostName string                      `json:"routeHostName,omitempty"`
+	Version       string                      `json:"version,omitempty"`
+	Resources     corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // HawtioStatus defines the observed state of Hawtio

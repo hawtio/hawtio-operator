@@ -82,7 +82,7 @@ func newPodTemplateSpecForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, o
 
 	spec := corev1.PodSpec{}
 	var Containers []corev1.Container
-	container := NewContainer(hawtio.Name, hawtio.Spec.Version, newEnvVarArrayForCR(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
+	container := NewContainer(hawtio, newEnvVarArrayForCR(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
 
 	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, buildVariables)
 	if err != nil {
