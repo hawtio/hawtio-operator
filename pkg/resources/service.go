@@ -4,14 +4,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
-//func NewServiceDefinitionForCR
-func NewServiceDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *corev1.Service {
-	name := cr.Name
-
+func NewService(name string) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",

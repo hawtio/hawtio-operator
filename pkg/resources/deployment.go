@@ -20,18 +20,23 @@ const (
 	serviceSigningSecretVolumeMountPathLegacy = "/etc/tls/private"
 	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
 	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
+	onlineConfigMapVolumeName                 = "hawtio-online"
+	integrationConfigMapVolumeName            = "hawtio-integration"
+	rbacConfigMapVolumeName                   = "hawtio-rbac"
+	rbacConfigMapVolumeMountPath              = "/etc/hawtio/rbac"
+	RBACConfigMapKey                          = "ACL.yaml"
 	configVersionAnnotation                   = "hawtio.hawt.io/configversion"
 	serverRootDirectory                       = "/usr/share/nginx/html"
 )
 
-// Create NewDeploymentForCR method to create deployment
-func NewDeploymentForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
+// Create NewDeployment method to create deployment
+func NewDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
 	namespacedName := types.NamespacedName{
 		Name:      hawtio.Name,
 		Namespace: hawtio.Namespace,
 	}
 
-	podTemplateSpec, err := newPodTemplateSpecForCR(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMapVersion, buildVariables)
+	podTemplateSpec, err := newPodTemplateSpec(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMapVersion, buildVariables)
 	if err != nil {
 		return nil, err
 	}
@@ -72,121 +77,122 @@ func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts cor
 	}
 }
 
-func newPodTemplateSpecForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
-	namespacedName := types.NamespacedName{
-		Name:      hawtio.Name,
-		Namespace: hawtio.Namespace,
-	}
+func newPodTemplateSpec(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
+	container := newContainer(hawtio, newEnvVars(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
 
-	pts := newPodTemplateSpec(namespacedName, labelsForHawtio(hawtio.Name), configMapVersion)
-
-	spec := corev1.PodSpec{}
-	var Containers []corev1.Container
-	container := NewContainer(hawtio, newEnvVarArrayForCR(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
-
-	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, buildVariables)
+	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables)
 	if err != nil {
 		return corev1.PodTemplateSpec{}, err
 	}
 	if len(volumeMounts) > 0 {
 		container.VolumeMounts = volumeMounts
 	}
-	v := newVolumes(hawtio, isOpenShift4)
-	if len(v) > 0 {
-		spec.Volumes = v
-	}
-	spec.Containers = append(Containers, container)
-	pts.Spec = spec
+	volumes := newVolumes(hawtio, isOpenShift4)
 
-	return pts, err
+	pod := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: labelsForHawtio(hawtio.Name),
+			// Used to trigger a rollout deployment if config changed,
+			// similarly to `kubectl rollout restart`
+			Annotations: map[string]string{
+				configVersionAnnotation: configMapVersion,
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				container,
+			},
+			Volumes: volumes,
+		},
+	}
+
+	return pod, err
 }
 
 func newVolumes(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 	var volumes []corev1.Volume
 
-	secretName := hawtio.Name + "-tls-serving"
-	volumeName := serviceSigningSecretVolumeName
-	volume := newVolume(secretName, volumeName)
+	volume := newSecretVolume(hawtio.Name+"-tls-serving", serviceSigningSecretVolumeName)
 	volumes = append(volumes, volume)
 
 	if isOpenShift4 {
-		secretName = hawtio.Name + "-tls-proxying"
-		volumeName = clientCertificateSecretVolumeName
-		volume = newVolume(secretName, volumeName)
+		volume = newSecretVolume(hawtio.Name+"-tls-proxying", clientCertificateSecretVolumeName)
 		volumes = append(volumes, volume)
 	}
 
-	configMapName := hawtio.Name
-	volumeName = "hawtio-online"
-	volume = newConfigMapVolume(configMapName, volumeName)
+	volume = newConfigMapVolume(hawtio.Name, onlineConfigMapVolumeName)
 	volumes = append(volumes, volume)
 
-	configMapName = hawtio.Name
-	volumeName = "hawtio-integration"
-	volume = newConfigMapVolume(configMapName, volumeName)
+	volume = newConfigMapVolume(hawtio.Name, integrationConfigMapVolumeName)
 	volumes = append(volumes, volume)
+
+	if rbacConfigMapName := hawtio.Spec.RBAC.ConfigMap; rbacConfigMapName != "" {
+		volume = newConfigMapVolume(rbacConfigMapName, rbacConfigMapVolumeName)
+		volumes = append(volumes, volume)
+	}
 
 	return volumes
 }
 
-func newEnvVarArrayForCR(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string) []corev1.EnvVar {
-	var envVar []corev1.EnvVar
+func newEnvVars(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
 
-	envVarArrayForCluster := addEnvVarForContainer(hawtio.Spec.Type, hawtio.Name)
-	envVar = append(envVar, envVarArrayForCluster...)
+	envVarsForHawtio := envVarsForHawtio(hawtio.Spec.Type, hawtio.Name)
+	envVars = append(envVars, envVarsForHawtio...)
 
 	if isOpenShift4 {
-		envVarArrayFoOpenShift := addEnvVarForOpenshift(openShiftVersion, openShiftConsoleURL)
-		envVar = append(envVar, envVarArrayFoOpenShift...)
+		envVarsForOpenShift4 := envVarsForOpenshift4(openShiftVersion, openShiftConsoleURL)
+		envVars = append(envVars, envVarsForOpenShift4...)
 	}
 
-	return envVar
+	if hawtio.IsRbacEnabled() {
+		envVars = append(envVars, envVarForRBAC(hawtio.Spec.RBAC.ConfigMap))
+	}
+
+	return envVars
 }
 
-func newVolumeMounts(isOpenShift4 bool, hawtioVersion string, buildVariables util.BuildVariables) ([]corev1.VolumeMount, error) {
+func newVolumeMounts(isOpenShift4 bool, hawtioVersion string, rbacConfigMapName string, buildVariables util.BuildVariables) ([]corev1.VolumeMount, error) {
 	var volumeMounts []corev1.VolumeMount
 	var volumeMountPath string
 
-	volumeMountSubPath := hawtioConfigKey
-	volumeMountName := "hawtio-online"
 	if buildVariables.ServerRootDirectory != "" {
 		volumeMountPath = path.Join(buildVariables.ServerRootDirectory, "online", hawtioConfigKey)
 	} else {
 		volumeMountPath = path.Join(serverRootDirectory, "online", hawtioConfigKey)
 	}
-	volumeMount := newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
+	volumeMount := newVolumeMount(onlineConfigMapVolumeName, volumeMountPath, hawtioConfigKey)
 	volumeMounts = append(volumeMounts, volumeMount)
 
-	volumeMountSubPath = hawtioConfigKey
-	volumeMountName = "hawtio-integration"
 	if buildVariables.ServerRootDirectory != "" {
 		volumeMountPath = path.Join(buildVariables.ServerRootDirectory, "integration", hawtioConfigKey)
 	} else {
 		volumeMountPath = path.Join(serverRootDirectory, "integration", hawtioConfigKey)
 	}
-	volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
+	volumeMount = newVolumeMount(integrationConfigMapVolumeName, volumeMountPath, hawtioConfigKey)
 	volumeMounts = append(volumeMounts, volumeMount)
 
-	volumeMountSubPath = ""
-	volumeMountName = serviceSigningSecretVolumeName
-	volumeMountPath, err := getServingCertificateMountPathFor(hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
+	volumeMountPath, err := getServingCertificateMountPath(hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
 	if err != nil {
 		return nil, err
 	}
-	volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
+	volumeMount = newVolumeMount(serviceSigningSecretVolumeName, volumeMountPath, "")
 	volumeMounts = append(volumeMounts, volumeMount)
 
 	if isOpenShift4 {
-		volumeMountName = clientCertificateSecretVolumeName
-		volumeMountPath = clientCertificateSecretVolumeMountPath
-		volumeMount = newVolumeMount(volumeMountName, volumeMountPath, volumeMountSubPath)
+		volumeMount = newVolumeMount(clientCertificateSecretVolumeName, clientCertificateSecretVolumeMountPath, "")
+		volumeMounts = append(volumeMounts, volumeMount)
+	}
+
+	if rbacConfigMapName != "" {
+		volumeMount = newVolumeMount(rbacConfigMapVolumeName, rbacConfigMapVolumeMountPath, "")
 		volumeMounts = append(volumeMounts, volumeMount)
 	}
 
 	return volumeMounts, nil
 }
 
-func getServingCertificateMountPathFor(version string, legacyServingCertificateMountVersion string) (string, error) {
+func getServingCertificateMountPath(version string, legacyServingCertificateMountVersion string) (string, error) {
 	if len(version) == 0 {
 		version = "latest"
 	}

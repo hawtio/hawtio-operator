@@ -11,8 +11,7 @@ import (
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
-// Create newRouteForCR method to create exposed route
-func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
+func NewRoute(hawtio *hawtiov1alpha1.Hawtio) *routev1.Route {
 	route := &routev1.Route{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -20,13 +19,13 @@ func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{"app": "hawtio"},
-			Name:   cr.Name,
+			Name:   hawtio.Name,
 		},
 		Spec: routev1.RouteSpec{
-			Host: cr.Spec.RouteHostName,
+			Host: hawtio.Spec.RouteHostName,
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
-				Name: cr.Name,
+				Name: hawtio.Name,
 			},
 		},
 	}
@@ -39,7 +38,6 @@ func NewRouteDefinitionForCR(cr *hawtiov1alpha1.Hawtio) *routev1.Route {
 	return route
 }
 
-//GetRouteURL
 func GetRouteURL(route *routev1.Route) string {
 	var scheme string
 	if route.Spec.TLS != nil && len(route.Spec.TLS.Termination) > 0 {

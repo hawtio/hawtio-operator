@@ -30,7 +30,17 @@ type HawtioSpec struct {
 	Replicas      *int32                      `json:"replicas,omitempty"`
 	RouteHostName string                      `json:"routeHostName,omitempty"`
 	Version       string                      `json:"version,omitempty"`
+	RBAC          HawtioRBAC                  `json:"rbac,omitempty"`
 	Resources     corev1.ResourceRequirements `json:"resources,omitempty"`
+}
+
+// The RBAC configuration
+type HawtioRBAC struct {
+	// Whether RBAC is enabled.
+	// Default is true.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The name of the ConfigMap that contains the ACL definition.
+	ConfigMap string `json:"configMap,omitempty"`
 }
 
 // HawtioStatus defines the observed state of Hawtio

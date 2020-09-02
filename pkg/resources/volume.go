@@ -14,7 +14,7 @@ func newVolumeMount(volumeMountName string, volumeMountPath string, volumeMountS
 	return volumeMount
 }
 
-func newVolume(secretName string, volumeName string) corev1.Volume {
+func newSecretVolume(secretName string, volumeName string) corev1.Volume {
 	volume := corev1.Volume{
 		Name: volumeName,
 		VolumeSource: corev1.VolumeSource{
@@ -26,14 +26,14 @@ func newVolume(secretName string, volumeName string) corev1.Volume {
 	return volume
 }
 
-func newConfigMapVolume(customResourceName string, volumeName string) corev1.Volume {
+func newConfigMapVolume(configMapName string, volumeName string) corev1.Volume {
 	executeMode := int32(420)
 	volume := corev1.Volume{
 		Name: volumeName,
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: customResourceName,
+					Name: configMapName,
 				},
 				DefaultMode: &executeMode,
 			},
