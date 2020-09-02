@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"path"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,11 +13,10 @@ const (
 	hawtioTypeEnvVar        = "HAWTIO_ONLINE_MODE"
 	hawtioNamespaceEnvVar   = "HAWTIO_ONLINE_NAMESPACE"
 	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
-
-	OAuthClientName = "hawtio"
+	hawtioRbacEnvVar        = "HAWTIO_ONLINE_RBAC_ACL"
 )
 
-func addEnvVarForContainer(deploymentType string, name string) []corev1.EnvVar {
+func envVarsForHawtio(deploymentType string, name string) []corev1.EnvVar {
 	oauthClientId := name
 	if strings.EqualFold(deploymentType, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		// Pin to a known name for cluster-wide OAuthClient
@@ -49,21 +49,32 @@ func addEnvVarForContainer(deploymentType string, name string) []corev1.EnvVar {
 	return envVars
 }
 
-func addEnvVarForOpenshift(openshiftVersion string, openshiftURL string) []corev1.EnvVar {
+func envVarsForOpenshift4(openShiftVersion string, openShiftConsoleURL string) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{
 		{
-			// Activate console backend gateway
 			Name:  "HAWTIO_ONLINE_GATEWAY",
 			Value: "true",
 		},
 		{
 			Name:  "OPENSHIFT_CLUSTER_VERSION",
-			Value: openshiftVersion,
+			Value: openShiftVersion,
 		},
 		{
 			Name:  "OPENSHIFT_WEB_CONSOLE_URL",
-			Value: openshiftURL,
+			Value: openShiftConsoleURL,
 		},
 	}
 	return envVars
+}
+
+func envVarForRBAC(rbacConfigMapName string) corev1.EnvVar {
+	value := ""
+	if rbacConfigMapName != "" {
+		value = path.Join(rbacConfigMapVolumeMountPath, RBACConfigMapKey)
+	}
+
+	return corev1.EnvVar{
+		Name:  hawtioRbacEnvVar,
+		Value: value,
+	}
 }

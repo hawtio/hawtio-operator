@@ -305,10 +305,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			if errors.IsNotFound(err) {
 				reqLogger.Info("Client certificate secret must be created", "secret", request.Name+"-tls-proxying")
 				// Let's poll for the client certificate secret to be created
-				return reconcile.Result{
-					Requeue:      true,
-					RequeueAfter: 5 * time.Second,
-				}, nil
+				return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 			} else {
 				return reconcile.Result{}, err
 			}
@@ -336,6 +333,27 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get config map")
 		return reconcile.Result{}, err
+	}
+
+	if cm := hawtio.Spec.RBAC.ConfigMap; hawtio.IsRbacEnabled() && cm != "" {
+		// Check that the ConfigMap exists
+		var rbacConfigMap corev1.ConfigMap
+		err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: cm}, &rbacConfigMap)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				reqLogger.Info("RBAC ConfigMap must be created", "ConfigMap", cm)
+				// Let's poll for the RBAC ConfigMap to be created
+				return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+			} else {
+				reqLogger.Error(err, "Failed to get RBAC ConfigMap")
+				return reconcile.Result{}, err
+			}
+		}
+		if _, ok := rbacConfigMap.Data[resources.RBACConfigMapKey]; !ok {
+			reqLogger.Info("RBAC ConfigMap does not contain expected key: "+resources.RBACConfigMapKey, "ConfigMap", cm)
+			// Let's poll for the RBAC ConfigMap to contain the expected key
+			return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+		}
 	}
 
 	_, err = r.reconcileResources(hawtio, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, hawtio.Spec.Version, configMap)
@@ -554,17 +572,17 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap) (bool, error) {
-	reqLogger := log.WithName(cr.Name)
+func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap) (bool, error) {
+	reqLogger := log.WithName(hawtio.Name)
 
-	isNamespaceDeployment := strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
+	isNamespaceDeployment := strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
 
-	deployment, err := resources.NewDeploymentForCR(cr, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), r.BuildVariables)
+	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), r.BuildVariables)
 	if err != nil {
 		return false, err
 	}
-	service := resources.NewServiceDefinitionForCR(cr)
-	route := resources.NewRouteDefinitionForCR(cr)
+	service := resources.NewService(hawtio.Name)
+	route := resources.NewRoute(hawtio)
 
 	var requestedResources []resource.KubernetesResource
 	requestedResources = append(requestedResources, deployment)
@@ -581,10 +599,10 @@ func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request 
 	}
 
 	for index := range requestedResources {
-		requestedResources[index].SetNamespace(cr.Namespace)
+		requestedResources[index].SetNamespace(hawtio.Namespace)
 	}
 
-	deployed, err := getDeployedResources(cr, client)
+	deployed, err := getDeployedResources(hawtio, client)
 	if err != nil {
 		return false, err
 	}
@@ -592,7 +610,7 @@ func (r *ReconcileHawtio) reconcileResources(cr *hawtiov1alpha1.Hawtio, request 
 	requested := compare.NewMapBuilder().Add(requestedResources...).ResourceMap()
 
 	var hasUpdates bool
-	writer := write.New(client).WithOwnerController(cr, scheme)
+	writer := write.New(client).WithOwnerController(hawtio, scheme)
 	comparator := getComparator()
 	deltas := comparator.Compare(deployed, requested)
 	for resourceType, delta := range deltas {
@@ -643,8 +661,8 @@ func getComparator() compare.MapComparator {
 	return compare.MapComparator{Comparator: resourceComparator}
 }
 
-func getDeployedResources(cr *hawtiov1alpha1.Hawtio, client client.Client) (map[reflect.Type][]resource.KubernetesResource, error) {
-	reader := read.New(client).WithNamespace(cr.Namespace).WithOwnerObject(cr)
+func getDeployedResources(hawtio *hawtiov1alpha1.Hawtio, client client.Client) (map[reflect.Type][]resource.KubernetesResource, error) {
+	reader := read.New(client).WithNamespace(hawtio.Namespace).WithOwnerObject(hawtio)
 	resourceMap, err := reader.ListAll(
 		&corev1.ServiceList{},
 		&appsv1.DeploymentList{},
@@ -659,16 +677,8 @@ func getDeployedResources(cr *hawtiov1alpha1.Hawtio, client client.Client) (map[
 	return resourceMap, nil
 }
 
-func (r *ReconcileHawtio) update(cr *hawtiov1alpha1.Hawtio) (reconcile.Result, error) {
-	err := r.client.Update(context.TODO(), cr)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	return reconcile.Result{Requeue: true}, nil
-}
-
-func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
-	ok, err := kubernetes.HasFinalizer(cr, "foregroundDeletion")
+func (r *ReconcileHawtio) deletion(hawtio *hawtiov1alpha1.Hawtio) error {
+	ok, err := kubernetes.HasFinalizer(hawtio, "foregroundDeletion")
 	if err != nil {
 		return err
 	}
@@ -676,14 +686,14 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 		return nil
 	}
 
-	if strings.EqualFold(cr.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+	if strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: resources.OAuthClientName}, oc)
 		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get OAuth client: %v", err)
 		}
-		updated := resources.RemoveRedirectURIFromOauthClient(oc, cr.Status.URL)
+		updated := resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL)
 		if updated {
 			err := r.client.Update(context.TODO(), oc)
 			if err != nil {
@@ -695,7 +705,7 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 	// Remove OpenShift console link
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.ObjectMeta.Name + "-" + cr.ObjectMeta.Namespace,
+			Name: hawtio.ObjectMeta.Name + "-" + hawtio.ObjectMeta.Namespace,
 		},
 	}
 	err = r.client.Delete(context.TODO(), consoleLink)
@@ -703,12 +713,12 @@ func (r *ReconcileHawtio) deletion(cr *hawtiov1alpha1.Hawtio) error {
 		return fmt.Errorf("failed to delete console link: %v", err)
 	}
 
-	_, err = kubernetes.RemoveFinalizer(cr, hawtioFinalizer)
+	_, err = kubernetes.RemoveFinalizer(hawtio, hawtioFinalizer)
 	if err != nil {
 		return err
 	}
 
-	err = r.client.Update(context.TODO(), cr)
+	err = r.client.Update(context.TODO(), hawtio)
 	if err != nil {
 		return fmt.Errorf("failed to remove finalizer: %v", err)
 	}
