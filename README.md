@@ -1,8 +1,10 @@
 # Hawtio Operator
 
-A Kubernetes operator based on the Operator SDK that installs and maintains [Hawtio Online](https://github.com/hawtio/hawtio-online) on a cluster.
+A [Kubernetes](https://kubernetes.io) operator, based on the [Operator SDK](https://sdk.operatorframework.io), that operates [Hawtio Online](https://github.com/hawtio/hawtio-online).
 
-## Custom Resource
+## Resources
+
+The `Hawtio` CRD defines the resource the operator uses to configure a Hawtio Online operand, e.g.:
 
 ```yaml
 apiVersion: hawt.io/v1alpha1
@@ -45,19 +47,20 @@ spec:
 The operator covers the following cases:
 
 * Creation
-  * Create image stream, deployment config, config map, service and route resources
+  * Create Deployment, ConfigMap, Service and Route resources
   * Create a service account as OAuth client in `namespace` deployment
   * Create an OAuth client in `cluster` deployment
 * Update
-  * Reconcile the image stream tag and deployment trigger from the `version` field
-  * Reconcile the route host from the `routeHostName` field
-  * Support emptying the `routeHostName` field (recreate the route to re-generate the host)
-  * Reconcile the `replicas` count into the deployment config
+  * Reconcile the Deployment container image from the `version` field
+  * Reconcile the Route host from the `routeHostName` field
+  * Support emptying the `routeHostName` field (recreate the Route to re-generate the host)
+  * Reconcile the `replicas` field into the Deployment
+  * Reconcile the `resources` field into the Deployment
   * Support changing deployment type from / to `namespace` or `cluster`
-  * Remove previous route host from OAuth client in `cluster` deployment
-  * Trigger a rollout deployment on config map change
+  * Remove previous Route host from the OAuth client in `cluster` deployment
+  * Trigger a rollout deployment on ConfigMap changes
 * Deletion
-  * Remove image stream, deployment config, config map, service and route resources
+  * Remove the Deployment, ConfigMap, Service and Route resources
   * Remove the service account as OAuth client in `namespace` deployment
   * Remove the route URL from the OAuth client authorized redirect URIs in `cluster` deployment
 
@@ -86,7 +89,7 @@ deployment.apps/hawtio-operator created
 
 ## Test
 
-To create and operate a Hawtio console resource, you can run the following commands:
+To create and operate a Hawtio resource, you can run the following commands:
 
 ```console
 # Create Hawtio
