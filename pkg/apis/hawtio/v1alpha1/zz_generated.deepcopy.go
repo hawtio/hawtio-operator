@@ -154,6 +154,7 @@ func (in *HawtioSpec) DeepCopyInto(out *HawtioSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	in.Resources.DeepCopyInto(&out.Resources)
 	return
 }
 

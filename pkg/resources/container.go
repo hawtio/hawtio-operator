@@ -4,17 +4,18 @@ import (
 	"os"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
 const containerPortName = "https"
 
 //func NewContainer
-func NewContainer(name string, version string, envVarArray []corev1.EnvVar, imageRepository string) corev1.Container {
+func NewContainer(hawtio *hawtiov1alpha1.Hawtio, envVarArray []corev1.EnvVar, imageRepository string) corev1.Container {
 	container := corev1.Container{
-		Name:  name + "-container",
-		Image: getImageForCR(version, imageRepository),
+		Name:  hawtio.Name + "-container",
+		Image: getImageForCR(hawtio.Spec.Version, imageRepository),
 		Env:   envVarArray,
 		ReadinessProbe: &corev1.Probe{
 			InitialDelaySeconds: 5,
@@ -46,16 +47,7 @@ func NewContainer(name string, version string, envVarArray []corev1.EnvVar, imag
 				Protocol:      "TCP",
 			},
 		},
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("1"),
-				corev1.ResourceMemory: resource.MustParse("32Mi"),
-			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("200m"),
-				corev1.ResourceMemory: resource.MustParse("32Mi"),
-			},
-		},
+		Resources: hawtio.Spec.Resources,
 	}
 
 	return container

@@ -20,6 +20,14 @@ spec:
   # the cluster.
   # Note that the operator will recreate the route if the field is emptied,
   # so that the host is re-generated.
-  # routeHostName: hawtio-online.192.168.64.38.nip.io
+  # routeHostName: hawtio-online.hawt.io
   # The version (default 'latest')
   version: latest
+  # The compute resources required by the deployment
+  resources:
+    limits:
+      cpu: "1"
+      memory: 100Mi
+    requests:
+      cpu: 200m
+      memory: 32Mi
