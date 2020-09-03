@@ -10,10 +10,13 @@ import (
 )
 
 const (
-	hawtioTypeEnvVar        = "HAWTIO_ONLINE_MODE"
-	hawtioNamespaceEnvVar   = "HAWTIO_ONLINE_NAMESPACE"
-	hawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
-	hawtioRbacEnvVar        = "HAWTIO_ONLINE_RBAC_ACL"
+	HawtioTypeEnvVar              = "HAWTIO_ONLINE_MODE"
+	HawtioNamespaceEnvVar         = "HAWTIO_ONLINE_NAMESPACE"
+	HawtioOAuthClientEnvVar       = "HAWTIO_OAUTH_CLIENT_ID"
+	HawtioRbacEnvVar              = "HAWTIO_ONLINE_RBAC_ACL"
+	HawtioGatewayEnvVar           = "HAWTIO_ONLINE_GATEWAY"
+	OpenShiftClusterVersionEnvVar = "OPENSHIFT_CLUSTER_VERSION"
+	OpenShiftWebConsoleUrlEnvVar  = "OPENSHIFT_WEB_CONSOLE_URL"
 )
 
 func envVarsForHawtio(deploymentType string, name string) []corev1.EnvVar {
@@ -25,18 +28,18 @@ func envVarsForHawtio(deploymentType string, name string) []corev1.EnvVar {
 
 	envVars := []corev1.EnvVar{
 		{
-			Name:  hawtioTypeEnvVar,
+			Name:  HawtioTypeEnvVar,
 			Value: strings.ToLower(deploymentType),
 		},
 		{
-			Name:  hawtioOAuthClientEnvVar,
+			Name:  HawtioOAuthClientEnvVar,
 			Value: oauthClientId,
 		},
 	}
 
 	if strings.EqualFold(deploymentType, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
 		envVars = append(envVars, corev1.EnvVar{
-			Name: hawtioNamespaceEnvVar,
+			Name: HawtioNamespaceEnvVar,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					APIVersion: "v1",
@@ -52,15 +55,15 @@ func envVarsForHawtio(deploymentType string, name string) []corev1.EnvVar {
 func envVarsForOpenshift4(openShiftVersion string, openShiftConsoleURL string) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{
 		{
-			Name:  "HAWTIO_ONLINE_GATEWAY",
+			Name:  HawtioGatewayEnvVar,
 			Value: "true",
 		},
 		{
-			Name:  "OPENSHIFT_CLUSTER_VERSION",
+			Name:  OpenShiftClusterVersionEnvVar,
 			Value: openShiftVersion,
 		},
 		{
-			Name:  "OPENSHIFT_WEB_CONSOLE_URL",
+			Name:  OpenShiftWebConsoleUrlEnvVar,
 			Value: openShiftConsoleURL,
 		},
 	}
@@ -74,7 +77,7 @@ func envVarForRBAC(rbacConfigMapName string) corev1.EnvVar {
 	}
 
 	return corev1.EnvVar{
-		Name:  hawtioRbacEnvVar,
+		Name:  HawtioRbacEnvVar,
 		Value: value,
 	}
 }
