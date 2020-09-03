@@ -66,6 +66,8 @@ func TestCompleteCRD(t *testing.T) {
 			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
 		} else if strings.HasPrefix(missing.Path, "/spec/resources") {
 			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
+		} else if strings.HasPrefix(missing.Path, "/spec/rbac") {
+			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
 		} else {
 			assert.Fail(t, "Discrepancy between CRD and Struct", "Missing or incorrect schema validation at %v, expected type %v", missing.Path, missing.Type)
 		}
