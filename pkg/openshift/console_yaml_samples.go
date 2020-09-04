@@ -25,7 +25,7 @@ func ConsoleYAMLSampleExists() error {
 	return kubernetes.CustomResourceDefinitionExists(gvk)
 }
 
-func CreateConsoleYAMLSamples(c client.Client, productName string) {
+func CreateConsoleYAMLSamples(ctx context.Context, c client.Client, productName string) {
 	log.Info("Loading CR YAML samples.")
 	box := packr.New("cryamlsamples", "../../deploy/crs")
 	if box.List() == nil {
@@ -52,7 +52,7 @@ func CreateConsoleYAMLSamples(c client.Client, productName string) {
 			log.Info("yaml", " name: ", filename, " not created:  ", err.Error())
 			continue
 		}
-		err = c.Create(context.TODO(), yamlSample)
+		err = c.Create(ctx, yamlSample)
 		if err != nil {
 			if !apierrors.IsAlreadyExists(err) {
 				log.Info("yaml", " name: ", filename, " not created:+", err.Error())
