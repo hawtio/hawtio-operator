@@ -99,7 +99,7 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 	r.coreClient = coreClient
 
 	if err := openshift.ConsoleYAMLSampleExists(); err == nil {
-		openshift.CreateConsoleYAMLSamples(mgr.GetClient(), r.ProductName)
+		openshift.CreateConsoleYAMLSamples(context.TODO(), mgr.GetClient(), r.ProductName)
 	}
 
 	return add(mgr, r)
@@ -183,9 +183,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling Hawtio")
 
+	ctx := context.TODO()
+
 	// Fetch the Hawtio instance
 	hawtio := &hawtiov1alpha1.Hawtio{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, hawtio)
+	err := r.client.Get(ctx, request.NamespacedName, hawtio)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -200,7 +202,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Delete phase
 
 	if hawtio.GetDeletionTimestamp() != nil {
-		err = r.deletion(hawtio)
+		err = r.deletion(ctx, hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("deletion failed: %v", err)
 		}
@@ -217,7 +219,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to set finalizer: %v", err)
 		}
-		err = r.client.Update(context.TODO(), hawtio)
+		err = r.client.Update(ctx, hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update finalizer: %v", err)
 		}
@@ -227,7 +229,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if len(hawtio.Spec.Type) == 0 {
 		hawtio.Spec.Type = hawtiov1alpha1.ClusterHawtioDeploymentType
-		err = r.client.Update(context.TODO(), hawtio)
+		err = r.client.Update(ctx, hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update type: %v", err)
 		}
@@ -242,7 +244,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		err := fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
 		if hawtio.Status.Phase != hawtiov1alpha1.HawtioPhaseFailed {
 			hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseFailed
-			err = r.client.Status().Update(context.TODO(), hawtio)
+			err = r.client.Status().Update(ctx, hawtio)
 			if err != nil {
 				return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 			}
@@ -252,7 +254,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov1alpha1.HawtioPhaseFailed {
 		hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseInitialized
-		err = r.client.Status().Update(context.TODO(), hawtio)
+		err = r.client.Status().Update(ctx, hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 		}
@@ -287,7 +289,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	var openShiftConsoleUrl string
 	if isOpenShift4 {
 		// Retrieve OpenShift Web console public URL
-		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get("console-public", metav1.GetOptions{})
+		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
 		if err != nil {
 			if !errors.IsNotFound(err) && !errors.IsForbidden(err) {
 				reqLogger.Error(err, "Error getting OpenShift managed configuration")
@@ -300,7 +302,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	if isOpenShift4 {
 		// Check whether client certificate secret exists
-		_, err := r.coreClient.Secrets(request.Namespace).Get(request.Name+"-tls-proxying", metav1.GetOptions{})
+		_, err := r.coreClient.Secrets(request.Namespace).Get(ctx, request.Name+"-tls-proxying", metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				reqLogger.Info("Client certificate secret must be created", "secret", request.Name+"-tls-proxying")
@@ -313,7 +315,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	configMap := &corev1.ConfigMap{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, configMap)
+	err = r.client.Get(ctx, request.NamespacedName, configMap)
 	if err != nil && errors.IsNotFound(err) {
 		configMap, err = resources.NewConfigMapForCR(hawtio)
 		if err != nil {
@@ -325,7 +327,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			reqLogger.Error(err, "Failed to set config map owner")
 			return reconcile.Result{}, err
 		}
-		err = r.client.Create(context.TODO(), configMap)
+		err = r.client.Create(ctx, configMap)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create config map")
 			return reconcile.Result{}, err
@@ -338,7 +340,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if cm := hawtio.Spec.RBAC.ConfigMap; hawtio.IsRbacEnabled() && cm != "" {
 		// Check that the ConfigMap exists
 		var rbacConfigMap corev1.ConfigMap
-		err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: cm}, &rbacConfigMap)
+		err := r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: cm}, &rbacConfigMap)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				reqLogger.Info("RBAC ConfigMap must be created", "ConfigMap", cm)
@@ -363,7 +365,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	route := &routev1.Route{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, route)
+	err = r.client.Get(ctx, request.NamespacedName, route)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
@@ -374,7 +376,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if isClusterDeployment {
 		// Add OAuth client
 		oauthClient := resources.NewOAuthClient(resources.OAuthClientName)
-		err = r.client.Create(context.TODO(), oauthClient)
+		err = r.client.Create(ctx, oauthClient)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
 		}
@@ -391,14 +393,14 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	consoleLinkName := request.Name + "-" + request.Namespace
 	if isOpenShift4 && hawtio.Status.Phase == hawtiov1alpha1.HawtioPhaseInitialized {
 		consoleLink := &consolev1.ConsoleLink{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkName}, consoleLink)
+		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
 			if !errors.IsNotFound(err) {
 				reqLogger.Error(err, "Failed to get console link")
 				return reconcile.Result{}, err
 			}
 		} else {
-			err = r.client.Delete(context.TODO(), consoleLink)
+			err = r.client.Delete(ctx, consoleLink)
 			if err != nil {
 				reqLogger.Error(err, "Failed to delete console link")
 				return reconcile.Result{}, err
@@ -411,7 +413,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 		}
 		if consoleLink.Spec.Location != "" {
-			err = r.client.Create(context.TODO(), consoleLink)
+			err = r.client.Create(ctx, consoleLink)
 			if err != nil {
 				reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
 				return reconcile.Result{}, err
@@ -422,7 +424,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Update status
 	if hawtio.Status.Phase != hawtiov1alpha1.HawtioPhaseDeployed {
 		hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseDeployed
-		err = r.client.Status().Update(context.TODO(), hawtio)
+		err = r.client.Status().Update(ctx, hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 		}
@@ -434,7 +436,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	hawtioCopy := hawtio.DeepCopy()
 
 	deployment := &appsv1.Deployment{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, deployment)
+	err = r.client.Get(ctx, request.NamespacedName, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
@@ -464,7 +466,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		// Emptying route host is ignored so it's not possible to re-generate the host
 		// See https://github.com/openshift/origin/pull/9425
 		// In that case, let's delete the route
-		err := r.client.Delete(context.TODO(), route)
+		err := r.client.Delete(ctx, route)
 		if err != nil {
 			reqLogger.Error(err, "Failed to delete route to auto-generate hostname")
 			return reconcile.Result{}, err
@@ -476,7 +478,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Reconcile console link in OpenShift console
 	if isOpenShift4 {
 		consoleLink := &consolev1.ConsoleLink{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: consoleLinkName}, consoleLink)
+		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				// If not found, create a console link
@@ -486,7 +488,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 					consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 				}
 				if consoleLink.Spec.Location != "" {
-					err = r.client.Create(context.TODO(), consoleLink)
+					err = r.client.Create(ctx, consoleLink)
 					if err != nil {
 						reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
 						return reconcile.Result{}, err
@@ -503,7 +505,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			} else if isOpenShift43Plus {
 				openshift.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
 			}
-			err = r.client.Patch(context.TODO(), consoleLinkCopy, client.MergeFrom(consoleLink))
+			err = r.client.Patch(ctx, consoleLinkCopy, client.MergeFrom(consoleLink))
 			if err != nil {
 				reqLogger.Error(err, "Failed to update console link", "name", consoleLink.Name)
 				return reconcile.Result{}, err
@@ -514,7 +516,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Reconcile OAuth client
 	// Do not use the default client whose cached informers require
 	// permission to list cluster wide oauth clients
-	// err = r.client.Get(context.TODO(), types.NamespacedName{Name: resources.OAuthClientName}, oc)
+	// err = r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
 	oc, err := r.oauthClient.OauthV1().OAuthClients().Get(resources.OAuthClientName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -536,7 +538,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if isClusterDeployment {
 		// First remove old URL from OAuthClient
 		if resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL) {
-			err := r.client.Update(context.TODO(), oc)
+			err := r.client.Update(ctx, oc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
 				return reconcile.Result{}, err
@@ -545,7 +547,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		// Add route URL to OAuthClient authorized redirect URIs
 		if ok, _ := resources.OauthClientContainsRedirectURI(oc, url); !ok {
 			oc.RedirectURIs = append(oc.RedirectURIs, url)
-			err := r.client.Update(context.TODO(), oc)
+			err := r.client.Update(ctx, oc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
 				return reconcile.Result{}, err
@@ -556,7 +558,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		// Clean-up OAuth client if any. This happens when the deployment type is changed
 		// from "cluster" to "namespace".
 		if resources.RemoveRedirectURIFromOauthClient(oc, url) {
-			err := r.client.Update(context.TODO(), oc)
+			err := r.client.Update(ctx, oc)
 			if err != nil {
 				reqLogger.Error(err, "Failed to reconcile OAuth client")
 				return reconcile.Result{}, err
@@ -564,7 +566,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	err = r.client.Status().Patch(context.TODO(), hawtioCopy, client.MergeFrom(hawtio))
+	err = r.client.Status().Patch(ctx, hawtioCopy, client.MergeFrom(hawtio))
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to patch status: %v", err)
 	}
@@ -677,7 +679,7 @@ func getDeployedResources(hawtio *hawtiov1alpha1.Hawtio, client client.Client) (
 	return resourceMap, nil
 }
 
-func (r *ReconcileHawtio) deletion(hawtio *hawtiov1alpha1.Hawtio) error {
+func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1alpha1.Hawtio) error {
 	ok, err := kubernetes.HasFinalizer(hawtio, "foregroundDeletion")
 	if err != nil {
 		return err
@@ -689,13 +691,13 @@ func (r *ReconcileHawtio) deletion(hawtio *hawtiov1alpha1.Hawtio) error {
 	if strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: resources.OAuthClientName}, oc)
+		err = r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
 		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get OAuth client: %v", err)
 		}
 		updated := resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL)
 		if updated {
-			err := r.client.Update(context.TODO(), oc)
+			err := r.client.Update(ctx, oc)
 			if err != nil {
 				return fmt.Errorf("failed to remove redirect URI from OAuth client: %v", err)
 			}
@@ -708,7 +710,7 @@ func (r *ReconcileHawtio) deletion(hawtio *hawtiov1alpha1.Hawtio) error {
 			Name: hawtio.ObjectMeta.Name + "-" + hawtio.ObjectMeta.Namespace,
 		},
 	}
-	err = r.client.Delete(context.TODO(), consoleLink)
+	err = r.client.Delete(ctx, consoleLink)
 	if err != nil && !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 		return fmt.Errorf("failed to delete console link: %v", err)
 	}
@@ -718,7 +720,7 @@ func (r *ReconcileHawtio) deletion(hawtio *hawtiov1alpha1.Hawtio) error {
 		return err
 	}
 
-	err = r.client.Update(context.TODO(), hawtio)
+	err = r.client.Update(ctx, hawtio)
 	if err != nil {
 		return fmt.Errorf("failed to remove finalizer: %v", err)
 	}
