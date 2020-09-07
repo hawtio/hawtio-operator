@@ -235,8 +235,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	if !isNamespaceDeployment && !isClusterDeployment {
 		err := fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
 		if hawtio.Status.Phase != hawtiov1alpha1.HawtioPhaseFailed {
+			previous := hawtio.DeepCopy()
 			hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseFailed
-			err = r.client.Status().Update(ctx, hawtio)
+			err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
 			if err != nil {
 				return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 			}
@@ -245,8 +246,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov1alpha1.HawtioPhaseFailed {
+		previous := hawtio.DeepCopy()
 		hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseInitialized
-		err = r.client.Status().Update(ctx, hawtio)
+		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 		}
@@ -415,8 +417,9 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Update status
 	if hawtio.Status.Phase != hawtiov1alpha1.HawtioPhaseDeployed {
+		previous := hawtio.DeepCopy()
 		hawtio.Status.Phase = hawtiov1alpha1.HawtioPhaseDeployed
-		err = r.client.Status().Update(ctx, hawtio)
+		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
 		}
