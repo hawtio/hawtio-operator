@@ -41,7 +41,6 @@ import (
 	oauthclient "github.com/openshift/client-go/oauth/clientset/versioned"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
-	"github.com/hawtio/hawtio-operator/pkg/kubernetes"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
@@ -210,15 +209,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
-	ok, err := kubernetes.HasFinalizer(hawtio, hawtioFinalizer)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to read finalizer: %v", err)
-	}
-	if !ok {
-		err = kubernetes.AddFinalizer(hawtio, hawtioFinalizer)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to set finalizer: %v", err)
-		}
+	if !controllerutil.ContainsFinalizer(hawtio, hawtioFinalizer) {
+		controllerutil.AddFinalizer(hawtio, hawtioFinalizer)
 		err = r.client.Update(ctx, hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update finalizer: %v", err)
@@ -680,18 +672,14 @@ func getDeployedResources(hawtio *hawtiov1alpha1.Hawtio, client client.Client) (
 }
 
 func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1alpha1.Hawtio) error {
-	ok, err := kubernetes.HasFinalizer(hawtio, "foregroundDeletion")
-	if err != nil {
-		return err
-	}
-	if ok {
+	if controllerutil.ContainsFinalizer(hawtio, "foregroundDeletion") {
 		return nil
 	}
 
 	if strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
 		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
-		err = r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
+		err := r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
 		if err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get OAuth client: %v", err)
 		}
@@ -710,16 +698,12 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1alpha1.H
 			Name: hawtio.ObjectMeta.Name + "-" + hawtio.ObjectMeta.Namespace,
 		},
 	}
-	err = r.client.Delete(ctx, consoleLink)
+	err := r.client.Delete(ctx, consoleLink)
 	if err != nil && !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 		return fmt.Errorf("failed to delete console link: %v", err)
 	}
 
-	_, err = kubernetes.RemoveFinalizer(hawtio, hawtioFinalizer)
-	if err != nil {
-		return err
-	}
-
+	controllerutil.RemoveFinalizer(hawtio, hawtioFinalizer)
 	err = r.client.Update(ctx, hawtio)
 	if err != nil {
 		return fmt.Errorf("failed to remove finalizer: %v", err)
