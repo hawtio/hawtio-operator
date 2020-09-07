@@ -60,7 +60,9 @@ func main() {
 
 	// Become the leader before proceeding
 	err = leader.Become(context.TODO(), "hawtio-lock")
-	if err != nil {
+	if err == leader.ErrNoNamespace {
+		log.Info("Local run detected, leader election is disabled")
+	} else if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
@@ -71,8 +73,6 @@ func main() {
 		log.Error(err, "")
 		os.Exit(1)
 	}
-
-	log.Info("Registering Components.")
 
 	// Setup Scheme for all resources
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
