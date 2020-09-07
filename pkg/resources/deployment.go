@@ -145,7 +145,7 @@ func newEnvVars(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersi
 		envVars = append(envVars, envVarsForOpenShift4...)
 	}
 
-	if hawtio.IsRbacEnabled() {
+	if hawtio.IsRbacEnabled(isOpenShift4) {
 		envVars = append(envVars, envVarForRBAC(hawtio.Spec.RBAC.ConfigMap))
 	}
 
