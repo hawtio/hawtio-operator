@@ -263,7 +263,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 	// Check OpenShift version
 	var openShiftSemVer *semver.Version
-	clusterVersion, err := r.configClient.ConfigV1().ClusterVersions().Get("version", metav1.GetOptions{})
+	clusterVersion, err := r.configClient.ConfigV1().ClusterVersions().Get(ctx, "version", metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Let's default to OpenShift 3 as ClusterVersion API was introduced in OpenShift 4
@@ -517,7 +517,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	// Do not use the default client whose cached informers require
 	// permission to list cluster wide oauth clients
 	// err = r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
-	oc, err := r.oauthClient.OauthV1().OAuthClients().Get(resources.OAuthClientName, metav1.GetOptions{})
+	oc, err := r.oauthClient.OauthV1().OAuthClients().Get(ctx, resources.OAuthClientName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// OAuth client should not be found for namespace deployment type
