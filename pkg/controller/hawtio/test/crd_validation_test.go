@@ -4,7 +4,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/ghodss/yaml"
@@ -47,31 +46,10 @@ spec:
 }
 
 // Requires openAPIV3Schema in CRD for function to work properly
-// aka missingEntries should not contain "/spec" and "/spec/version"
 func TestCompleteCRD(t *testing.T) {
 	schema := getSchema(t)
 	missingEntries := schema.GetMissingEntries(&v1alpha1.Hawtio{})
-	for _, missing := range missingEntries {
-		if strings.HasPrefix(missing.Path, "/status") {
-			//Not using subresources, so status is not expected to appear in CRD
-		} else if strings.HasSuffix(missing.Path, "/version") {
-			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
-		} else if strings.HasSuffix(missing.Path, "/spec") {
-			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
-		} else if strings.HasSuffix(missing.Path, "/type") {
-			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
-		} else if strings.HasSuffix(missing.Path, "/replicas") {
-			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
-		} else if strings.HasSuffix(missing.Path, "/routeHostName") {
-			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
-		} else if strings.HasPrefix(missing.Path, "/spec/resources") {
-			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
-		} else if strings.HasPrefix(missing.Path, "/spec/rbac") {
-			//The ObjectReference is not expected to be used and is not fully defined TODO: verify
-		} else {
-			assert.Fail(t, "Discrepancy between CRD and Struct", "Missing or incorrect schema validation at %v, expected type %v", missing.Path, missing.Type)
-		}
-	}
+	assert.Emptyf(t, missingEntries, "Missing or incorrect schema validation: %v", missingEntries)
 }
 
 func getCRFile(t *testing.T, dir string) string {
