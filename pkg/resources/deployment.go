@@ -71,7 +71,7 @@ func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts cor
 			},
 			Template: pts,
 			Strategy: appsv1.DeploymentStrategy{
-				Type: "RollingUpdate",
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
 			},
 		},
 	}
