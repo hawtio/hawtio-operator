@@ -3,34 +3,147 @@ kind: CustomResourceDefinition
 metadata:
   name: hawtios.hawt.io
 spec:
+  additionalPrinterColumns:
+    - JSONPath: .metadata.creationTimestamp
+      description: Creation phase
+      name: Age
+      type: date
+    - JSONPath: .status.image
+      description: Console image
+      name: Image
+      type: string
+    - JSONPath: .status.phase
+      description: Console phase
+      name: Phase
+      type: string
+    - JSONPath: .status.URL
+      description: Console URL
+      name: URL
+      type: string
   group: hawt.io
   names:
+    categories:
+      - hawtio
     kind: Hawtio
     listKind: HawtioList
     plural: hawtios
     singular: hawtio
   scope: Namespaced
-  version: v1alpha1
   subresources:
-    status: {}
     scale:
+      labelSelectorPath: .status.selector
       specReplicasPath: .spec.replicas
       statusReplicasPath: .status.replicas
-      labelSelectorPath: .status.selector
-  additionalPrinterColumns:
-    - name: Age
-      description: Creation date
-      type: date
-      JSONPath: .metadata.creationTimestamp
-    - name: Image
-      description: Hawtio console image
-      type: string
-      JSONPath: .status.image
-    - name: Phase
-      description: Hawtio console phase
-      type: string
-      JSONPath: .status.phase
-    - name: URL
-      description: Hawtio console URL
-      type: string
-      JSONPath: .status.URL
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: Hawtio Console
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: Defines the desired state of Hawtio
+          properties:
+            rbac:
+              description: The RBAC configuration
+              properties:
+                configMap:
+                  description: The name of the ConfigMap that contains the ACL definition.
+                  type: string
+                enabled:
+                  description: Whether RBAC is enabled. Defaults to true.
+                  type: boolean
+              type: object
+            replicas:
+              description: Number of desired pods. This is a pointer to distinguish
+                between explicit zero and not specified. Defaults to 1.
+              format: int32
+              type: integer
+            resources:
+              description: The compute resources
+              properties:
+                limits:
+                  additionalProperties:
+                    anyOf:
+                      - type: integer
+                      - type: string
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  description: 'Limits describes the maximum amount of compute resources
+                    allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                  type: object
+                requests:
+                  additionalProperties:
+                    anyOf:
+                      - type: integer
+                      - type: string
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  description: 'Requests describes the minimum amount of compute resources
+                    required. If Requests is omitted for a container, it defaults
+                    to Limits if that is explicitly specified, otherwise to an implementation-defined
+                    value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                  type: object
+              type: object
+            routeHostName:
+              description: 'The edge host name of the route that exposes the Hawtio
+                service externally. If not specified, it is automatically generated
+                and is of the form: <name>[-<namespace>].<suffix> where <suffix> is
+                the default routing sub-domain as configured for the cluster. Note
+                that the operator will recreate the route if the field is emptied,
+                so that the host is re-generated.'
+              type: string
+            type:
+              description: 'The deployment type. Defaults to cluster. cluster: Hawtio
+                is capable of discovering and managing applications across all namespaces
+                the authenticated user has access to. namespace: Hawtio is capable
+                of discovering and managing applications within the deployment namespace.'
+              enum:
+                - cluster
+                - namespace
+              type: string
+            version:
+              description: The Hawtio console container image version. Defaults to
+                'latest'.
+              type: string
+          type: object
+        status:
+          description: Reports the observed state of Hawtio
+          properties:
+            URL:
+              description: The Hawtio console route URL
+              type: string
+            image:
+              description: The Hawtio console container image
+              type: string
+            phase:
+              description: The Hawtio deployment phase
+              enum:
+                - Initialized
+                - Deployed
+                - Failed
+              type: string
+            replicas:
+              description: The actual number of pods
+              format: int32
+              type: integer
+            selector:
+              description: The label selector for the Hawtio pods
+              type: string
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
