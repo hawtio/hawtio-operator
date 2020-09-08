@@ -4,6 +4,16 @@ NAMESPACE ?= hawtio
 PROJECT = operator
 TAG ?= latest
 
+# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+CRD_OPTIONS ?= "crd:trivialVersions=true"
+
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
+
 default: build-image
 
 .PHONY: build-image
@@ -16,6 +26,10 @@ build: go-generate
 .PHONY: compile
 compile: test
 	go build -o=build/_output/bin/hawtio-operator ./cmd/manager/main.go
+
+# Generate manifests, e.g. CRDs
+manifests: controller-gen
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=deploy/crds
 
 .PHONY: generate-csv
 generate-csv:
@@ -56,3 +70,20 @@ deploy:
 .PHONY: test
 test:
 	CGO_ENABLED=0 go test -count=1 ./...
+
+# find or download controller-gen
+# download controller-gen if necessary
+controller-gen:
+ifeq (, $(shell which controller-gen))
+	@{ \
+	set -e ;\
+	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CONTROLLER_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.3.0 ;\
+	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
+	}
+CONTROLLER_GEN=$(GOBIN)/controller-gen
+else
+CONTROLLER_GEN=$(shell which controller-gen)
+endif
