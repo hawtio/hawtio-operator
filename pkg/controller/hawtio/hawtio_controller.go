@@ -229,8 +229,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	// Invariant checks
-	isClusterDeployment := strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType)
-	isNamespaceDeployment := strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
+	isClusterDeployment := hawtio.Spec.Type == hawtiov1alpha1.ClusterHawtioDeploymentType
+	isNamespaceDeployment := hawtio.Spec.Type == hawtiov1alpha1.NamespaceHawtioDeploymentType
 
 	if !isNamespaceDeployment && !isClusterDeployment {
 		err := fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
@@ -572,7 +572,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap) (bool, error) {
 	reqLogger := log.WithName(hawtio.Name)
 
-	isNamespaceDeployment := strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.NamespaceHawtioDeploymentType)
+	isNamespaceDeployment := hawtio.Spec.Type == hawtiov1alpha1.NamespaceHawtioDeploymentType
 
 	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), r.BuildVariables)
 	if err != nil {
@@ -679,7 +679,7 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1alpha1.H
 		return nil
 	}
 
-	if strings.EqualFold(hawtio.Spec.Type, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+	if hawtio.Spec.Type == hawtiov1alpha1.ClusterHawtioDeploymentType {
 		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
 		err := r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)

@@ -9,17 +9,17 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // HawtioDeploymentType defines the possible deployment types
-type HawtioDeploymentType = string
+type HawtioDeploymentType string
 
 const (
 	// ClusterHawtioDeploymentType is the deployment type capable of discovering
 	// and managing applications across all namespaces the authenticated user
 	// has access to.
-	ClusterHawtioDeploymentType HawtioDeploymentType = "Cluster"
+	ClusterHawtioDeploymentType HawtioDeploymentType = "cluster"
 
 	// NamespaceHawtioDeploymentType is the deployment type capable of discovering
 	// and managing applications within the deployment namespace.
-	NamespaceHawtioDeploymentType HawtioDeploymentType = "Namespace"
+	NamespaceHawtioDeploymentType HawtioDeploymentType = "namespace"
 )
 
 // HawtioSpec defines the desired state of Hawtio

@@ -2,7 +2,6 @@ package resources
 
 import (
 	"path"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -19,9 +18,9 @@ const (
 	OpenShiftWebConsoleUrlEnvVar  = "OPENSHIFT_WEB_CONSOLE_URL"
 )
 
-func envVarsForHawtio(deploymentType string, name string) []corev1.EnvVar {
+func envVarsForHawtio(deploymentType hawtiov1alpha1.HawtioDeploymentType, name string) []corev1.EnvVar {
 	oauthClientId := name
-	if strings.EqualFold(deploymentType, hawtiov1alpha1.ClusterHawtioDeploymentType) {
+	if deploymentType == hawtiov1alpha1.ClusterHawtioDeploymentType {
 		// Pin to a known name for cluster-wide OAuthClient
 		oauthClientId = OAuthClientName
 	}
@@ -29,7 +28,7 @@ func envVarsForHawtio(deploymentType string, name string) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{
 		{
 			Name:  HawtioTypeEnvVar,
-			Value: strings.ToLower(deploymentType),
+			Value: string(deploymentType),
 		},
 		{
 			Name:  HawtioOAuthClientEnvVar,
@@ -37,7 +36,7 @@ func envVarsForHawtio(deploymentType string, name string) []corev1.EnvVar {
 		},
 	}
 
-	if strings.EqualFold(deploymentType, hawtiov1alpha1.NamespaceHawtioDeploymentType) {
+	if deploymentType == hawtiov1alpha1.NamespaceHawtioDeploymentType {
 		envVars = append(envVars, corev1.EnvVar{
 			Name: HawtioNamespaceEnvVar,
 			ValueFrom: &corev1.EnvVarSource{

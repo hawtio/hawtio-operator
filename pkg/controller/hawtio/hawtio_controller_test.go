@@ -2,7 +2,6 @@ package hawtio
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,7 +112,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			assert.ElementsMatch(t, container.Env, []corev1.EnvVar{
 				{
 					Name:  resources.HawtioTypeEnvVar,
-					Value: strings.ToLower(hawtiov1alpha1.NamespaceHawtioDeploymentType),
+					Value: string(hawtiov1alpha1.NamespaceHawtioDeploymentType),
 				},
 				{
 					Name: resources.HawtioNamespaceEnvVar,
