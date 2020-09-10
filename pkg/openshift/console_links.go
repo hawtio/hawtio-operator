@@ -30,13 +30,13 @@ func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1a
 // UpdateApplicationMenuLink updates the ApplicationMenu ConsoleLink properties
 func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.HawtioConfig) {
 	consoleLink.Spec.Location = consolev1.ApplicationMenu
-	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
+	consoleLink.Spec.Link.Text = config.Online.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
 	if consoleLink.Spec.ApplicationMenu == nil {
 		consoleLink.Spec.ApplicationMenu = &consolev1.ApplicationMenuSpec{}
 	}
-	consoleLink.Spec.ApplicationMenu.Section = config.Branding.ConsoleLink.Section
-	consoleLink.Spec.ApplicationMenu.ImageURL = "https://" + route.Spec.Host + config.Branding.ConsoleLink.ImageRelativePath
+	consoleLink.Spec.ApplicationMenu.Section = config.Online.ConsoleLink.Section
+	consoleLink.Spec.ApplicationMenu.ImageURL = "https://" + route.Spec.Host + config.Online.ConsoleLink.ImageRelativePath
 }
 
 // NewNamespaceDashboardLink creates a NamespaceDashboard ConsoleLink instance
@@ -62,7 +62,7 @@ func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Rou
 // UpdateNamespaceDashboardLink updates the NamespaceDashboard ConsoleLink properties
 func UpdateNamespaceDashboardLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1alpha1.HawtioConfig) {
 	consoleLink.Spec.Location = consolev1.NamespaceDashboard
-	consoleLink.Spec.Link.Text = config.Branding.ConsoleLink.Text
+	consoleLink.Spec.Link.Text = config.Online.ConsoleLink.Text
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
 	// ApplicationMenu can be set when the Hawtio type changes from 'cluster' to 'namespace'
 	consoleLink.Spec.ApplicationMenu = nil

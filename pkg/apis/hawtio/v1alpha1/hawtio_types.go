@@ -123,15 +123,10 @@ type HawtioConfig struct {
 }
 
 type HawtioBranding struct {
-	AppName     string `json:"appName"`
-	AppLogoURL  string `json:"appLogoUrl"`
-	ConsoleLink struct {
-		Text              string `json:"text"`
-		Section           string `json:"section"`
-		ImageRelativePath string `json:"imageRelativePath"`
-	} `json:"consoleLink"`
-	CSS     string `json:"css"`
-	Favicon string `json:"favicon"`
+	AppName    string `json:"appName"`
+	AppLogoURL string `json:"appLogoUrl"`
+	CSS        string `json:"css"`
+	Favicon    string `json:"favicon"`
 }
 
 type HawtioAbout struct {
@@ -149,6 +144,11 @@ type HawtioProductInfo struct {
 
 type HawtioOnline struct {
 	ProjectSelector string `json:"projectSelector,omitempty"`
+	ConsoleLink     struct {
+		Text              string `json:"text"`
+		Section           string `json:"section"`
+		ImageRelativePath string `json:"imageRelativePath"`
+	} `json:"consoleLink"`
 }
 
 func init() {
