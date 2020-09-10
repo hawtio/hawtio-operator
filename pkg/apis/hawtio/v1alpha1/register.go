@@ -1,5 +1,5 @@
 // Package v1alpha1 contains API Schema definitions for the hawtio v1alpha1 API group
-// +k8s:deepcopy-gen=package,register
+// +kubebuilder:object:generate=true
 // +groupName=hawt.io
 package v1alpha1
 

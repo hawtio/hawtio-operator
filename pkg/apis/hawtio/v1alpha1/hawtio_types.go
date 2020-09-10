@@ -24,8 +24,7 @@ const (
 	NamespaceHawtioDeploymentType HawtioDeploymentType = "namespace"
 )
 
-// +k8s:openapi-gen=true
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 // +kubebuilder:resource:path=hawtios,scope=Namespaced,categories=hawtio
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
@@ -105,8 +104,7 @@ const (
 	HawtioPhaseFailed HawtioPhase = "Failed"
 )
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
+// +kubebuilder:object:root=true
 // HawtioList contains a list of Hawtio
 type HawtioList struct {
 	metav1.TypeMeta `json:",inline"`
