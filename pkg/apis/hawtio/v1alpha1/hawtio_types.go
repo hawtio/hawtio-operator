@@ -7,7 +7,7 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+// Important: Run "make k8s-generate" to regenerate code after modifying this file
 
 // HawtioDeploymentType defines the possible deployment types
 // +kubebuilder:validation:Enum=cluster;namespace

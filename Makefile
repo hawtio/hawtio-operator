@@ -1,4 +1,3 @@
-
 ORG = hawtio
 NAMESPACE ?= hawtio
 PROJECT = operator
@@ -20,7 +19,7 @@ default: build-image
 build-image: compile build
 
 .PHONY: build
-build: go-generate
+build: go-generate k8s-generate
 	operator-sdk build docker.io/${ORG}/${PROJECT}:${TAG}
 
 .PHONY: compile
@@ -31,13 +30,13 @@ compile: test
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=deploy/crds
 
+# Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations
+k8s-generate: controller-gen
+	$(CONTROLLER_GEN) paths="./..." object
+
 .PHONY: generate-csv
 generate-csv:
 	operator-sdk olm-catalog gen-csv --csv-version ${TAG}
-
-.PHONY: go-generate
-go-generate:
-	go generate ./...
 
 .PHONY: verify-csv
 verify-csv:
