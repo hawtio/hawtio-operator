@@ -118,6 +118,7 @@ type HawtioList struct {
 type HawtioConfig struct {
 	About          HawtioAbout    `json:"about"`
 	Branding       HawtioBranding `json:"branding"`
+	Online         HawtioOnline   `json:"online"`
 	DisabledRoutes []string       `json:"disabledRoutes"`
 }
 
@@ -144,6 +145,10 @@ type HawtioAbout struct {
 type HawtioProductInfo struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+
+type HawtioOnline struct {
+	ProjectSelector string `json:"projectSelector,omitempty"`
 }
 
 func init() {
