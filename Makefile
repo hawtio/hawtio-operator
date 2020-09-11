@@ -26,6 +26,10 @@ build: go-generate k8s-generate
 compile: test
 	go build -o=build/_output/bin/hawtio-operator ./cmd/manager/main.go
 
+# Generate Go code
+go-generate:
+	go generate ./...
+
 # Generate manifests, e.g. CRDs
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=deploy/crd
