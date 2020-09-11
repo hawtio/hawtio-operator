@@ -126,13 +126,3 @@ deployment "hawtio-online" successfully rolled out
 $ kubectl delete hawtio hawtio-online
 hawtio.hawt.io "hawtio-online" deleted
 ```
-
-## Development
-
-To run the operator locally in order to speed up development cycle, you can run the following command:
-
-```console
-$ make run
-
-INFO[0000] Running the operator locally.
-```

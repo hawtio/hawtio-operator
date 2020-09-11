@@ -53,10 +53,6 @@ push-csv:
 install:
 	kubectl apply -f deploy/crd/hawtio_v1alpha1_hawtio_crd.yaml
 
-.PHONY: run
-run:
-	operator-sdk up local --namespace=${NAMESPACE} --operator-flags=""
-
 deploy: install kustomize
 	cd deploy && $(KUSTOMIZE) edit set namespace $(NAMESPACE)
 	$(KUSTOMIZE) build deploy | kubectl apply -f -
