@@ -1,0 +1,11 @@
+domain: hawt.io
+layout: go.kubebuilder.io/v2
+projectName: hawtio-operator
+repo: github.com/hawtio/hawtio-operator
+resources:
+- group: hawt.io
+  kind: Hawtio
+  version: v1alpha1
+version: 3-alpha
+plugins:
+  go.sdk.operatorframework.io/v2-alpha: {}
