@@ -5,7 +5,6 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: hawtio-operator
-  namespace: {{NAMESPACE}}
 roleRef:
   kind: ClusterRole
   name: hawtio-operator

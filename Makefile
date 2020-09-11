@@ -50,25 +50,16 @@ verify-csv:
 push-csv:
 	operator-courier push deploy/olm-catalog/hawtio-operator ${QUAY_NAMESPACE} hawtio-operator ${TAG} "${QUAY_TOKEN}"
 
-.PHONY: install
-install: install-crds
-	kubectl apply -f deploy/service_account.yaml -n ${NAMESPACE}
-	kubectl apply -f deploy/role.yaml -n ${NAMESPACE}
-	kubectl apply -f deploy/role_binding.yaml -n ${NAMESPACE}
-	kubectl apply -f deploy/cluster_role.yaml
-	cat deploy/cluster_role_binding.yaml | sed "s/{{NAMESPACE}}/${NAMESPACE}/g" | kubectl apply -f -
-
-.PHONY: install-crds
-install-crds:
+install:
 	kubectl apply -f deploy/crd/hawtio_v1alpha1_hawtio_crd.yaml
 
 .PHONY: run
 run:
 	operator-sdk up local --namespace=${NAMESPACE} --operator-flags=""
 
-.PHONY: deploy
-deploy:
-	kubectl apply -f deploy/operator.yaml -n ${NAMESPACE}
+deploy: install kustomize
+	cd deploy && $(KUSTOMIZE) edit set namespace $(NAMESPACE)
+	$(KUSTOMIZE) build deploy | kubectl apply -f -
 
 .PHONY: test
 test:
@@ -89,4 +80,19 @@ ifeq (, $(shell which controller-gen))
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
+endif
+
+kustomize:
+ifeq (, $(shell which kustomize))
+	@{ \
+	set -e ;\
+	KUSTOMIZE_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$KUSTOMIZE_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/kustomize/kustomize/v3@v3.5.4 ;\
+	rm -rf $$KUSTOMIZE_GEN_TMP_DIR ;\
+	}
+KUSTOMIZE=$(GOBIN)/kustomize
+else
+KUSTOMIZE=$(shell which kustomize)
 endif
