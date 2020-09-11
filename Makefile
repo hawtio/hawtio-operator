@@ -28,7 +28,7 @@ compile: test
 
 # Generate manifests, e.g. CRDs
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=deploy/crds
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=deploy/crd
 
 # Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations
 k8s-generate: controller-gen
@@ -56,7 +56,7 @@ install: install-crds
 
 .PHONY: install-crds
 install-crds:
-	kubectl apply -f deploy/crds/hawtio_v1alpha1_hawtio_crd.yaml
+	kubectl apply -f deploy/crd/hawtio_v1alpha1_hawtio_crd.yaml
 
 .PHONY: run
 run:
