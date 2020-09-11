@@ -93,7 +93,7 @@ To create and operate a Hawtio resource, you can run the following commands:
 
 ```console
 # Create Hawtio
-$ kubectl apply -f deploy/crds/hawtio_v1alpha1_hawtio_cr.yaml
+$ kubectl apply -f deploy/crs/hawtio_v1alpha1_hawtio_cr.yaml
 hawtio.hawt.io/hawtio-online created
 
 # Get Hawtio info
