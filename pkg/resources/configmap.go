@@ -1,10 +1,8 @@
 package resources
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"text/template"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,21 +33,20 @@ func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.HawtioConfig,
 	return config, nil
 }
 
-// Create NewConfigMapForCR method to create configmap
-func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
-	config, err := configForHawtio(cr)
+func NewConfigMap(hawtio *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
+	config, err := configForHawtio(hawtio)
 	if err != nil {
 		return nil, err
 	}
 
 	configMap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
+			APIVersion: corev1.SchemeGroupVersion.String(),
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name,
-			Namespace: cr.Namespace,
+			Name:      hawtio.Name,
+			Namespace: hawtio.Namespace,
 		},
 		Data: map[string]string{
 			hawtioConfigKey: config,
@@ -59,18 +56,55 @@ func NewConfigMapForCR(cr *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
 	return configMap, nil
 }
 
-func configForHawtio(m *hawtiov1alpha1.Hawtio) (string, error) {
+func configForHawtio(hawtio *hawtiov1alpha1.Hawtio) (string, error) {
 	data, err := util.LoadConfigFromFile(hawtioConfigPath)
 	if err != nil {
 		return "", err
 	}
-
-	var buff bytes.Buffer
-	config := template.Must(template.New("config").Parse(string(data)))
-	err = config.Execute(&buff, m.Spec)
+	var defaultConfig interface{}
+	err = json.Unmarshal(data, &defaultConfig)
 	if err != nil {
 		return "", err
 	}
 
-	return buff.String(), nil
+	data, err = json.Marshal(hawtio.Spec.Config)
+	if err != nil {
+		return "", err
+	}
+	var hawtioConfig interface{}
+	err = json.Unmarshal(data, &hawtioConfig)
+	if err != nil {
+		return "", err
+	}
+
+	config := merge(hawtioConfig, defaultConfig)
+	data, err = json.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func merge(x1, x2 interface{}) interface{} {
+	switch x1 := x1.(type) {
+	case map[string]interface{}:
+		x2, ok := x2.(map[string]interface{})
+		if !ok {
+			return x1
+		}
+		for k, v2 := range x2 {
+			if v1, ok := x1[k]; ok {
+				x1[k] = merge(v1, v2)
+			} else {
+				x1[k] = v2
+			}
+		}
+	case nil:
+		x2, ok := x2.(map[string]interface{})
+		if ok {
+			return x2
+		}
+	}
+	return x1
 }

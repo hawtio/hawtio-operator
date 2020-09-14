@@ -26,6 +26,11 @@ var (
 			Type:          "namespace",
 			Version:       "latest",
 			RouteHostName: "hawtio.cluster",
+			Config: hawtiov1alpha1.HawtioConfig{
+				Online: hawtiov1alpha1.HawtioOnline{
+					ProjectSelector: "!openshift.io/run-level,!openshift.io/cluster-monitoring",
+				},
+			},
 			Resources: corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("1"),

@@ -128,8 +128,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to secondary resources and requeue the owner Hawtio
-	// TODO: The handler should be changed to EnqueueRequestForOwner when the configuration is embedded into Hawtio
-	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &hawtiov1alpha1.Hawtio{},
+	})
 	if err != nil {
 		return err
 	}
@@ -308,29 +310,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	configMap := &corev1.ConfigMap{}
-	err = r.client.Get(ctx, request.NamespacedName, configMap)
-	if err != nil && errors.IsNotFound(err) {
-		configMap, err = resources.NewConfigMapForCR(hawtio)
-		if err != nil {
-			reqLogger.Error(err, "Failed to generate config map")
-			return reconcile.Result{}, err
-		}
-		err := controllerutil.SetControllerReference(hawtio, configMap, r.scheme)
-		if err != nil {
-			reqLogger.Error(err, "Failed to set config map owner")
-			return reconcile.Result{}, err
-		}
-		err = r.client.Create(ctx, configMap)
-		if err != nil {
-			reqLogger.Error(err, "Failed to create config map")
-			return reconcile.Result{}, err
-		}
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get config map")
-		return reconcile.Result{}, err
-	}
-
 	if cm := hawtio.Spec.RBAC.ConfigMap; hawtio.IsRbacEnabled(isOpenShift4) && cm != "" {
 		// Check that the ConfigMap exists
 		var rbacConfigMap corev1.ConfigMap
@@ -352,9 +331,22 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	_, err = r.reconcileResources(hawtio, request, r.client, r.scheme, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, hawtio.Spec.Version, configMap)
+	_, err = r.reconcileConfigMap(hawtio)
 	if err != nil {
-		reqLogger.Error(err, "Error reconciling resources")
+		reqLogger.Error(err, "Error reconciling ConfigMap")
+		return reconcile.Result{}, err
+	}
+
+	configMap := &corev1.ConfigMap{}
+	err = r.client.Get(ctx, request.NamespacedName, configMap)
+	if err != nil {
+		reqLogger.Error(err, "Failed to get config map")
+		return reconcile.Result{}, err
+	}
+
+	_, err = r.reconcileDeployment(hawtio, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, hawtio.Spec.Version, configMap)
+	if err != nil {
+		reqLogger.Error(err, "Error reconciling deployment")
 		return reconcile.Result{}, err
 	}
 
@@ -569,37 +561,54 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1alpha1.Hawtio, request reconcile.Request, client client.Client, scheme *runtime.Scheme, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap) (bool, error) {
-	reqLogger := log.WithName(hawtio.Name)
+func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1alpha1.Hawtio) (bool, error) {
+	configMap, err := resources.NewConfigMap(hawtio)
+	if err != nil {
+		return false, err
+	}
+	return r.reconcileResources(hawtio, []resource.KubernetesResource{configMap}, []runtime.Object{&corev1.ConfigMapList{}})
+}
 
-	isNamespaceDeployment := hawtio.Spec.Type == hawtiov1alpha1.NamespaceHawtioDeploymentType
-
+func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap) (bool, error) {
 	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), r.BuildVariables)
 	if err != nil {
 		return false, err
 	}
+
 	service := resources.NewService(hawtio.Name)
 	route := resources.NewRoute(hawtio)
 
-	var requestedResources []resource.KubernetesResource
-	requestedResources = append(requestedResources, deployment)
-	requestedResources = append(requestedResources, service)
-	requestedResources = append(requestedResources, route)
-
-	if isNamespaceDeployment {
+	var serviceAccount *corev1.ServiceAccount
+	if hawtio.Spec.Type == hawtiov1alpha1.NamespaceHawtioDeploymentType {
 		// Add service account as OAuth client
-		sa, err := resources.NewServiceAccountAsOauthClient(request.Name)
+		serviceAccount, err = resources.NewServiceAccountAsOauthClient(hawtio.Name)
 		if err != nil {
 			return false, fmt.Errorf("error UpdateResources : %s", err)
 		}
-		requestedResources = append(requestedResources, sa)
 	}
 
-	for index := range requestedResources {
-		requestedResources[index].SetNamespace(hawtio.Namespace)
+	return r.reconcileResources(hawtio,
+		[]resource.KubernetesResource{deployment, service, route, serviceAccount},
+		[]runtime.Object{
+			&corev1.ServiceList{},
+			&appsv1.DeploymentList{},
+			&routev1.RouteList{},
+			&corev1.ServiceAccountList{},
+		},
+	)
+}
+
+func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1alpha1.Hawtio, requestedResources []resource.KubernetesResource, listObjects []runtime.Object) (bool, error) {
+	reqLogger := log.WithName(hawtio.Name)
+
+	for _, res := range requestedResources {
+		if res == nil || reflect.ValueOf(res).IsNil() {
+			continue
+		}
+		res.SetNamespace(hawtio.Namespace)
 	}
 
-	deployed, err := getDeployedResources(hawtio, client)
+	deployed, err := getDeployedResources(hawtio, r.client, listObjects)
 	if err != nil {
 		return false, err
 	}
@@ -607,7 +616,7 @@ func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1alpha1.Hawtio, requ
 	requested := compare.NewMapBuilder().Add(requestedResources...).ResourceMap()
 
 	var hasUpdates bool
-	writer := write.New(client).WithOwnerController(hawtio, scheme)
+	writer := write.New(r.client).WithOwnerController(hawtio, r.scheme)
 	comparator := getComparator()
 	deltas := comparator.Compare(deployed, requested)
 	for resourceType, delta := range deltas {
@@ -658,14 +667,9 @@ func getComparator() compare.MapComparator {
 	return compare.MapComparator{Comparator: resourceComparator}
 }
 
-func getDeployedResources(hawtio *hawtiov1alpha1.Hawtio, client client.Client) (map[reflect.Type][]resource.KubernetesResource, error) {
+func getDeployedResources(hawtio *hawtiov1alpha1.Hawtio, client client.Client, listObjects []runtime.Object) (map[reflect.Type][]resource.KubernetesResource, error) {
 	reader := read.New(client).WithNamespace(hawtio.Namespace).WithOwnerObject(hawtio)
-	resourceMap, err := reader.ListAll(
-		&corev1.ServiceList{},
-		&appsv1.DeploymentList{},
-		&routev1.RouteList{},
-		&corev1.ServiceAccountList{},
-	)
+	resourceMap, err := reader.ListAll(listObjects...)
 	if err != nil {
 		log.Error(err, "Failed to list deployed objects. ", err)
 		return nil, err

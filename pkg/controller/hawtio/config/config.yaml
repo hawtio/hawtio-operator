@@ -1,15 +1,13 @@
 # Used for testing only
 about:
   title: Hawtio Console
-  productInfo: []
   additionalInfo: The Hawtio console eases the discovery and management of 'hawtio-enabled'
     applications deployed on OpenShift.
-  copyright: ''
 branding:
   appName: Hawtio Console
   appLogoUrl: img/hawtio-logo.svg
+online:
   consoleLink:
     text: Hawtio Console
     section: Hawtio
-    imageRelativePath: "/online/img/favicon.ico"
-disabledRoutes: []
+    imageRelativePath: /online/img/favicon.ico
