@@ -66,8 +66,10 @@ type HawtioSpec struct {
 	// The Hawtio console container image version. Defaults to 'latest'.
 	Version string     `json:"version,omitempty"`
 	RBAC    HawtioRBAC `json:"rbac,omitempty"`
-	// The compute resources
+	// The Hawtio console compute resources
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	// The Hawtio console configuration
+	Config HawtioConfig `json:"config,omitempty"`
 }
 
 // The RBAC configuration
@@ -114,25 +116,25 @@ type HawtioList struct {
 
 // HawtioConfig defines the hawtconfig.json file structure
 type HawtioConfig struct {
-	About          HawtioAbout    `json:"about"`
-	Branding       HawtioBranding `json:"branding"`
-	Online         HawtioOnline   `json:"online"`
-	DisabledRoutes []string       `json:"disabledRoutes"`
+	About          HawtioAbout    `json:"about,omitempty"`
+	Branding       HawtioBranding `json:"branding,omitempty"`
+	Online         HawtioOnline   `json:"online,omitempty"`
+	DisabledRoutes []string       `json:"disabledRoutes,omitempty"`
 }
 
 type HawtioBranding struct {
-	AppName    string `json:"appName"`
-	AppLogoURL string `json:"appLogoUrl"`
-	CSS        string `json:"css"`
-	Favicon    string `json:"favicon"`
+	AppName    string `json:"appName,omitempty"`
+	AppLogoURL string `json:"appLogoUrl,omitempty"`
+	CSS        string `json:"css,omitempty"`
+	Favicon    string `json:"favicon,omitempty"`
 }
 
 type HawtioAbout struct {
-	Title          string              `json:"title"`
-	ProductInfos   []HawtioProductInfo `json:"productInfo"`
-	AdditionalInfo string              `json:"additionalInfo"`
-	Copyright      string              `json:"copyright"`
-	ImgSrc         string              `json:"imgSrc"`
+	Title          string              `json:"title,omitempty"`
+	ProductInfos   []HawtioProductInfo `json:"productInfo,omitempty"`
+	AdditionalInfo string              `json:"additionalInfo,omitempty"`
+	Copyright      string              `json:"copyright,omitempty"`
+	ImgSrc         string              `json:"imgSrc,omitempty"`
 }
 
 type HawtioProductInfo struct {
@@ -141,12 +143,14 @@ type HawtioProductInfo struct {
 }
 
 type HawtioOnline struct {
-	ProjectSelector string `json:"projectSelector,omitempty"`
-	ConsoleLink     struct {
-		Text              string `json:"text"`
-		Section           string `json:"section"`
-		ImageRelativePath string `json:"imageRelativePath"`
-	} `json:"consoleLink"`
+	ProjectSelector string            `json:"projectSelector,omitempty"`
+	ConsoleLink     HawtioConsoleLink `json:"consoleLink,omitempty"`
+}
+
+type HawtioConsoleLink struct {
+	Text              string `json:"text,omitempty"`
+	Section           string `json:"section,omitempty"`
+	ImageRelativePath string `json:"imageRelativePath,omitempty"`
 }
 
 func init() {

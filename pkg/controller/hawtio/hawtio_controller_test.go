@@ -103,6 +103,33 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			container := deployment.Spec.Template.Spec.Containers[0]
 			assert.Equal(t, container.Resources, hawtio.Spec.Resources)
 		})
+		t.Run("check if the ConfigMap has been created", func(t *testing.T) {
+			configMap := corev1.ConfigMap{}
+			err = r.client.Get(context.TODO(), NamespacedName, &configMap)
+			require.NoError(t, err)
+
+			config, err := resources.GetHawtioConfig(&configMap)
+			require.NoError(t, err)
+
+			assert.Equal(t, config, &hawtiov1alpha1.HawtioConfig{
+				About: hawtiov1alpha1.HawtioAbout{
+					AdditionalInfo: "The Hawtio console eases the discovery and management of 'hawtio-enabled' applications deployed on OpenShift.",
+					Title:          "Hawtio Console",
+				},
+				Branding: hawtiov1alpha1.HawtioBranding{
+					AppLogoURL: "img/hawtio-logo.svg",
+					AppName:    "Hawtio Console",
+				},
+				Online: hawtiov1alpha1.HawtioOnline{
+					ConsoleLink: hawtiov1alpha1.HawtioConsoleLink{
+						ImageRelativePath: "/online/img/favicon.ico",
+						Section:           "Hawtio",
+						Text:              "Hawtio Console",
+					},
+					ProjectSelector: "!openshift.io/run-level,!openshift.io/cluster-monitoring",
+				},
+			})
+		})
 		t.Run("check if the environment variables have been set", func(t *testing.T) {
 			deployment := appsv1.Deployment{}
 			err = r.client.Get(context.TODO(), NamespacedName, &deployment)
