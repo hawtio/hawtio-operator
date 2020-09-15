@@ -54,6 +54,106 @@ spec:
         spec:
           description: Defines the desired state of Hawtio
           properties:
+            config:
+              description: The Hawtio console configuration
+              properties:
+                about:
+                  description: The information to be displayed in the About page
+                  properties:
+                    additionalInfo:
+                      description: The text for the description section
+                      type: string
+                    copyright:
+                      description: The text for the copyright section
+                      type: string
+                    imgSrc:
+                      description: The image displayed in the page. It can be a path,
+                        relative to the Hawtio status URL, or an absolute URL.
+                      type: string
+                    productInfo:
+                      description: List of product information
+                      items:
+                        description: The product information displayed in the About
+                          page
+                        properties:
+                          name:
+                            description: The name of the product information
+                            type: string
+                          value:
+                            description: The value of the product information
+                            type: string
+                        required:
+                          - name
+                          - value
+                        type: object
+                      type: array
+                    title:
+                      description: The title of the page
+                      type: string
+                  type: object
+                branding:
+                  description: The UI branding
+                  properties:
+                    appLogoUrl:
+                      description: The URL of the logo, that displays in the navigation
+                        bar. It can be a path, relative to the Hawtio status URL,
+                        or an absolute URL.
+                      type: string
+                    appName:
+                      description: The application title, that usually displays in
+                        the Web browser tab.
+                      type: string
+                    css:
+                      description: The URL of an external CSS stylesheet, that can
+                        be used to style the application. It can be a path, relative
+                        to the Hawtio status URL, or an absolute URL.
+                      type: string
+                    favicon:
+                      description: The URL of the favicon, that usually displays in
+                        the Web browser tab. It can be a path, relative to the Hawtio
+                        status URL, or an absolute URL.
+                      type: string
+                  type: object
+                disabledRoutes:
+                  description: Disables UI components with matching routes
+                  items:
+                    type: string
+                  type: array
+                online:
+                  description: The OpenShift related configuration
+                  properties:
+                    consoleLink:
+                      description: The configuration for the OpenShift Web console
+                        link. A link is added to the application menu when the Hawtio
+                        deployment is equal to 'cluster'. Otherwise, a link is added
+                        to the Hawtio project dashboard.
+                      properties:
+                        imageRelativePath:
+                          description: The path, relative to the Hawtio status URL,
+                            for the icon used in front of the link in the application
+                            menu. It is only applicable when the Hawtio deployment
+                            type is equal to 'cluster'. The image should be square
+                            and will be shown at 24x24 pixels.
+                          type: string
+                        section:
+                          description: The section of the application menu in which
+                            the link should appear. It is only applicable when the
+                            Hawtio deployment type is equal to 'cluster'.
+                          type: string
+                        text:
+                          description: The text display for the link
+                          type: string
+                      type: object
+                    projectSelector:
+                      description: The selector used to watch for projects. It is
+                        only applicable when the Hawtio deployment type is equal to
+                        'cluster'. By default, all the projects the logged in user
+                        has access to are watched. The string representation of the
+                        selector must be provided, as mandated by the `--selector`,
+                        or `-l`, options from the `kubectl get` command. See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+                      type: string
+                  type: object
+              type: object
             rbac:
               description: The RBAC configuration
               properties:
@@ -70,7 +170,7 @@ spec:
               format: int32
               type: integer
             resources:
-              description: The compute resources
+              description: The Hawtio console compute resources
               properties:
                 limits:
                   additionalProperties:
