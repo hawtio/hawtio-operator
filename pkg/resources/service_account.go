@@ -11,10 +11,6 @@ import (
 
 func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error) {
 	OAuthRedirectReference := &oauthv1.OAuthRedirectReference{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "OAuthRedirectReference",
-			APIVersion: "v1",
-		},
 		Reference: oauthv1.RedirectReference{
 			Kind: "Route",
 			Name: name,
@@ -27,10 +23,6 @@ func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error)
 	}
 
 	sa := &corev1.ServiceAccount{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ServiceAccount",
-			APIVersion: "v1",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{

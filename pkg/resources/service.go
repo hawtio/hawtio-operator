@@ -8,10 +8,6 @@ import (
 
 func NewService(name string) *corev1.Service {
 	return &corev1.Service{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Service",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
 				"service.alpha.openshift.io/serving-cert-secret-name": name + "-tls-serving",

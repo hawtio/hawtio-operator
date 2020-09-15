@@ -13,10 +13,6 @@ import (
 
 func NewRoute(hawtio *hawtiov1alpha1.Hawtio) *routev1.Route {
 	route := &routev1.Route{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Route",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{"app": "hawtio"},
 			Name:   hawtio.Name,

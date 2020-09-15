@@ -40,10 +40,6 @@ func NewConfigMap(hawtio *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
 	}
 
 	configMap := &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       "ConfigMap",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hawtio.Name,
 			Namespace: hawtio.Namespace,

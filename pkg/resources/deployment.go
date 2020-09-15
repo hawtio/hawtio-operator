@@ -29,7 +29,6 @@ const (
 	serverRootDirectory                       = "/usr/share/nginx/html"
 )
 
-// Create NewDeployment method to create deployment
 func NewDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
 	namespacedName := types.NamespacedName{
 		Name:      hawtio.Name,
@@ -55,10 +54,6 @@ func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts cor
 		r = 1
 	}
 	return &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,
 			Namespace: namespacedName.Namespace,

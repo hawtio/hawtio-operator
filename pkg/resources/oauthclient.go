@@ -10,10 +10,6 @@ const OAuthClientName = "hawtio"
 
 func NewOAuthClient(name string) *oauthv1.OAuthClient {
 	return &oauthv1.OAuthClient{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "OAuthClient",
-			APIVersion: "v1",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
