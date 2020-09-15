@@ -64,8 +64,9 @@ type HawtioSpec struct {
 	// so that the host is re-generated.
 	RouteHostName string `json:"routeHostName,omitempty"`
 	// The Hawtio console container image version. Defaults to 'latest'.
-	Version string     `json:"version,omitempty"`
-	RBAC    HawtioRBAC `json:"rbac,omitempty"`
+	Version string `json:"version,omitempty"`
+	// The RBAC configuration
+	RBAC HawtioRBAC `json:"rbac,omitempty"`
 	// The Hawtio console compute resources
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	// The Hawtio console configuration
@@ -83,7 +84,8 @@ type HawtioRBAC struct {
 // Reports the observed state of Hawtio
 type HawtioStatus struct {
 	// The Hawtio console container image
-	Image string      `json:"image,omitempty"`
+	Image string `json:"image,omitempty"`
+	// The Hawtio deployment phase
 	Phase HawtioPhase `json:"phase,omitempty"`
 	// The Hawtio console route URL
 	URL string `json:"URL,omitempty"`
@@ -114,42 +116,82 @@ type HawtioList struct {
 	Items           []Hawtio `json:"items"`
 }
 
-// HawtioConfig defines the hawtconfig.json file structure
+// HawtioConfig defines the hawtconfig.json structure
 type HawtioConfig struct {
-	About          HawtioAbout    `json:"about,omitempty"`
-	Branding       HawtioBranding `json:"branding,omitempty"`
-	Online         HawtioOnline   `json:"online,omitempty"`
-	DisabledRoutes []string       `json:"disabledRoutes,omitempty"`
+	// The information to be displayed in the About page
+	About HawtioAbout `json:"about,omitempty"`
+	// The UI branding
+	Branding HawtioBranding `json:"branding,omitempty"`
+	// The OpenShift related configuration
+	Online HawtioOnline `json:"online,omitempty"`
+	// Disables UI components with matching routes
+	DisabledRoutes []string `json:"disabledRoutes,omitempty"`
 }
 
+// The UI branding
 type HawtioBranding struct {
-	AppName    string `json:"appName,omitempty"`
+	// The application title, that usually displays in the Web browser tab.
+	AppName string `json:"appName,omitempty"`
+	// The URL of the logo, that displays in the navigation bar.
+	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
 	AppLogoURL string `json:"appLogoUrl,omitempty"`
-	CSS        string `json:"css,omitempty"`
-	Favicon    string `json:"favicon,omitempty"`
+	// The URL of an external CSS stylesheet, that can be used to style the application.
+	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
+	CSS string `json:"css,omitempty"`
+	// The URL of the favicon, that usually displays in the Web browser tab.
+	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
+	Favicon string `json:"favicon,omitempty"`
 }
 
+// The About page information
 type HawtioAbout struct {
-	Title          string              `json:"title,omitempty"`
-	ProductInfos   []HawtioProductInfo `json:"productInfo,omitempty"`
-	AdditionalInfo string              `json:"additionalInfo,omitempty"`
-	Copyright      string              `json:"copyright,omitempty"`
-	ImgSrc         string              `json:"imgSrc,omitempty"`
+	// The title of the page
+	Title string `json:"title,omitempty"`
+	// List of product information
+	ProductInfos []HawtioProductInfo `json:"productInfo,omitempty"`
+	// The text for the description section
+	AdditionalInfo string `json:"additionalInfo,omitempty"`
+	// The text for the copyright section
+	Copyright string `json:"copyright,omitempty"`
+	// The image displayed in the page.
+	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
+	ImgSrc string `json:"imgSrc,omitempty"`
 }
 
+// The product information displayed in the About page
 type HawtioProductInfo struct {
-	Name  string `json:"name"`
+	// The name of the product information
+	Name string `json:"name"`
+	// The value of the product information
 	Value string `json:"value"`
 }
 
+// The OpenShift related configuration
 type HawtioOnline struct {
-	ProjectSelector string            `json:"projectSelector,omitempty"`
-	ConsoleLink     HawtioConsoleLink `json:"consoleLink,omitempty"`
+	// The selector used to watch for projects.
+	// It is only applicable when the Hawtio deployment type is equal to 'cluster'.
+	// By default, all the projects the logged in user has access to are watched.
+	// The string representation of the selector must be provided, as mandated by the `--selector`, or `-l`, options from the `kubectl get` command.
+	// See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+	ProjectSelector string `json:"projectSelector,omitempty"`
+	// The configuration for the OpenShift Web console link.
+	// A link is added to the application menu when the Hawtio deployment is equal to 'cluster'.
+	// Otherwise, a link is added to the Hawtio project dashboard.
+	ConsoleLink HawtioConsoleLink `json:"consoleLink,omitempty"`
 }
 
+// The configuration for the OpenShift Web console link
 type HawtioConsoleLink struct {
-	Text              string `json:"text,omitempty"`
-	Section           string `json:"section,omitempty"`
+	// The text display for the link
+	Text string `json:"text,omitempty"`
+	// The section of the application menu in which the link should appear.
+	//It is only applicable when the Hawtio deployment type is equal to 'cluster'.
+	// +optional
+	Section string `json:"section,omitempty"`
+	// The path, relative to the Hawtio status URL, for the icon used in front of the link in the application menu.
+	// It is only applicable when the Hawtio deployment type is equal to 'cluster'.
+	// The image should be square and will be shown at 24x24 pixels.
+	// +optional
 	ImageRelativePath string `json:"imageRelativePath,omitempty"`
 }
 
