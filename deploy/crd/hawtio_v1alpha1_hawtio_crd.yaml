@@ -54,6 +54,18 @@ spec:
         spec:
           description: Defines the desired state of Hawtio
           properties:
+            certificateConfig:
+              description: The certificate configuration
+              properties:
+                CommonName:
+                  description: CommonName - required for generation of the client
+                    certificate
+                  type: string
+                DaysToExpiry:
+                  description: Number of days to expiry of the certificate. Its required
+                    for the client certificate generation
+                  type: integer
+              type: object
             config:
               description: The Hawtio console configuration
               properties:

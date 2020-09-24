@@ -64,7 +64,8 @@ type HawtioSpec struct {
 	// so that the host is re-generated.
 	RouteHostName string `json:"routeHostName,omitempty"`
 	// The Hawtio console container image version. Defaults to 'latest'.
-	Version string `json:"version,omitempty"`
+	Version           string `json:"version,omitempty"`
+	CertificateConfig HawtioCertificateConfig `json:"certificateConfig,omitempty"`
 	// The RBAC configuration
 	RBAC HawtioRBAC `json:"rbac,omitempty"`
 	// The Hawtio console compute resources
@@ -79,6 +80,14 @@ type HawtioRBAC struct {
 	Enabled *bool `json:"enabled,omitempty"`
 	// The name of the ConfigMap that contains the ACL definition.
 	ConfigMap string `json:"configMap,omitempty"`
+}
+
+//The certificate configuration
+type HawtioCertificateConfig struct {
+	// CommonName - required for generation of the client certificate
+	CommonName string `json:"CommonName,omitempty"`
+	// Number of days to expiry of the certificate. Its required for the client certificate generation
+	DaysToExpiry int `json:"DaysToExpiry,omitempty"`
 }
 
 // Reports the observed state of Hawtio
