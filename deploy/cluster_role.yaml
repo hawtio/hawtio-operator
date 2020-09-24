@@ -36,3 +36,11 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - signing-key
+  verbs:
+  - get
