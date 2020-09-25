@@ -33,15 +33,18 @@ func CreateConsoleYAMLSamples(ctx context.Context, c client.Client, productName 
 		return
 	}
 	for _, filename := range box.List() {
+		if filename == "kustomization.yaml" {
+			continue
+		}
 		yamlStr, err := box.FindString(filename)
 		if err != nil {
-			log.Info("yaml", " name: ", filename, " not created:  ", err.Error())
+			log.Info("yaml", " name: ", filename, " not created: ", err.Error())
 			continue
 		}
 		hawtio := hawtiov1alpha1.Hawtio{}
 		err = yaml.Unmarshal([]byte(yamlStr), &hawtio)
 		if err != nil {
-			log.Info("yaml", " name: ", filename, " not created:  ", err.Error())
+			log.Info("yaml", " name: ", filename, " not created: ", err.Error())
 			continue
 		}
 		if productName != "" {
@@ -49,13 +52,13 @@ func CreateConsoleYAMLSamples(ctx context.Context, c client.Client, productName 
 		}
 		yamlSample, err := openshift.GetConsoleYAMLSample(&hawtio)
 		if err != nil {
-			log.Info("yaml", " name: ", filename, " not created:  ", err.Error())
+			log.Info("yaml", " name: ", filename, " not created: ", err.Error())
 			continue
 		}
 		err = c.Create(ctx, yamlSample)
 		if err != nil {
 			if !apierrors.IsAlreadyExists(err) {
-				log.Info("yaml", " name: ", filename, " not created:+", err.Error())
+				log.Info("yaml", " name: ", filename, " not created: ", err.Error())
 			}
 			continue
 		}
