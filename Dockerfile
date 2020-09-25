@@ -7,7 +7,7 @@ WORKDIR /hawtio-operator
 
 COPY . .
 
-RUN make compile
+RUN make build
 
 FROM alpine:3.11.2
 

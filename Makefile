@@ -14,17 +14,15 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-default: build-image
+default: image
 
-.PHONY: build-image
-build-image: compile build
+image:
+	docker build -t docker.io/${ORG}/${PROJECT}:${TAG} .
 
-.PHONY: build
-build: go-generate k8s-generate
-	operator-sdk build docker.io/${ORG}/${PROJECT}:${TAG}
+build: go-generate compile test
 
-compile: test
-	go build -o=build/_output/bin/hawtio-operator ./cmd/manager/main.go
+compile:
+	CGO_ENABLED=0 go build -o=build/_output/bin/hawtio-operator ./cmd/manager/main.go
 
 # Generate Go code
 go-generate:
