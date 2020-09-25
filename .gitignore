@@ -1,6 +1,4 @@
 # Temporary Build Files
-build/_output
-build/_test
 *-packr.go
 pkg/openshift/packrd
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode

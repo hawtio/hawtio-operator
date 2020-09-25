@@ -13,6 +13,6 @@ FROM alpine:3.11.2
 
 USER nobody
 
-COPY --from=builder /hawtio-operator/build/_output/bin/hawtio-operator /usr/local/bin/hawtio-operator
+COPY --from=builder /hawtio-operator/hawtio-operator /usr/local/bin/hawtio-operator
 
 COPY --from=builder /hawtio-operator/config /config

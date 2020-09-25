@@ -22,7 +22,7 @@ image:
 build: go-generate compile test
 
 compile:
-	CGO_ENABLED=0 go build -o=build/_output/bin/hawtio-operator ./cmd/manager/main.go
+	CGO_ENABLED=0 go build -o hawtio-operator ./cmd/manager/main.go
 
 # Generate Go code
 go-generate:
