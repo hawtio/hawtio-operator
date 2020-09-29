@@ -300,7 +300,8 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		// Check whether client certificate secret exists
 		secretName := request.Name + "-tls-proxying"
 		_, err := r.coreClient.Secrets(request.Namespace).Get(ctx, secretName, metav1.GetOptions{})
-		//TODO: Add automated rotation of client certificate before it expires
+		// TODO: Update the client certificate when the Hawtio resource changes
+		// TODO: Add automated rotation of client certificate before it expires
 		if err != nil {
 			if errors.IsNotFound(err) {
 				reqLogger.Info("Client certificate secret not found, creating a new one", "secret", secretName)
@@ -321,6 +322,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				}
 				expirationDate := hawtio.Spec.Auth.ClientCertExpirationDate.Time
 				if expirationDate.IsZero() {
+					// Let's default to one year validity period
 					expirationDate = time.Now().AddDate(1, 0, 0)
 				}
 				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName, expirationDate)
