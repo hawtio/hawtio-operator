@@ -10,6 +10,6 @@ type BuildVariables struct {
 	ProductName string
 	// The hawtio-online server root directory
 	ServerRootDirectory string
-	// CommonName required for certificate generation
-	CertificateCommonName string
+	// The default common name for the generated client certificates
+	ClientCertCommonName string
 }

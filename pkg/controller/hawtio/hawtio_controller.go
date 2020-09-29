@@ -314,10 +314,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				commonName := hawtio.Spec.CertificateConfig.CommonName
 				daysToExpiry := hawtio.Spec.CertificateConfig.DaysToExpiry
 				if commonName == "" {
-					if r.CertificateCommonName == "" {
+					if r.ClientCertCommonName == "" {
 						commonName = "hawtio-online.hawtio.svc"
 					} else {
-						commonName = r.CertificateCommonName
+						commonName = r.ClientCertCommonName
 					}
 				}
 				if daysToExpiry == 0 {
