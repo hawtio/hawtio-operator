@@ -87,7 +87,7 @@ func main() {
 		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
 		ProductName:                          ProductName,
 		ServerRootDirectory:                  ServerRootDirectory,
-		CertificateCommonName:                CertificateCommonName,
+		ClientCertCommonName:                 CertificateCommonName,
 	}
 	if err := controller.AddToManager(mgr, bv); err != nil {
 		log.Error(err, "")
