@@ -2,15 +2,7 @@ package hawtio
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	errors2 "errors"
 	"fmt"
-	"math/big"
-	rand2 "math/rand"
 	"reflect"
 	"strings"
 	"time"
@@ -305,13 +297,13 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if isOpenShift4 {
-		//Check whether client certificate secret exists
-		_, err := r.coreClient.Secrets(request.Namespace).Get(ctx, request.Name+"-tls-proxying", metav1.GetOptions{})
-		//TODO add automated regeneration of certificate after the expiration
+		// Check whether client certificate secret exists
+		secretName := request.Name + "-tls-proxying"
+		_, err := r.coreClient.Secrets(request.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+		//TODO: Add automated rotation of client certificate before it expires
 		if err != nil {
 			if errors.IsNotFound(err) {
-				secretName := request.Name + "-tls-proxying"
-				reqLogger.Info("Client certificate not found, certificate will be created now", "secret", secretName)
+				reqLogger.Info("Client certificate secret not found, creating a new one", "secret", secretName)
 
 				caSecret, err := r.coreClient.Secrets("openshift-service-ca").Get(ctx, "signing-key", metav1.GetOptions{})
 				if err != nil {
@@ -321,7 +313,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 				commonName := hawtio.Spec.CertificateConfig.CommonName
 				daysToExpiry := hawtio.Spec.CertificateConfig.DaysToExpiry
-
 				if commonName == "" {
 					if r.CertificateCommonName == "" {
 						commonName = "hawtio-online.hawtio.svc"
@@ -329,7 +320,6 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 						commonName = r.CertificateCommonName
 					}
 				}
-
 				if daysToExpiry == 0 {
 					if r.CertificateDaysToExpiry == 0 {
 						daysToExpiry = 1000
@@ -340,18 +330,17 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName,daysToExpiry)
 				if err != nil {
-					reqLogger.Error(err, "Generating the certificate failed", err)
+					reqLogger.Error(err, "Generating the client certificate failed", err)
 					return reconcile.Result{}, err
 				}
 				err = controllerutil.SetControllerReference(hawtio, certSecret, r.scheme)
 				if err != nil {
-					reqLogger.Error(err, "Ownership  couldn't be changed ", err)
 					return reconcile.Result{}, err
 				}
 				_, err = r.coreClient.Secrets(request.Namespace).Create(ctx, certSecret, metav1.CreateOptions{})
-				reqLogger.Info("Certificate was created", "secret", secretName)
+				reqLogger.Info("Client certificate created successfully", "secret", secretName)
 				if err != nil {
-					reqLogger.Error(err, "Creation of the certificate failed ", err)
+					reqLogger.Error(err, "Creating the client certificate secret failed", err)
 					return reconcile.Result{}, err
 				}
 			} else {
@@ -767,76 +756,4 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1alpha1.H
 	}
 
 	return nil
-}
-
-func generateCertificateSecret(name string, namespace string, secretWithCa *corev1.Secret, commonName string, daysToExpiry int) (*corev1.Secret, error) {
-	caCertFile := secretWithCa.Data["tls.crt"]
-	pemBlock, _ := pem.Decode(caCertFile)
-	if pemBlock == nil {
-		return nil, errors2.New("failed to decode certificate")
-	}
-	caCert, err := x509.ParseCertificate(pemBlock.Bytes)
-	if err != nil {
-		return nil, err
-	}
-
-	caKey := secretWithCa.Data["tls.key"]
-	pemBlock, _ = pem.Decode(caKey)
-	if pemBlock == nil {
-		return nil, errors2.New("failed to decode certificate key")
-	}
-	caPrivateKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
-	if err != nil {
-		return nil, err
-	}
-
-	subj := pkix.Name{
-		CommonName: commonName,
-	}
-
-	serialNumber := big.NewInt(rand2.Int63())
-	cert := &x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject:      subj,
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().AddDate(0, 0, daysToExpiry),
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}
-
-	// generate cert private key
-	certPrivetKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, err
-	}
-
-	privateKeyBytes := x509.MarshalPKCS1PrivateKey(certPrivetKey)
-	//encode for storing into secret
-	privateKeyPem := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: privateKeyBytes,
-		},
-	)
-	//create certificate
-	certBytes, err := x509.CreateCertificate(rand.Reader, cert, caCert, &certPrivetKey.PublicKey, caPrivateKey)
-	if err != nil {
-		return nil, err
-	}
-	//encode to storing into secret
-	certPEM := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: certBytes,
-		})
-
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		}, Data: map[string][]byte{
-			corev1.TLSCertKey:       certPEM,
-			corev1.TLSPrivateKeyKey: privateKeyPem,
-		}, Type: corev1.SecretTypeTLS,
-	}, nil
 }
