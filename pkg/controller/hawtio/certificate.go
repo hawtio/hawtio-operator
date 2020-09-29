@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func generateCertificateSecret(name string, namespace string, caSecret *corev1.Secret, commonName string, daysToExpiry int) (*corev1.Secret, error) {
+func generateCertificateSecret(name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
 	caCertFile := caSecret.Data["tls.crt"]
 	pemBlock, _ := pem.Decode(caCertFile)
 	if pemBlock == nil {
@@ -43,7 +43,7 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 			CommonName: commonName,
 		},
 		NotBefore:   time.Now(),
-		NotAfter:    time.Now().AddDate(0, 0, daysToExpiry),
+		NotAfter:    expirationDate,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 	}
