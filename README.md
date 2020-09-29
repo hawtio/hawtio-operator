@@ -50,6 +50,7 @@ The operator covers the following cases:
   * Create Deployment, ConfigMap, Service and Route resources
   * Create a service account as OAuth client in `namespace` deployment
   * Create an OAuth client in `cluster` deployment
+  * Create a Secret containing a client certificate used to authenticate to Jolokia endpoints
 * Update
   * Reconcile the Deployment container image from the `version` field
   * Reconcile the Route host from the `routeHostName` field
@@ -63,6 +64,7 @@ The operator covers the following cases:
   * Remove the Deployment, ConfigMap, Service and Route resources
   * Remove the service account as OAuth client in `namespace` deployment
   * Remove the route URL from the OAuth client authorized redirect URIs in `cluster` deployment
+  * Remove the generated client certificate Secret
 
 ## Deploy
 
