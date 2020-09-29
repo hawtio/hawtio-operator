@@ -25,7 +25,7 @@ spec:
 
     To secure the communication between the Hawtio console and the Jolokia agents, a client certificate is automatically generated.
 
-    Note that `CN=hawtio-online.hawtio.svc` must be trusted by the Jolokia agents, for which client certification authentication is enabled. See the `clientPrincipal` parameter from the [Jolokia agent configuration options](https://jolokia.org/reference/html/agents.html#agent-jvm-config).
+    Note that the client certificate CN (defaults to `hawtio-online.hawtio.svc`) must be trusted by the Jolokia agents, for which client certification authentication is enabled. See the `clientPrincipal` parameter from the [Jolokia agent configuration options](https://jolokia.org/reference/html/agents.html#agent-jvm-config).
   keywords:
   - Hawtio
   - Java
