@@ -321,14 +321,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 					}
 				}
 				if daysToExpiry == 0 {
-					if r.CertificateDaysToExpiry == 0 {
-						daysToExpiry = 1000
-					} else {
-						daysToExpiry = r.CertificateDaysToExpiry
-					}
+					daysToExpiry = 1000
 				}
 
-				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName,daysToExpiry)
+				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName, daysToExpiry)
 				if err != nil {
 					reqLogger.Error(err, "Generating the client certificate failed", err)
 					return reconcile.Result{}, err
