@@ -64,8 +64,9 @@ type HawtioSpec struct {
 	// so that the host is re-generated.
 	RouteHostName string `json:"routeHostName,omitempty"`
 	// The Hawtio console container image version. Defaults to 'latest'.
-	Version           string `json:"version,omitempty"`
-	CertificateConfig HawtioCertificateConfig `json:"certificateConfig,omitempty"`
+	Version string `json:"version,omitempty"`
+	// The authentication configuration
+	Auth HawtioAuth `json:"auth,omitempty"`
 	// The RBAC configuration
 	RBAC HawtioRBAC `json:"rbac,omitempty"`
 	// The Hawtio console compute resources
@@ -82,12 +83,12 @@ type HawtioRBAC struct {
 	ConfigMap string `json:"configMap,omitempty"`
 }
 
-//The certificate configuration
-type HawtioCertificateConfig struct {
-	// CommonName - required for generation of the client certificate
-	CommonName string `json:"CommonName,omitempty"`
-	// Number of days to expiry of the certificate. Its required for the client certificate generation
-	DaysToExpiry int `json:"DaysToExpiry,omitempty"`
+// The authentication configuration
+type HawtioAuth struct {
+	// The generated client certificate CN
+	ClientCertCommonName string `json:"clientCertCommonName,omitempty"`
+	// The generated client certificate expiration date
+	ClientCertExpirationDate metav1.Time `json:"clientCertExpirationDate,omitempty"`
 }
 
 // Reports the observed state of Hawtio

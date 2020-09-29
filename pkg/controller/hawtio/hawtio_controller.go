@@ -311,8 +311,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 					return reconcile.Result{}, err
 				}
 
-				commonName := hawtio.Spec.CertificateConfig.CommonName
-				daysToExpiry := hawtio.Spec.CertificateConfig.DaysToExpiry
+				commonName := hawtio.Spec.Auth.ClientCertCommonName
 				if commonName == "" {
 					if r.ClientCertCommonName == "" {
 						commonName = "hawtio-online.hawtio.svc"
@@ -320,11 +319,11 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 						commonName = r.ClientCertCommonName
 					}
 				}
-				if daysToExpiry == 0 {
-					daysToExpiry = 1000
+				expirationDate := hawtio.Spec.Auth.ClientCertExpirationDate.Time
+				if expirationDate.IsZero() {
+					expirationDate = time.Now().AddDate(1, 0, 0)
 				}
-
-				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName, daysToExpiry)
+				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName, expirationDate)
 				if err != nil {
 					reqLogger.Error(err, "Generating the client certificate failed", err)
 					return reconcile.Result{}, err
