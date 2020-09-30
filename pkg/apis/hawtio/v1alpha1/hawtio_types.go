@@ -88,7 +88,7 @@ type HawtioAuth struct {
 	// The generated client certificate CN
 	ClientCertCommonName string `json:"clientCertCommonName,omitempty"`
 	// The generated client certificate expiration date
-	ClientCertExpirationDate metav1.Time `json:"clientCertExpirationDate,omitempty"`
+	ClientCertExpirationDate *metav1.Time `json:"clientCertExpirationDate,omitempty"`
 }
 
 // Reports the observed state of Hawtio

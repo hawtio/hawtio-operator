@@ -320,10 +320,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 						commonName = r.ClientCertCommonName
 					}
 				}
-				expirationDate := hawtio.Spec.Auth.ClientCertExpirationDate.Time
-				if expirationDate.IsZero() {
-					// Let's default to one year validity period
-					expirationDate = time.Now().AddDate(1, 0, 0)
+				// Let's default to one year validity period
+				expirationDate := time.Now().AddDate(1, 0, 0)
+				if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
+					expirationDate = date.Time
 				}
 				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName, expirationDate)
 				if err != nil {
