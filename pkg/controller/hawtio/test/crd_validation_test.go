@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ghodss/yaml"
@@ -49,7 +50,13 @@ spec:
 func TestCompleteCRD(t *testing.T) {
 	schema := getSchema(t)
 	missingEntries := schema.GetMissingEntries(&v1alpha1.Hawtio{})
-	assert.Emptyf(t, missingEntries, "Missing or incorrect schema validation: %v", missingEntries)
+	for _, missing := range missingEntries {
+		if strings.HasPrefix(missing.Path, "/spec/auth/clientCertExpirationDate") {
+			// operator-utils does not deal with Time type validation correctly
+		} else {
+			assert.Fail(t, "Discrepancy between CRD and Struct", "Missing or incorrect schema validation at %v, expected type %v", missing.Path, missing.Type)
+		}
+	}
 }
 
 func getCRFile(t *testing.T, dir string) string {
