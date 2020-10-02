@@ -5,14 +5,19 @@ go 1.13
 require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/RHsyseng/operator-utils v1.4.5-0.20200818174404-bac3ddc29e6b
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/gobuffalo/packr/v2 v2.7.1
+	github.com/heroku/docker-registry-client v0.0.0-20190909225348-afc9e1acc3d5
 	github.com/openshift/api v0.0.0-20200521101457-60c476765272
 	// OpenShift 4.5 (via replace statement)
 	github.com/openshift/client-go v3.9.0+incompatible
+	github.com/operator-framework/api v0.3.15
 	github.com/operator-framework/operator-lib v0.1.0
+	github.com/operator-framework/operator-lifecycle-manager v3.11.0+incompatible
 	github.com/sirupsen/logrus v1.5.0 // indirect
 	github.com/stretchr/testify v1.6.1
+	github.com/tidwall/sjson v1.1.1
 	go.uber.org/multierr v1.4.0 // indirect
 	golang.org/x/net v0.0.0-20200625001655-4c5254603344 // indirect
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect

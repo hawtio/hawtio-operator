@@ -7,29 +7,37 @@ spec:
   selector:
     matchLabels:
       name: hawtio-operator
+  strategy: {}
   template:
     metadata:
       labels:
         name: hawtio-operator
     spec:
-      serviceAccountName: hawtio-operator
       containers:
-        - name: hawtio-operator
-          image: docker.io/hawtio/operator
-          ports:
-          - containerPort: 60000
-            name: metrics
-          command:
-          - hawtio-operator
-          imagePullPolicy: Always
-          env:
-            - name: WATCH_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: OPERATOR_NAME
-              value: "hawtio-operator"
+      - command:
+        - hawtio-operator
+        env:
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: hawtio-operator
+        - name: HAWTIO_IMAGE_1.6
+          value: registry.redhat.io/fuse7/fuse-console:1.6
+        - name: HAWTIO_IMAGE_1.5
+          value: registry.redhat.io/fuse7/fuse-console:1.5
+        - name: HAWTIO_IMAGE_1.4
+          value: registry.redhat.io/fuse7/fuse-console:1.4
+        image: registry.redhat.io/fuse7-tech-preview/fuse-console-operator:1.6
+        imagePullPolicy: Always
+        name: hawtio-operator
+        ports:
+        - containerPort: 60000
+          name: metrics
+        resources: {}
+      serviceAccountName: hawtio-operator

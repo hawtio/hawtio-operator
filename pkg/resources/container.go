@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio/constants"
 	"os"
 
 	corev1 "k8s.io/api/core/v1"
@@ -52,21 +53,31 @@ func newContainer(hawtio *hawtiov1alpha1.Hawtio, envVars []corev1.EnvVar, imageR
 
 	return container
 }
+//func getImageForCR
+func getImageForCR(version string) string {
 
-//TODO(): will replace that function with update code committed in PR #23
-func getImageFor(version string, imageRepository string) string {
-	tag := "latest"
-	if len(version) > 0 {
-		tag = version
-	}
-	repository := os.Getenv("IMAGE_REPOSITORY")
-	if repository == "" {
-		if imageRepository != "" {
-			repository = imageRepository
-		} else {
-			repository = "docker.io/hawtio/online"
+	image := ""
+
+	if val, exists := os.LookupEnv(constants.HawtioVar + version); exists {
+		image = val
+
+	} else {
+		tag := "latest"
+
+		if len(version) > 0 {
+			tag = version
 		}
+		repository := os.Getenv("IMAGE_REPOSITORY")
+		if repository == "" {
+			if ImageRepository != "" {
+				repository = ImageRepository
+			} else {
+				repository = "docker.io/hawtio/online"
+			}
+		}
+		image = repository + ":" + tag
 	}
 
-	return repository + ":" + tag
+	return image
+
 }

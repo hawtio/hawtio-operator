@@ -83,3 +83,7 @@ KUSTOMIZE=$(GOBIN)/kustomize
 else
 KUSTOMIZE=$(shell which kustomize)
 endif
+
+.PHONY: generate-csv
+generate-csv:
+	./tools/go-csv.sh
