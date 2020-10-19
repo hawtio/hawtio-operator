@@ -17,7 +17,7 @@ spec:
         - name: hawtio-operator
           image: docker.io/hawtio/operator
           ports:
-          - containerPort: 60000
+          - containerPort: 8080
             name: metrics
           command:
           - hawtio-operator

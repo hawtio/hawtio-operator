@@ -149,7 +149,7 @@ spec:
                 imagePullPolicy: Always
                 name: hawtio-operator
                 ports:
-                - containerPort: 60000
+                - containerPort: 8080
                   name: metrics
                 resources: {}
               serviceAccountName: hawtio-operator
