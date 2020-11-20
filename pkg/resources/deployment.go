@@ -194,7 +194,9 @@ func getServingCertificateMountPath(version string, legacyServingCertificateMoun
 	if version != "latest" {
 		semVer, err := semver.NewVersion(version)
 		if err != nil {
-			return "", err
+			// not a standard version format (possibly an arbitrary tag)
+			// which is fine and just skip version check
+			return serviceSigningSecretVolumeMountPath, nil
 		}
 		var constraints *semver.Constraints
 		if legacyServingCertificateMountVersion == "" {
