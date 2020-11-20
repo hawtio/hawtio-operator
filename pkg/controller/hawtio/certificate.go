@@ -6,7 +6,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	errors2 "errors"
+	"errors"
 	"math/big"
 	rand2 "math/rand"
 	"time"
@@ -19,7 +19,7 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 	caCertFile := caSecret.Data["tls.crt"]
 	pemBlock, _ := pem.Decode(caCertFile)
 	if pemBlock == nil {
-		return nil, errors2.New("failed to decode CA certificate")
+		return nil, errors.New("failed to decode CA certificate")
 	}
 	caCert, err := x509.ParseCertificate(pemBlock.Bytes)
 	if err != nil {
@@ -29,7 +29,7 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 	caKey := caSecret.Data["tls.key"]
 	pemBlock, _ = pem.Decode(caKey)
 	if pemBlock == nil {
-		return nil, errors2.New("failed to decode CA certificate signing key")
+		return nil, errors.New("failed to decode CA certificate signing key")
 	}
 	caPrivateKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
 	if err != nil {
@@ -49,12 +49,12 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 	}
 
 	// generate cert private key
-	certPrivetKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	certPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
 	}
 
-	privateKeyBytes := x509.MarshalPKCS1PrivateKey(certPrivetKey)
+	privateKeyBytes := x509.MarshalPKCS1PrivateKey(certPrivateKey)
 	// encode for storing into secret
 	privateKeyPem := pem.EncodeToMemory(
 		&pem.Block{
@@ -62,7 +62,7 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 			Bytes: privateKeyBytes,
 		},
 	)
-	certBytes, err := x509.CreateCertificate(rand.Reader, cert, caCert, &certPrivetKey.PublicKey, caPrivateKey)
+	certBytes, err := x509.CreateCertificate(rand.Reader, cert, caCert, &certPrivateKey.PublicKey, caPrivateKey)
 	if err != nil {
 		return nil, err
 	}
