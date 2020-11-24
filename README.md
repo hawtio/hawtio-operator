@@ -128,3 +128,25 @@ deployment "hawtio-online" successfully rolled out
 $ kubectl delete hawtio hawtio-online
 hawtio.hawt.io "hawtio-online" deleted
 ```
+
+## Develop
+
+To build and test the operator locally, run the following command:
+
+```console
+$ make build
+```
+
+Once you get `hawtio-operator` locally, you can run the operator as follows:
+
+```console
+$ WATCH_NAMESPACE=<namespace> ./hawtio-operator
+```
+
+where `WATCH_NAMESPACE` is the mandatory environment variable. Setting `WATCH_NAMESPACE=` (empty) runs the operator as `cluster` type.
+
+You can also specify `IMAGE_REPOSITORY` environment variable to change the docker image repository for the hawtio-online instances from the default `docker.io/hawtio/online` to somewhere else. For example:
+
+```console
+$ WATCH_NAMESPACE=hawtio IMAGE_REPOSITORY=docker.io/fuse/hawtio-online ./hawtio-operator
+```
