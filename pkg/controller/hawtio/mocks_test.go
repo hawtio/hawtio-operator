@@ -23,7 +23,7 @@ var (
 			APIVersion: "hawt.io/v1alpha1",
 		},
 		Spec: hawtiov1alpha1.HawtioSpec{
-			Type:          "namespace",
+			Type:          hawtiov1alpha1.NamespaceHawtioDeploymentType,
 			Version:       "latest",
 			RouteHostName: "hawtio.cluster",
 			Config: hawtiov1alpha1.HawtioConfig{
