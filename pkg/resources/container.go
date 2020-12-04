@@ -11,7 +11,6 @@ import (
 
 const containerPortName = "https"
 
-//func newContainer
 func newContainer(hawtio *hawtiov1alpha1.Hawtio, envVars []corev1.EnvVar, imageRepository string) corev1.Container {
 	container := corev1.Container{
 		Name:  hawtio.Name + "-container",

@@ -2,6 +2,7 @@ package resources
 
 import (
 	"path"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -28,7 +29,7 @@ func envVarsForHawtio(deploymentType hawtiov1alpha1.HawtioDeploymentType, name s
 	envVars := []corev1.EnvVar{
 		{
 			Name:  HawtioTypeEnvVar,
-			Value: string(deploymentType),
+			Value: strings.ToLower(string(deploymentType)),
 		},
 		{
 			Name:  HawtioOAuthClientEnvVar,

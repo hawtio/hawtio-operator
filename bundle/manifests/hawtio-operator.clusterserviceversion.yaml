@@ -22,7 +22,7 @@ metadata:
                 "memory": "32Mi"
               }
             },
-            "type": "namespace"
+            "type": "Namespace"
           }
         }
       ]
