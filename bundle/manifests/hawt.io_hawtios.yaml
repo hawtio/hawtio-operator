@@ -180,8 +180,8 @@ spec:
             type:
               description: 'The deployment type. Defaults to cluster. cluster: Hawtio is capable of discovering and managing applications across all namespaces the authenticated user has access to. namespace: Hawtio is capable of discovering and managing applications within the deployment namespace.'
               enum:
-              - cluster
-              - namespace
+              - Cluster
+              - Namespace
               type: string
             version:
               description: The Hawtio console container image version. Defaults to 'latest'.

@@ -220,8 +220,8 @@ spec:
                 the authenticated user has access to. namespace: Hawtio is capable
                 of discovering and managing applications within the deployment namespace.'
               enum:
-                - cluster
-                - namespace
+                - Cluster
+                - Namespace
               type: string
             version:
               description: The Hawtio console container image version. Defaults to

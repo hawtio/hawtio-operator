@@ -10,18 +10,18 @@ import (
 // Important: Run "make k8s-generate" to regenerate code after modifying this file
 
 // HawtioDeploymentType defines the possible deployment types
-// +kubebuilder:validation:Enum=cluster;namespace
+// +kubebuilder:validation:Enum=Cluster;Namespace
 type HawtioDeploymentType string
 
 const (
 	// ClusterHawtioDeploymentType is the deployment type capable of discovering
 	// and managing applications across all namespaces the authenticated user
 	// has access to.
-	ClusterHawtioDeploymentType HawtioDeploymentType = "cluster"
+	ClusterHawtioDeploymentType HawtioDeploymentType = "Cluster"
 
 	// NamespaceHawtioDeploymentType is the deployment type capable of discovering
 	// and managing applications within the deployment namespace.
-	NamespaceHawtioDeploymentType HawtioDeploymentType = "namespace"
+	NamespaceHawtioDeploymentType HawtioDeploymentType = "Namespace"
 )
 
 // +kubebuilder:object:root=true
