@@ -35,7 +35,7 @@ kind: Hawtio
 metadata:
   name: trial
 spec:
-  type: namespace
+  type: Namespace
   replicas: 1
   version: latest
 `
