@@ -145,7 +145,7 @@ spec:
                   description: The name of the ConfigMap that contains the ACL definition.
                   type: string
                 enabled:
-                  description: Whether RBAC is enabled. Defaults to true.
+                  description: Whether RBAC is enabled.
                   type: boolean
               type: object
             replicas:
