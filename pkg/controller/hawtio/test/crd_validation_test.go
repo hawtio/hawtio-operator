@@ -53,6 +53,8 @@ func TestCompleteCRD(t *testing.T) {
 	for _, missing := range missingEntries {
 		if strings.HasPrefix(missing.Path, "/spec/auth/clientCertExpirationDate") {
 			// operator-utils does not deal with Time type validation correctly
+		} else if strings.HasPrefix(missing.Path, "/spec/rbac/enabled") {
+			// spec.rbac.enabled is intentionally hidden from schema
 		} else {
 			assert.Fail(t, "Discrepancy between CRD and Struct", "Missing or incorrect schema validation at %v, expected type %v", missing.Path, missing.Type)
 		}
