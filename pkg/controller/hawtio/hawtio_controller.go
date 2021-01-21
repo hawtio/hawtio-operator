@@ -346,7 +346,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		}
 	}
 
-	if cm := hawtio.Spec.RBAC.ConfigMap; hawtio.IsRbacEnabled(isOpenShift4) && cm != "" {
+	if cm := hawtio.Spec.RBAC.ConfigMap; cm != "" {
 		// Check that the ConfigMap exists
 		var rbacConfigMap corev1.ConfigMap
 		err := r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: cm}, &rbacConfigMap)

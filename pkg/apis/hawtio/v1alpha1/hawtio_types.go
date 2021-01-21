@@ -77,8 +77,6 @@ type HawtioSpec struct {
 
 // The RBAC configuration
 type HawtioRBAC struct {
-	// Whether RBAC is enabled. Defaults to true.
-	Enabled *bool `json:"enabled,omitempty"`
 	// The name of the ConfigMap that contains the ACL definition.
 	ConfigMap string `json:"configMap,omitempty"`
 }
