@@ -1,0 +1,17 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: hawtio-operator-installer
+  labels:
+    #
+    # Add these permissions to the "admin" and "edit" default roles
+    # to allow namespace admin user access hawtio api
+    #
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+rules:
+- apiGroups:
+  - "hawt.io"
+  resources:
+  - "*"
+  verbs: [ get, list, create, update, delete, deletecollection, watch, patch ]
