@@ -2,6 +2,10 @@
 
 A [Kubernetes](https://kubernetes.io) operator, based on the [Operator SDK](https://sdk.operatorframework.io), that operates [Hawtio Online](https://github.com/hawtio/hawtio-online).
 
+## Upgrading
+
+See [Upgrading Guide](docs/Upgrading.md) when you are upgrading your hawtio-operator installation.
+
 ## Resources
 
 The `Hawtio` CRD defines the resource the operator uses to configure a Hawtio Online operand, e.g.:
