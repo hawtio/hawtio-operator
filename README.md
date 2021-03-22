@@ -4,7 +4,7 @@ A [Kubernetes](https://kubernetes.io) operator, based on the [Operator SDK](http
 
 ## Upgrading
 
-See [Upgrading Guide](docs/Upgrading.md) when you are upgrading your hawtio-operator installation.
+See [Upgrading Guide](docs/upgrading.md) when you are upgrading your hawtio-operator installation.
 
 ## Resources
 
