@@ -1,4 +1,4 @@
-FROM golang:1.13.5-alpine3.11 AS builder
+FROM golang:1.16-alpine3.14 AS builder
 
 RUN apk update
 RUN apk add git make
@@ -9,7 +9,7 @@ COPY . .
 
 RUN make build
 
-FROM alpine:3.11.2
+FROM alpine:3.14
 
 USER nobody
 
