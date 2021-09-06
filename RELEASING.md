@@ -27,3 +27,5 @@ Build image and push it to Docker Hub:
 TAG=x.x.x make image
 docker push hawtio/operator:x.x.x
 ```
+
+> :information_source: For `podman` users, it is important to do `export BUILDAH_FORMAT=docker` before `make image` so that the built image is based on Docker manifest type.
