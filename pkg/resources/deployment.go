@@ -2,6 +2,7 @@ package resources
 
 import (
 	"path"
+	"strings"
 
 	"github.com/Masterminds/semver"
 
@@ -9,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	labelUtils "k8s.io/apimachinery/pkg/labels"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/util"
@@ -84,9 +86,18 @@ func newPodTemplateSpec(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openSh
 	}
 	volumes := newVolumes(hawtio, isOpenShift4)
 
+	labels := labelsForHawtio(hawtio.Name)
+	additionalLabels, err := labelUtils.ConvertSelectorToLabelsMap(buildVariables.AdditionalLabels)
+	if err != nil {
+		return corev1.PodTemplateSpec{}, err
+	}
+	for name, value := range additionalLabels {
+		labels[name] = value
+	}
+
 	pod := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels: labelsForHawtio(hawtio.Name),
+			Labels: labels,
 			// Used to trigger a rollout deployment if config changed,
 			// similarly to `kubectl rollout restart`
 			Annotations: map[string]string{

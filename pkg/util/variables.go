@@ -12,4 +12,6 @@ type BuildVariables struct {
 	ServerRootDirectory string
 	// The default common name for the generated client certificates
 	ClientCertCommonName string
+	// Additional template spec labels
+	AdditionalLabels string
 }

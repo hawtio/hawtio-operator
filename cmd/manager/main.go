@@ -26,6 +26,7 @@ var (
 	ProductName                          string
 	ServerRootDirectory                  string
 	CertificateCommonName                string
+	AdditionalLabels                     string
 )
 
 var log = logf.Log.WithName("cmd")
@@ -88,6 +89,7 @@ func main() {
 		ProductName:                          ProductName,
 		ServerRootDirectory:                  ServerRootDirectory,
 		ClientCertCommonName:                 CertificateCommonName,
+		AdditionalLabels:                     AdditionalLabels,
 	}
 	if err := controller.AddToManager(mgr, bv); err != nil {
 		log.Error(err, "")
