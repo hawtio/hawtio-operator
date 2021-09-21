@@ -2,15 +2,14 @@ package resources
 
 import (
 	"path"
-	"strings"
 
 	"github.com/Masterminds/semver"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	labelUtils "k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/util"
