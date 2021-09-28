@@ -67,6 +67,8 @@ type HawtioSpec struct {
 	Version string `json:"version,omitempty"`
 	// The authentication configuration
 	Auth HawtioAuth `json:"auth,omitempty"`
+	// The Nginx runtime configuration
+	Nginx HawtioNginx `json:"nginx,omitempty"`
 	// The RBAC configuration
 	RBAC HawtioRBAC `json:"rbac,omitempty"`
 	// The Hawtio console compute resources
@@ -75,18 +77,30 @@ type HawtioSpec struct {
 	Config HawtioConfig `json:"config,omitempty"`
 }
 
-// The RBAC configuration
-type HawtioRBAC struct {
-	// The name of the ConfigMap that contains the ACL definition.
-	ConfigMap string `json:"configMap,omitempty"`
-}
-
 // The authentication configuration
 type HawtioAuth struct {
 	// The generated client certificate CN
 	ClientCertCommonName string `json:"clientCertCommonName,omitempty"`
 	// The generated client certificate expiration date
 	ClientCertExpirationDate *metav1.Time `json:"clientCertExpirationDate,omitempty"`
+}
+
+// The Nginx runtime configuration
+type HawtioNginx struct {
+	// The buffer size for reading client request body. Defaults to `256k`.
+	ClientBodyBufferSize string `json:"clientBodyBufferSize,omitempty"`
+	// The number and size of the buffers used for reading a response from
+	// the proxied server, for a single connection. Defaults to `16 128k`.
+	ProxyBuffers string `json:"proxyBuffers,omitempty"`
+	// The size of the buffer used for storing the response body of a subrequest.
+	// Defaults to `10m`.
+	SubrequestOutputBufferSize string `json:"subrequestOutputBufferSize,omitempty"`
+}
+
+// The RBAC configuration
+type HawtioRBAC struct {
+	// The name of the ConfigMap that contains the ACL definition.
+	ConfigMap string `json:"configMap,omitempty"`
 }
 
 // Reports the observed state of Hawtio

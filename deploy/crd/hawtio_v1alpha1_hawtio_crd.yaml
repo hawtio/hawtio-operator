@@ -170,6 +170,23 @@ spec:
                           type: string
                       type: object
                   type: object
+                nginx:
+                  description: The Nginx runtime configuration
+                  properties:
+                    clientBodyBufferSize:
+                      description: The buffer size for reading client request body.
+                        Defaults to `256k`.
+                      type: string
+                    proxyBuffers:
+                      description: The number and size of the buffers used for reading
+                        a response from the proxied server, for a single connection.
+                        Defaults to `16 128k`.
+                      type: string
+                    subrequestOutputBufferSize:
+                      description: The size of the buffer used for storing the response
+                        body of a subrequest. Defaults to `10m`.
+                      type: string
+                  type: object
                 rbac:
                   description: The RBAC configuration
                   properties:

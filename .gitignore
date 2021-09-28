@@ -1,3 +1,5 @@
+hawtio-operator
+
 # Temporary Build Files
 *-packr.go
 pkg/openshift/packrd
