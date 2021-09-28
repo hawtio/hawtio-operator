@@ -10,13 +10,16 @@ import (
 )
 
 const (
-	HawtioTypeEnvVar              = "HAWTIO_ONLINE_MODE"
-	HawtioNamespaceEnvVar         = "HAWTIO_ONLINE_NAMESPACE"
-	HawtioOAuthClientEnvVar       = "HAWTIO_OAUTH_CLIENT_ID"
-	HawtioRbacEnvVar              = "HAWTIO_ONLINE_RBAC_ACL"
-	HawtioGatewayEnvVar           = "HAWTIO_ONLINE_GATEWAY"
-	OpenShiftClusterVersionEnvVar = "OPENSHIFT_CLUSTER_VERSION"
-	OpenShiftWebConsoleUrlEnvVar  = "OPENSHIFT_WEB_CONSOLE_URL"
+	HawtioTypeEnvVar                = "HAWTIO_ONLINE_MODE"
+	HawtioNamespaceEnvVar           = "HAWTIO_ONLINE_NAMESPACE"
+	HawtioOAuthClientEnvVar         = "HAWTIO_OAUTH_CLIENT_ID"
+	HawtioRbacEnvVar                = "HAWTIO_ONLINE_RBAC_ACL"
+	HawtioGatewayEnvVar             = "HAWTIO_ONLINE_GATEWAY"
+	OpenShiftClusterVersionEnvVar   = "OPENSHIFT_CLUSTER_VERSION"
+	OpenShiftWebConsoleUrlEnvVar    = "OPENSHIFT_WEB_CONSOLE_URL"
+	NginxClientBodyBufferSize       = "NGINX_CLIENT_BODY_BUFFER_SIZE"
+	NginxProxyBuffers               = "NGINX_PROXY_BUFFERS"
+	NginxSubrequestOutputBufferSize = "NGINX_SUBREQUEST_OUTPUT_BUFFER_SIZE"
 )
 
 func envVarsForHawtio(deploymentType hawtiov1alpha1.HawtioDeploymentType, name string) []corev1.EnvVar {
@@ -80,4 +83,27 @@ func envVarForRBAC(rbacConfigMapName string) corev1.EnvVar {
 		Name:  HawtioRbacEnvVar,
 		Value: value,
 	}
+}
+
+func envVarsForNginx(nginx hawtiov1alpha1.HawtioNginx) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
+	if nginx.ClientBodyBufferSize != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  NginxClientBodyBufferSize,
+			Value: nginx.ClientBodyBufferSize,
+		})
+	}
+	if nginx.ProxyBuffers != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  NginxProxyBuffers,
+			Value: nginx.ProxyBuffers,
+		})
+	}
+	if nginx.SubrequestOutputBufferSize != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  NginxSubrequestOutputBufferSize,
+			Value: nginx.SubrequestOutputBufferSize,
+		})
+	}
+	return envVars
 }
