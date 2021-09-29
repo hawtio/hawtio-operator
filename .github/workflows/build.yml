@@ -1,0 +1,42 @@
+name: build
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "cmd/**"
+      - "deploy/**"
+      - "pkg/**"
+  push:
+    branches:
+      - master
+    paths:
+      - "cmd/**"
+      - "deploy/**"
+      - "pkg/**"
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        go: ["1.16", "1.15"]
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Cache modules
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Build
+        run: make build
