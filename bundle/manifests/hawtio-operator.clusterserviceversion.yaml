@@ -12,6 +12,7 @@ metadata:
           },
           "spec": {
             "replicas": 1,
+            "version": "1.12.0",
             "resources": {
               "limits": {
                 "cpu": "1",
@@ -30,13 +31,13 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: docker.io/hawtio/operator
-    createdAt: "2020-09-14T10:59:00Z"
+    createdAt: "2021-09-03T14:52:00Z"
     description: Hawtio eases the discovery and management of Java applications deployed on OpenShift.
-    operators.operatorframework.io/builder: operator-sdk-v1.0.0
+    operators.operatorframework.io/builder: operator-sdk-v1.11.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
     repository: https://github.com/hawtio/hawtio-operator
     support: Red Hat
-  name: hawtio-operator.v0.3.0
+  name: hawtio-operator.v0.4.0
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -145,7 +146,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: hawtio-operator
-                image: docker.io/hawtio/operator
+                image: docker.io/hawtio/operator:0.4.0
                 imagePullPolicy: Always
                 name: hawtio-operator
                 ports:
@@ -245,6 +246,8 @@ spec:
   - email: hawtio@googlegroups.com
     name: The Hawtio team
   maturity: alpha
+  minKubeVersion: 1.19.0
   provider:
     name: Red Hat
-  version: 0.3.0
+  replaces: hawtio-operator.v0.3.0
+  version: 0.4.0

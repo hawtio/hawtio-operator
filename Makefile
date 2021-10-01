@@ -91,7 +91,9 @@ endif
 
 bundle: kustomize
 	$(KUSTOMIZE) build bundle | operator-sdk generate bundle --kustomize-dir bundle --version $(VERSION)
-	#operator-sdk bundle validate ./bundle
+
+validate-bundle:
+	operator-sdk bundle validate ./bundle --select-optional suite=operatorframework
 
 # find or download controller-gen
 # download controller-gen if necessary
