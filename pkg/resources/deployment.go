@@ -27,16 +27,17 @@ const (
 	rbacConfigMapVolumeMountPath              = "/etc/hawtio/rbac"
 	RBACConfigMapKey                          = "ACL.yaml"
 	configVersionAnnotation                   = "hawtio.hawt.io/configversion"
+	clientCertSecretVersionAnnotation         = "hawtio.hawt.io/certversion"
 	serverRootDirectory                       = "/usr/share/nginx/html"
 )
 
-func NewDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
+func NewDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
 	namespacedName := types.NamespacedName{
 		Name:      hawtio.Name,
 		Namespace: hawtio.Namespace,
 	}
 
-	podTemplateSpec, err := newPodTemplateSpec(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMapVersion, buildVariables)
+	podTemplateSpec, err := newPodTemplateSpec(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMapVersion, clientCertSecretVersion, buildVariables)
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +74,15 @@ func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts cor
 	}
 }
 
-func newPodTemplateSpec(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
+func newPodTemplateSpec(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
 	container := newContainer(hawtio, newEnvVars(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
+
+	annotations := map[string]string{
+		configVersionAnnotation: configMapVersion,
+	}
+	if clientCertSecretVersion != "" {
+		annotations[clientCertSecretVersionAnnotation] = clientCertSecretVersion
+	}
 
 	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables)
 	if err != nil {
@@ -99,9 +107,7 @@ func newPodTemplateSpec(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openSh
 			Labels: labels,
 			// Used to trigger a rollout deployment if config changed,
 			// similarly to `kubectl rollout restart`
-			Annotations: map[string]string{
-				configVersionAnnotation: configMapVersion,
-			},
+			Annotations: annotations,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{

@@ -5,6 +5,10 @@ metadata:
 spec:
   type: Namespace
   replicas: 1
+  auth:
+    clientCertCheckSchedule: "* */12 * * *"
+    clientCertExpirationPeriod: 24
+
   resources:
     limits:
       cpu: "1"

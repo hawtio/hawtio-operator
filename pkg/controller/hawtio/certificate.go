@@ -7,8 +7,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
+	v1 "k8s.io/api/batch/v1"
+	"k8s.io/api/batch/v1beta1"
 	"math/big"
 	rand2 "math/rand"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -82,4 +86,82 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 			corev1.TLSPrivateKeyKey: privateKeyPem,
 		}, Type: corev1.SecretTypeTLS,
 	}, nil
+}
+
+func ValidateCertificate(caSecret corev1.Secret, validAtLeastForHours float64) (bool, error) {
+	block, _ := pem.Decode(caSecret.Data[corev1.TLSCertKey])
+	cert, err := x509.ParseCertificate(block.Bytes)
+
+	if err != nil {
+		log.Error(err, "certificate reading error")
+		return false, err
+	}
+
+	diff := cert.NotAfter.Sub(time.Now()).Hours()
+	// if cert is valid longer than certain amount of hours
+	if diff > validAtLeastForHours {
+		log.Info(fmt.Sprintf("Certificate is valid for %.0f days", diff/24))
+		return true, nil
+	}
+	//if is valid
+	return false, nil
+}
+
+func createCertValidationCronJob(name, namespace, image, schedule string, period int) *v1beta1.CronJob {
+	if period == 0 {
+		period = 24
+	}
+	cronjob := &v1beta1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: v1beta1.CronJobSpec{
+			Schedule:          schedule,
+			ConcurrencyPolicy: v1beta1.ForbidConcurrent,
+			JobTemplate: v1beta1.JobTemplateSpec{
+				Spec: v1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							ServiceAccountName: "hawtio-operator",
+							RestartPolicy:      "Never",
+							Containers: []corev1.Container{
+								{
+									Name:  "hawtio-operator",
+									Image: image,
+									Command: []string{
+										"hawtio-operator",
+									},
+									Args: []string{
+										"cert-expiry-check",
+										"--cert-namespace",
+										namespace,
+										"--cert-expiration-period",
+										strconv.Itoa(period),
+									},
+									ImagePullPolicy: "Always",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return cronjob
+}
+
+func updateExpirationPeriod(cronJob *v1beta1.CronJob, newPeriod int) bool {
+	arguments := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Args
+	for i, arg := range arguments {
+		if arg == "--cert-expiration-period" {
+			period, _ := strconv.Atoi(arguments[i+1])
+			if period == newPeriod {
+				return false
+			}
+			cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Args[i+1] = strconv.Itoa(newPeriod)
+			return true
+		}
+	}
+	return false
 }

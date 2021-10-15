@@ -17,7 +17,10 @@ rules:
     - secrets
   verbs:
     - get
+    - watch
     - create
+    - delete
+    - list
 - apiGroups:
   - ""
   resources:
@@ -70,3 +73,15 @@ rules:
   - '*'
   verbs:
   - '*'
+- apiGroups:
+    - batch
+  resources:
+    - cronjobs
+  verbs:
+    - get
+    - watch
+    - list
+    - update
+    - create
+    - delete
+
