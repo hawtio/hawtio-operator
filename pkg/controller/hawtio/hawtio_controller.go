@@ -3,6 +3,8 @@ package hawtio
 import (
 	"context"
 	"fmt"
+	"k8s.io/api/batch/v1beta1"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -154,6 +156,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 			return oldDeployment.Status.Replicas != newDeployment.Status.Replicas
 		},
 	})
+	//watch secret
+	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &hawtiov1alpha1.Hawtio{},
+	})
 	if err != nil {
 		return err
 	}
@@ -297,11 +304,15 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	if isOpenShift4 {
+		cronJob := &v1beta1.CronJob{}
+		cronJobName := request.Name + "-certificate-expiry-check"
+		cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob)
+
 		// Check whether client certificate secret exists
 		secretName := request.Name + "-tls-proxying"
-		_, err := r.coreClient.Secrets(request.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+		clientCertSecret := corev1.Secret{}
+		err := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, &clientCertSecret)
 		// TODO: Update the client certificate when the Hawtio resource changes
-		// TODO: Add automated rotation of client certificate before it expires
 		if err != nil {
 			if errors.IsNotFound(err) {
 				reqLogger.Info("Client certificate secret not found, creating a new one", "secret", secretName)
@@ -339,6 +350,32 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				if err != nil {
 					reqLogger.Error(err, "Creating the client certificate secret failed")
 					return reconcile.Result{}, err
+				}
+
+				// check if certificate rotation is enabled
+				if hawtio.Spec.Auth.ClientCertCheckSchedule != "" {
+					// generate auto-renewal cron job for the secret if it already hasn't been generated.
+					if cronJobErr != nil && errors.IsNotFound(cronJobErr) {
+						pod, err := getOperatorPod(ctx, r.client, request.Namespace)
+						if err != nil {
+							return reconcile.Result{}, err
+						}
+						//create cronJob to validate the Cert
+						cronJob = createCertValidationCronJob(cronJobName, request.Namespace,
+							pod.Spec.Containers[0].Image, hawtio.Spec.Auth.ClientCertCheckSchedule,
+							hawtio.Spec.Auth.ClientCertExpirationPeriod)
+
+						err = controllerutil.SetControllerReference(hawtio, cronJob, r.scheme)
+						if err != nil {
+							return reconcile.Result{}, err
+						}
+						err = r.client.Create(ctx, cronJob)
+
+						if err != nil {
+							log.Error(err, "Cronjob haven't been created")
+							return reconcile.Result{}, err
+						}
+					}
 				}
 			} else {
 				return reconcile.Result{}, err
@@ -380,7 +417,15 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	_, err = r.reconcileDeployment(hawtio, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, hawtio.Spec.Version, configMap)
+	secretName := request.Name + "-tls-proxying"
+	var clientCertSecret = &corev1.Secret{}
+	err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, clientCertSecret)
+	if err != nil {
+		// clientCertSecret isn't used on openshift 3
+		clientCertSecret = nil
+	}
+
+	_, err = r.reconcileDeployment(hawtio, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, hawtio.Spec.Version, configMap, clientCertSecret)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling deployment")
 		return reconcile.Result{}, err
@@ -535,6 +580,30 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 			}
 		}
 	}
+	// Reconcile the client certificate cronJob
+	cronJob := &v1beta1.CronJob{}
+	cronJobName := request.Name + "-certificate-expiry-check"
+
+	if cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob); cronJobErr == nil {
+		update := false
+		if hawtio.Spec.Auth.ClientCertCheckSchedule != "" {
+			if cronJob.Spec.Schedule != hawtio.Spec.Auth.ClientCertCheckSchedule {
+				cronJob.Spec.Schedule = hawtio.Spec.Auth.ClientCertCheckSchedule
+				update = true
+			}
+			if update || updateExpirationPeriod(cronJob, hawtio.Spec.Auth.ClientCertExpirationPeriod) {
+				err = r.client.Update(ctx, cronJob)
+
+				if err != nil {
+					log.Error(err, "CronJob haven't been updated")
+				}
+			}
+
+			//if cronjob exists and ClientCertRotate is disabled, cronjob has to be deleted
+		} else {
+			err = r.client.Delete(ctx, cronJob)
+		}
+	}
 
 	// Reconcile OAuth client
 	// Do not use the default client whose cached informers require
@@ -605,8 +674,12 @@ func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1alpha1.Hawtio) (boo
 	return r.reconcileResources(hawtio, []resource.KubernetesResource{configMap}, []runtime.Object{&corev1.ConfigMapList{}})
 }
 
-func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap) (bool, error) {
-	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), r.BuildVariables)
+func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap, clientCertSecret *corev1.Secret) (bool, error) {
+	clientCertSecretVersion := ""
+	if clientCertSecret != nil {
+		clientCertSecretVersion = clientCertSecret.GetResourceVersion()
+	}
+	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
 	if err != nil {
 		return false, err
 	}
@@ -753,4 +826,17 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1alpha1.H
 	}
 
 	return nil
+}
+
+func getOperatorPod(ctx context.Context, c client.Client, namespace string) (*corev1.Pod, error) {
+	podName, _ := os.LookupEnv("POD_NAME")
+
+	pod := &corev1.Pod{}
+	err := c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, pod)
+
+	if err != nil {
+		log.Error(err, "Pod not found")
+		return nil, err
+	}
+	return pod, nil
 }

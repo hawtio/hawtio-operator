@@ -83,6 +83,12 @@ type HawtioAuth struct {
 	ClientCertCommonName string `json:"clientCertCommonName,omitempty"`
 	// The generated client certificate expiration date
 	ClientCertExpirationDate *metav1.Time `json:"clientCertExpirationDate,omitempty"`
+	// CronJob schedule that defines how often the expiry of the certificate will be checked.
+	// Client rotation isn't enabled if the schedule isn't set.
+	ClientCertCheckSchedule string `json:"clientCertCheckSchedule,omitempty"`
+	// The duration in hours before the expiration date, during which the certification can be rotated.
+	// The default is set to 24 hours.
+	ClientCertExpirationPeriod int `json:"clientCertExpirationPeriod,omitempty"`
 }
 
 // The Nginx runtime configuration
