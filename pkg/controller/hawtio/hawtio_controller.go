@@ -308,7 +308,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 
 				caSecret, err := r.coreClient.Secrets("openshift-service-ca").Get(ctx, "signing-key", metav1.GetOptions{})
 				if err != nil {
-					reqLogger.Error(err, "Reading certificate authority signing key failed", err)
+					reqLogger.Error(err, "Reading certificate authority signing key failed")
 					return reconcile.Result{}, err
 				}
 
@@ -327,7 +327,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				}
 				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName, expirationDate)
 				if err != nil {
-					reqLogger.Error(err, "Generating the client certificate failed", err)
+					reqLogger.Error(err, "Generating the client certificate failed")
 					return reconcile.Result{}, err
 				}
 				err = controllerutil.SetControllerReference(hawtio, certSecret, r.scheme)
@@ -337,7 +337,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 				_, err = r.coreClient.Secrets(request.Namespace).Create(ctx, certSecret, metav1.CreateOptions{})
 				reqLogger.Info("Client certificate created successfully", "secret", secretName)
 				if err != nil {
-					reqLogger.Error(err, "Creating the client certificate secret failed", err)
+					reqLogger.Error(err, "Creating the client certificate secret failed")
 					return reconcile.Result{}, err
 				}
 			} else {
@@ -707,7 +707,7 @@ func getDeployedResources(hawtio *hawtiov1alpha1.Hawtio, client client.Client, l
 	reader := read.New(client).WithNamespace(hawtio.Namespace).WithOwnerObject(hawtio)
 	resourceMap, err := reader.ListAll(listObjects...)
 	if err != nil {
-		log.Error(err, "Failed to list deployed objects. ", err)
+		log.Error(err, "Failed to list deployed objects")
 		return nil, err
 	}
 
