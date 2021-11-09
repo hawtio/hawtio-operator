@@ -10,7 +10,7 @@ func NewService(name string) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				"service.alpha.openshift.io/serving-cert-secret-name": name + "-tls-serving",
+				"service.beta.openshift.io/serving-cert-secret-name": name + "-tls-serving",
 			},
 			Labels: map[string]string{"app": "hawtio"},
 			Name:   name,
