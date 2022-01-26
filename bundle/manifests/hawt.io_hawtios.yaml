@@ -54,6 +54,10 @@ spec:
               auth:
                 description: The authentication configuration
                 properties:
+                  clientCertCheckSchedule:
+                    description: CronJob schedule that defines how often the expiry
+                      of the certificate will be checked
+                    type: string
                   clientCertCommonName:
                     description: The generated client certificate CN
                     type: string
@@ -61,6 +65,11 @@ spec:
                     description: The generated client certificate expiration date
                     format: date-time
                     type: string
+                  clientCertExpirationPeriod:
+                    description: The duration in hours before the expiration date,
+                      during which the certification can be rotated. The default is
+                      set to 24 hours.
+                    type: integer
                 type: object
               config:
                 description: The Hawtio console configuration
