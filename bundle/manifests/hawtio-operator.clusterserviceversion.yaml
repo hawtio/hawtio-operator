@@ -11,6 +11,10 @@ metadata:
             "name": "hawtio-online"
           },
           "spec": {
+            "auth": {
+              "clientCertCheckSchedule": "* */12 * * *",
+              "clientCertExpirationPeriod": 24
+            },
             "replicas": 1,
             "version": "1.12.0",
             "resources": {
@@ -170,7 +174,10 @@ spec:
           - secrets
           verbs:
           - get
+          - watch
           - create
+          - delete
+          - list
         - apiGroups:
           - ""
           resources:
@@ -223,6 +230,17 @@ spec:
           - '*'
           verbs:
           - '*'
+        - apiGroups:
+          - batch
+          resources:
+          - cronjobs
+          verbs:
+          - get
+          - watch
+          - list
+          - update
+          - create
+          - delete
         serviceAccountName: hawtio-operator
     strategy: deployment
   installModes:
