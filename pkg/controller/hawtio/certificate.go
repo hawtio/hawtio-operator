@@ -107,7 +107,7 @@ func ValidateCertificate(caSecret corev1.Secret, validAtLeastForHours float64) (
 	return false, nil
 }
 
-func createCertValidationCronJob(name, namespace, image, schedule string, period int) *v1beta1.CronJob {
+func createCertValidationCronJob(name, namespace, schedule, serviceAccountName string, container corev1.Container, period int) *v1beta1.CronJob {
 	if period == 0 {
 		period = 24
 	}
@@ -123,12 +123,12 @@ func createCertValidationCronJob(name, namespace, image, schedule string, period
 				Spec: v1.JobSpec{
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
-							ServiceAccountName: "hawtio-operator",
+							ServiceAccountName: serviceAccountName,
 							RestartPolicy:      "Never",
 							Containers: []corev1.Container{
 								{
-									Name:  "hawtio-operator",
-									Image: image,
+									Name:  container.Name,
+									Image: container.Image,
 									Command: []string{
 										"hawtio-operator",
 									},

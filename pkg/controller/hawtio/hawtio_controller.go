@@ -360,9 +360,10 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 						if err != nil {
 							return reconcile.Result{}, err
 						}
+
 						//create cronJob to validate the Cert
 						cronJob = createCertValidationCronJob(cronJobName, request.Namespace,
-							pod.Spec.Containers[0].Image, hawtio.Spec.Auth.ClientCertCheckSchedule,
+							hawtio.Spec.Auth.ClientCertCheckSchedule, pod.Spec.ServiceAccountName, pod.Spec.Containers[0],
 							hawtio.Spec.Auth.ClientCertExpirationPeriod)
 
 						err = controllerutil.SetControllerReference(hawtio, cronJob, r.scheme)
