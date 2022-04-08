@@ -5,7 +5,7 @@ DEFAULT_IMAGE := docker.io/hawtio/operator
 IMAGE ?= $(DEFAULT_IMAGE)
 DEFAULT_TAG := latest
 TAG ?= $(DEFAULT_TAG)
-VERSION ?= 0.4.0
+VERSION ?= 0.5.0
 DEBUG ?= false
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)

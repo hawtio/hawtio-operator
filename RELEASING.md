@@ -11,7 +11,7 @@ Create a new version directory under `deploy/olm-catalog/`.
 ```console
 make build # Make sure it builds
 git tag x.x.x
-git push origin master --tags
+git push origin main --tags
 ```
 
 ### 3. Build image locally and push to Docker Hub
