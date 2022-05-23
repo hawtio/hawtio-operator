@@ -156,7 +156,8 @@ func newEnvVars(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersi
 		envVars = append(envVars, envVarsForOpenShift4...)
 	}
 
-	envVars = append(envVars, envVarForRBAC(hawtio.Spec.RBAC.ConfigMap))
+	envVarsForRBAC := envVarsForRBAC(hawtio.Spec.RBAC)
+	envVars = append(envVars, envVarsForRBAC...)
 
 	envVarsForNginx := envVarsForNginx(hawtio.Spec.Nginx)
 	envVars = append(envVars, envVarsForNginx...)

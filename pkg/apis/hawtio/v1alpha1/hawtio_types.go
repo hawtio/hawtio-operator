@@ -107,6 +107,8 @@ type HawtioNginx struct {
 type HawtioRBAC struct {
 	// The name of the ConfigMap that contains the ACL definition.
 	ConfigMap string `json:"configMap,omitempty"`
+	// Disable performance improvement brought by RBACRegistry and revert to the classic behavior. Defaults to `false`.
+	DisableRBACRegistry *bool `json:"disableRBACRegistry,omitempty"`
 }
 
 // Reports the observed state of Hawtio
