@@ -15,6 +15,7 @@ const (
 	HawtioOAuthClientEnvVar         = "HAWTIO_OAUTH_CLIENT_ID"
 	HawtioRbacEnvVar                = "HAWTIO_ONLINE_RBAC_ACL"
 	HawtioGatewayEnvVar             = "HAWTIO_ONLINE_GATEWAY"
+	HawtioDisableRbacRegistry       = "HAWTIO_ONLINE_DISABLE_RBAC_REGISTRY"
 	OpenShiftClusterVersionEnvVar   = "OPENSHIFT_CLUSTER_VERSION"
 	OpenShiftWebConsoleUrlEnvVar    = "OPENSHIFT_WEB_CONSOLE_URL"
 	NginxClientBodyBufferSize       = "NGINX_CLIENT_BODY_BUFFER_SIZE"
@@ -73,16 +74,26 @@ func envVarsForOpenshift4(openShiftVersion string, openShiftConsoleURL string) [
 	return envVars
 }
 
-func envVarForRBAC(rbacConfigMapName string) corev1.EnvVar {
-	value := ""
-	if rbacConfigMapName != "" {
-		value = path.Join(rbacConfigMapVolumeMountPath, RBACConfigMapKey)
+func envVarsForRBAC(rbac hawtiov1alpha1.HawtioRBAC) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
+
+	aclPath := ""
+	if rbac.ConfigMap != "" {
+		aclPath = path.Join(rbacConfigMapVolumeMountPath, RBACConfigMapKey)
+	}
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  HawtioRbacEnvVar,
+		Value: aclPath,
+	})
+
+	if rbac.DisableRBACRegistry != nil && *rbac.DisableRBACRegistry {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  HawtioDisableRbacRegistry,
+			Value: "true",
+		})
 	}
 
-	return corev1.EnvVar{
-		Name:  HawtioRbacEnvVar,
-		Value: value,
-	}
+	return envVars
 }
 
 func envVarsForNginx(nginx hawtiov1alpha1.HawtioNginx) []corev1.EnvVar {
