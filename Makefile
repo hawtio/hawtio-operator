@@ -21,7 +21,7 @@ GEN_SUFFIX := gen.yaml
 #
 # See https://kubectl.docs.kubernetes.io/faq/kustomize
 #
-KOPTIONS := --load-restrictor LoadRestrictionsNone
+KOPTIONS := --load_restrictor LoadRestrictionsNone
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
