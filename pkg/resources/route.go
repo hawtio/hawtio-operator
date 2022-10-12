@@ -11,7 +11,7 @@ import (
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 )
 
-func NewRoute(hawtio *hawtiov1alpha1.Hawtio) *routev1.Route {
+func NewRoute(hawtio *hawtiov1alpha1.Hawtio, routeTLSSecret, caCertRouteSecret *v1.Secret) *routev1.Route {
 	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{"app": "hawtio"},
@@ -26,10 +26,24 @@ func NewRoute(hawtio *hawtiov1alpha1.Hawtio) *routev1.Route {
 		},
 	}
 
-	route.Spec.TLS = &routev1.TLSConfig{
+	tlsConfig := &routev1.TLSConfig{
 		Termination:                   routev1.TLSTerminationReencrypt,
 		InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
 	}
+
+	if routeTLSSecret != nil {
+		tlsConfig.Key = string(routeTLSSecret.Data["tls.key"])
+		tlsConfig.Certificate = string(routeTLSSecret.Data["tls.crt"])
+		if caCertRouteSecret != nil {
+			key := "tls.crt"
+			if k := hawtio.Spec.Route.CaCert.Key; k != "" {
+				key = k
+			}
+			tlsConfig.CACertificate = string(caCertRouteSecret.Data[key])
+		}
+	}
+
+	route.Spec.TLS = tlsConfig
 
 	return route
 }

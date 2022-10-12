@@ -63,6 +63,8 @@ type HawtioSpec struct {
 	// Note that the operator will recreate the route if the field is emptied,
 	// so that the host is re-generated.
 	RouteHostName string `json:"routeHostName,omitempty"`
+	// Custom certificate configuration for the route
+	Route HawtioRoute `json:"route,omitempty"`
 	// The Hawtio console container image version. Defaults to 'latest'.
 	Version string `json:"version,omitempty"`
 	// The authentication configuration
@@ -75,6 +77,13 @@ type HawtioSpec struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	// The Hawtio console configuration
 	Config HawtioConfig `json:"config,omitempty"`
+}
+
+type HawtioRoute struct {
+	// Name of the TLS secret with the custom certificate used for the route TLS termination
+	CertSecret corev1.LocalObjectReference `json:"certSecret,omitempty"`
+	// Ca certificate secret key selector
+	CaCert corev1.SecretKeySelector `json:"caCert,omitempty"`
 }
 
 // The authentication configuration
