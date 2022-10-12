@@ -426,7 +426,27 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 		clientCertSecret = nil
 	}
 
-	_, err = r.reconcileDeployment(hawtio, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl, hawtio.Spec.Version, configMap, clientCertSecret)
+	tlsRouteSecret := &corev1.Secret{}
+	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
+		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, tlsRouteSecret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	} else {
+		tlsRouteSecret = nil
+	}
+	caCertRouteSecret := &corev1.Secret{}
+	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
+		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: caCertSecretName}, caCertRouteSecret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	} else {
+		caCertRouteSecret = nil
+	}
+
+	_, err = r.reconcileDeployment(hawtio, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl,
+		hawtio.Spec.Version, configMap, clientCertSecret, tlsRouteSecret, caCertRouteSecret)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling deployment")
 		return reconcile.Result{}, err
@@ -675,7 +695,7 @@ func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1alpha1.Hawtio) (boo
 	return r.reconcileResources(hawtio, []resource.KubernetesResource{configMap}, []runtime.Object{&corev1.ConfigMapList{}})
 }
 
-func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap, clientCertSecret *corev1.Secret) (bool, error) {
+func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap, clientCertSecret, tlsCustomSecret, caCertRouteSecret *corev1.Secret) (bool, error) {
 	clientCertSecretVersion := ""
 	if clientCertSecret != nil {
 		clientCertSecretVersion = clientCertSecret.GetResourceVersion()
@@ -686,7 +706,7 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isO
 	}
 
 	service := resources.NewService(hawtio.Name)
-	route := resources.NewRoute(hawtio)
+	route := resources.NewRoute(hawtio, tlsCustomSecret, caCertRouteSecret)
 
 	var serviceAccount *corev1.ServiceAccount
 	if hawtio.Spec.Type == hawtiov1alpha1.NamespaceHawtioDeploymentType {

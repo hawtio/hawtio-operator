@@ -246,6 +246,32 @@ spec:
                     that the operator will recreate the route if the field is emptied,
                     so that the host is re-generated.'
                   type: string
+                route:
+                  description: Custom certificate configuration for the route
+                  properties:
+                    caCert:
+                      description: Ca certificate secret key selector
+                      properties:
+                        key:
+                          description: The key of the secret where CA certificate is stored. Default is 'tls.crt'
+                          type: string
+                        name:
+                          description: 'Name of the secret where CA certificate is stored'
+                          type: string
+                        optional:
+                          description: Specify whether the Secret or its key must be
+                            defined
+                          type: boolean
+                      type: object
+                    certSecret:
+                      description: Name of the TLS secret with the custom certificate
+                        used for the route TLS termination
+                      properties:
+                        name:
+                          description: 'Name of the TLS secret with the custom certificate'
+                          type: string
+                      type: object
+                  type: object
                 type:
                   description: 'The deployment type. Defaults to cluster. cluster: Hawtio
                     is capable of discovering and managing applications across all namespaces
