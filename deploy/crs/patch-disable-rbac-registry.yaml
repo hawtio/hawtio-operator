@@ -1,0 +1,7 @@
+apiVersion: hawt.io/v1alpha1
+kind: Hawtio
+metadata:
+  name: hawtio-online
+spec:
+  rbac:
+    disableRBACRegistry: true
