@@ -3,7 +3,7 @@ package resources
 import (
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -12,16 +12,27 @@ import (
 )
 
 func NewRoute(hawtio *hawtiov1alpha1.Hawtio, routeTLSSecret, caCertRouteSecret *v1.Secret) *routev1.Route {
+	name := hawtio.Name
+
+	annotations := map[string]string{}
+	propagateAnnotations(hawtio, annotations)
+
+	labels := map[string]string{
+		labelAppKey: "hawtio",
+	}
+	propagateLabels(hawtio, labels)
+
 	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{"app": "hawtio"},
-			Name:   hawtio.Name,
+			Annotations: annotations,
+			Labels:      labels,
+			Name:        name,
 		},
 		Spec: routev1.RouteSpec{
 			Host: hawtio.Spec.RouteHostName,
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
-				Name: hawtio.Name,
+				Name: name,
 			},
 		},
 	}

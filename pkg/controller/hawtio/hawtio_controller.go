@@ -3,11 +3,12 @@ package hawtio
 import (
 	"context"
 	"fmt"
-	"k8s.io/api/batch/v1beta1"
 	"os"
 	"reflect"
 	"strings"
 	"time"
+
+	"k8s.io/api/batch/v1beta1"
 
 	"github.com/Masterminds/semver"
 
@@ -695,17 +696,20 @@ func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1alpha1.Hawtio) (boo
 	return r.reconcileResources(hawtio, []resource.KubernetesResource{configMap}, []runtime.Object{&corev1.ConfigMapList{}})
 }
 
-func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMap *corev1.ConfigMap, clientCertSecret, tlsCustomSecret, caCertRouteSecret *corev1.Secret) (bool, error) {
+func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio,
+	isOpenShift4 bool, openShiftVersion, openShiftConsoleURL, hawtioVersion string,
+	configMap *corev1.ConfigMap, clientCertSecret, tlsCustomSecret, caCertRouteSecret *corev1.Secret) (bool, error) {
 	clientCertSecretVersion := ""
 	if clientCertSecret != nil {
 		clientCertSecretVersion = clientCertSecret.GetResourceVersion()
 	}
-	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
+	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion,
+		configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
 	if err != nil {
 		return false, err
 	}
 
-	service := resources.NewService(hawtio.Name)
+	service := resources.NewService(hawtio)
 	route := resources.NewRoute(hawtio, tlsCustomSecret, caCertRouteSecret)
 
 	var serviceAccount *corev1.ServiceAccount
@@ -728,7 +732,8 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio, isO
 	)
 }
 
-func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1alpha1.Hawtio, requestedResources []resource.KubernetesResource, listObjects []runtime.Object) (bool, error) {
+func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1alpha1.Hawtio,
+	requestedResources []resource.KubernetesResource, listObjects []runtime.Object) (bool, error) {
 	reqLogger := log.WithName(hawtio.Name)
 
 	for _, res := range requestedResources {
