@@ -21,7 +21,7 @@ func labelsForHawtio(name string) map[string]string {
 func propagateAnnotations(hawtio *hawtiov1alpha1.Hawtio, annotations map[string]string) {
 	for k, v := range hawtio.GetAnnotations() {
 		// Only propagate specified annotations
-		if !util.Contains(hawtio.Spec.MetadataPropagation.Annotations, k) {
+		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Annotations, k) {
 			continue
 		}
 		// Not overwrite existing annotations
@@ -34,7 +34,7 @@ func propagateAnnotations(hawtio *hawtiov1alpha1.Hawtio, annotations map[string]
 func propagateLabels(hawtio *hawtiov1alpha1.Hawtio, labels map[string]string) {
 	for k, v := range hawtio.GetLabels() {
 		// Only propagate specified labels
-		if !util.Contains(hawtio.Spec.MetadataPropagation.Labels, k) {
+		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Labels, k) {
 			continue
 		}
 		// Not overwrite existing labels
