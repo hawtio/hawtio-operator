@@ -1,6 +1,8 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.6.1
   name: hawtios.hawt.io
 spec:
   group: hawt.io
@@ -56,7 +58,8 @@ spec:
                 properties:
                   clientCertCheckSchedule:
                     description: CronJob schedule that defines how often the expiry
-                      of the certificate will be checked
+                      of the certificate will be checked. Client rotation isn't enabled
+                      if the schedule isn't set.
                     type: string
                   clientCertCommonName:
                     description: The generated client certificate CN
@@ -172,6 +175,22 @@ spec:
                         type: string
                     type: object
                 type: object
+              metadataPropagation:
+                description: The configuration for which metadata on Hawtio custom
+                  resources to propagate to generated resources such as deployments,
+                  pods, services, and routes.
+                properties:
+                  annotations:
+                    description: Annotations to propagate
+                    items:
+                      type: string
+                    type: array
+                  labels:
+                    description: Labels to propagate
+                    items:
+                      type: string
+                    type: array
+                type: object
               nginx:
                 description: The Nginx runtime configuration
                 properties:
@@ -229,6 +248,37 @@ spec:
                       resources required. If Requests is omitted for a container,
                       it defaults to Limits if that is explicitly specified, otherwise
                       to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                    type: object
+                type: object
+              route:
+                description: Custom certificate configuration for the route
+                properties:
+                  caCert:
+                    description: Ca certificate secret key selector
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be
+                          a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be
+                          defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  certSecret:
+                    description: Name of the TLS secret with the custom certificate
+                      used for the route TLS termination
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
                     type: object
                 type: object
               routeHostName:
