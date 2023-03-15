@@ -14,6 +14,7 @@ func jsonIfYaml(source []byte, filename string) ([]byte, error) {
 
 	return source, nil
 }
+
 func LoadConfigFromFile(path string) ([]byte, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -26,4 +27,14 @@ func LoadConfigFromFile(path string) ([]byte, error) {
 	}
 
 	return data, err
+}
+
+func Contains(strs []string, item string) bool {
+	for _, s := range strs {
+		if s == item {
+			return true
+		}
+	}
+
+	return false
 }

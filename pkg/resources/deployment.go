@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labelUtils "k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 
 	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
 	"github.com/hawtio/hawtio-operator/pkg/util"
@@ -32,39 +32,36 @@ const (
 )
 
 func NewDeployment(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
-	namespacedName := types.NamespacedName{
-		Name:      hawtio.Name,
-		Namespace: hawtio.Namespace,
-	}
-
 	podTemplateSpec, err := newPodTemplateSpec(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMapVersion, clientCertSecretVersion, buildVariables)
 	if err != nil {
 		return nil, err
 	}
-	return newDeployment(namespacedName, hawtio.Spec.Replicas, podTemplateSpec), nil
+	return newDeployment(hawtio, hawtio.Spec.Replicas, podTemplateSpec), nil
 }
 
-func newDeployment(namespacedName types.NamespacedName, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
-	labels := labelsForHawtio(namespacedName.Name)
-	var r int32
-	if replicas != nil {
-		r = *replicas
-	} else {
-		// Deployment replicas field is defaulted to '1', so we have to equal that defaults, otherwise
-		// the comparison algorithm assumes the requested resource is different, which leads to an infinite
-		// reconciliation loop
-		r = 1
-	}
+func newDeployment(hawtio *hawtiov1alpha1.Hawtio, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
+	annotations := map[string]string{}
+	propagateAnnotations(hawtio, annotations)
+
+	labels := labelsForHawtio(hawtio.Name)
+	propagateLabels(hawtio, labels)
+
+	// Deployment replicas field is defaulted to '1', so we have to equal that defaults, otherwise
+	// the comparison algorithm assumes the requested resource is different, which leads to an infinite
+	// reconciliation loop
+	r := pointer.Int32PtrDerefOr(replicas, 1)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      namespacedName.Name,
-			Namespace: namespacedName.Namespace,
-			Labels:    labels,
+			Name:        hawtio.Name,
+			Namespace:   hawtio.Namespace,
+			Annotations: annotations,
+			Labels:      labels,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &r,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: labelsForHawtio(hawtio.Name),
 			},
 			Template: pts,
 			Strategy: appsv1.DeploymentStrategy{
@@ -83,6 +80,7 @@ func newPodTemplateSpec(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openSh
 	if clientCertSecretVersion != "" {
 		annotations[clientCertSecretVersionAnnotation] = clientCertSecretVersion
 	}
+	propagateAnnotations(hawtio, annotations)
 
 	volumeMounts, err := newVolumeMounts(isOpenShift4, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables)
 	if err != nil {
@@ -101,6 +99,7 @@ func newPodTemplateSpec(hawtio *hawtiov1alpha1.Hawtio, isOpenShift4 bool, openSh
 	for name, value := range additionalLabels {
 		labels[name] = value
 	}
+	propagateLabels(hawtio, labels)
 
 	pod := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{

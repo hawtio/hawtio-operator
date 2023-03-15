@@ -54,6 +54,9 @@ type HawtioSpec struct {
 	// Number of desired pods. This is a pointer to distinguish between explicit
 	// zero and not specified. Defaults to 1.
 	Replicas *int32 `json:"replicas,omitempty"`
+	// The configuration for which metadata on Hawtio custom resources to propagate to
+	// generated resources such as deployments, pods, services, and routes.
+	MetadataPropagation HawtioMetadataPropagation `json:"metadataPropagation,omitempty"`
 	// The edge host name of the route that exposes the Hawtio service
 	// externally. If not specified, it is automatically generated and
 	// is of the form:
@@ -77,6 +80,15 @@ type HawtioSpec struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	// The Hawtio console configuration
 	Config HawtioConfig `json:"config,omitempty"`
+}
+
+// The configuration for which metadata on Hawtio custom resources to propagate to
+// generated resources such as deployments, pods, services, and routes.
+type HawtioMetadataPropagation struct {
+	// Annotations to propagate
+	Annotations []string `json:"annotations,omitempty"`
+	// Labels to propagate
+	Labels []string `json:"labels,omitempty"`
 }
 
 type HawtioRoute struct {
