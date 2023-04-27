@@ -715,7 +715,7 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1alpha1.Hawtio,
 	var serviceAccount *corev1.ServiceAccount
 	if hawtio.Spec.Type == hawtiov1alpha1.NamespaceHawtioDeploymentType {
 		// Add service account as OAuth client
-		serviceAccount, err = resources.NewServiceAccountAsOauthClient(hawtio.Name)
+		serviceAccount, err = resources.NewServiceAccountAsOauthClient(hawtio.Name, hawtio.Spec.ExternalRoutes)
 		if err != nil {
 			return false, fmt.Errorf("error UpdateResources : %s", err)
 		}
