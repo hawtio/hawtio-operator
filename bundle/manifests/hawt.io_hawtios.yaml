@@ -175,6 +175,12 @@ spec:
                         type: string
                     type: object
                 type: object
+              externalRoutes:
+                description: List of external route names that will be annotated by
+                  the operator to access the console using the routes
+                items:
+                  type: string
+                type: array
               metadataPropagation:
                 description: The configuration for which metadata on Hawtio custom
                   resources to propagate to generated resources such as deployments,

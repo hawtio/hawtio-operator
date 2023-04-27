@@ -68,6 +68,8 @@ type HawtioSpec struct {
 	RouteHostName string `json:"routeHostName,omitempty"`
 	// Custom certificate configuration for the route
 	Route HawtioRoute `json:"route,omitempty"`
+	// List of external route names that will be annotated by the operator to access the console using the routes
+	ExternalRoutes []string `json:"externalRoutes,omitempty"`
 	// The Hawtio console container image version. Defaults to 'latest'.
 	Version string `json:"version,omitempty"`
 	// The authentication configuration

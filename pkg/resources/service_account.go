@@ -9,17 +9,17 @@ import (
 	oauthv1 "github.com/openshift/api/oauth/v1"
 )
 
-func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error) {
-	OAuthRedirectReference := &oauthv1.OAuthRedirectReference{
-		Reference: oauthv1.RedirectReference{
-			Kind: "Route",
-			Name: name,
-		},
-	}
+func NewServiceAccountAsOauthClient(name string, externalRoutes []string) (*corev1.ServiceAccount, error) {
+	annotations := make(map[string]string)
+	routes := append(externalRoutes, name)
+	for _, name := range routes {
 
-	ref, err := json.Marshal(OAuthRedirectReference)
-	if err != nil {
-		return nil, err
+		ref, err := createRedirectReferenceString(name)
+		if err != nil {
+			return nil, err
+		}
+		annotations["serviceaccounts.openshift.io/oauth-redirecturi."+name] = "https://"
+		annotations["serviceaccounts.openshift.io/oauth-redirectreference."+name] = ref
 	}
 
 	sa := &corev1.ServiceAccount{
@@ -28,11 +28,22 @@ func NewServiceAccountAsOauthClient(name string) (*corev1.ServiceAccount, error)
 			Labels: map[string]string{
 				"app": "hawtio",
 			},
-			Annotations: map[string]string{
-				"serviceaccounts.openshift.io/oauth-redirecturi.route":       "https://",
-				"serviceaccounts.openshift.io/oauth-redirectreference.route": string(ref),
-			},
+			Annotations: annotations,
 		},
 	}
 	return sa, nil
+}
+
+func createRedirectReferenceString(name string) (string, error) {
+	OAuthRedirectReference := &oauthv1.OAuthRedirectReference{
+		Reference: oauthv1.RedirectReference{
+			Kind: "Route",
+			Name: name,
+		},
+	}
+	ref, err := json.Marshal(OAuthRedirectReference)
+	if err != nil {
+		return "", err
+	}
+	return string(ref), err
 }

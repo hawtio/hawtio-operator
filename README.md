@@ -112,6 +112,15 @@ route:
 
 If the 'key' isn't defined 'tls.crt' is automatically used.
 
+### Custom routes
+To use custom routes, it is necessary to create the correct annotation in the service account. 
+All the routes to annotate can be listed in the `externalRoutes` field in the custom resource:
+
+```yaml
+  externalRoutes:
+    - second-route
+    - third-route
+```
 ## Deploy
 
 To create the required resources by the operator (e.g. CRD, service account, roles, role binding, deployment, ...), run the following command:
