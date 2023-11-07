@@ -8,8 +8,12 @@ TAG ?= $(DEFAULT_TAG)
 VERSION ?= 0.5.0
 DEBUG ?= false
 
+#
+# Versions of tools and binaries
+#
 CONTROLLER_GEN_VERSION := v0.6.1
-KUSTOMIZE_VERSION := v3.5.4
+KUSTOMIZE_VERSION := v4.5.4
+OPERATOR_SDK_VERSION := v1.28.0
 
 CRD_OPTIONS ?= crd:crdVersions=v1,preserveUnknownFields=false
 
@@ -91,43 +95,51 @@ endif
 
 # Generate bundle manifests and metadata
 
-bundle: kustomize
-	$(KUSTOMIZE) build bundle | operator-sdk generate bundle --kustomize-dir bundle --version $(VERSION)
+bundle: kustomize operator-sdk
+	$(KUSTOMIZE) build bundle | $(OPERATOR_SDK) generate bundle --kustomize-dir bundle --version $(VERSION)
 
-validate-bundle:
-	operator-sdk bundle validate ./bundle --select-optional suite=operatorframework
+validate-bundle: operator-sdk
+	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
 
 # find or download controller-gen
 # download controller-gen if necessary
 controller-gen:
-ifeq (, $(shell which controller-gen))
-	@{ \
-	set -e ;\
-	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION) ;\
-	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
-	}
+ifeq (, $(shell command -v controller-gen 2> /dev/null))
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
-CONTROLLER_GEN=$(shell which controller-gen)
+CONTROLLER_GEN=$(shell command -v controller-gen 2> /dev/null)
 endif
 
 kustomize:
-ifeq (, $(shell which kustomize))
-	@{ \
-	set -e ;\
-	KUSTOMIZE_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$KUSTOMIZE_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/kustomize/kustomize/v3@$(KUSTOMIZE_VERSION) ;\
-	rm -rf $$KUSTOMIZE_GEN_TMP_DIR ;\
-	}
+ifeq (, $(shell command -v kustomize 2> /dev/null))
+	go install sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION)
 KUSTOMIZE=$(GOBIN)/kustomize
 else
-KUSTOMIZE=$(shell which kustomize)
+KUSTOMIZE=$(shell command -v kustomize 2> /dev/null)
 endif
+
+detect-os:
+ifeq '$(findstring ;,$(PATH))' ';'
+OS := Windows
+OS_LOWER := windows
+else
+OS := $(shell echo $$(uname 2>/dev/null) || echo Unknown)
+OS := $(patsubst CYGWIN%,Cygwin,$(OS))
+OS := $(patsubst MSYS%,MSYS,$(OS))
+OS := $(patsubst MINGW%,MSYS,$(OS))
+OS_LOWER := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
+endif
+
+operator-sdk: detect-os
+	@echo "####### Installing operator-sdk version $(OPERATOR_SDK_VERSION)..."
+	curl \
+		-s -L https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$(OS_LOWER)_amd64 \
+		-o operator-sdk ; \
+		chmod +x operator-sdk ;\
+		mkdir -p $(GOBIN) ;\
+	mv operator-sdk $(GOBIN)/ ;
+OPERATOR_SDK=$(GOBIN)/operator-sdk
 
 #
 # Cluster-Admin install step that configures cluster roles and
