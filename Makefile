@@ -36,6 +36,12 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+GOFLAGS = -ldflags "$(GOLDFLAGS)" -trimpath
+
+ifeq ($(DEBUG),true)
+GOFLAGS += -gcflags="all=-N -l"
+endif
+
 .PHONY: image build compile go-generate test manifests k8s-generate install deploy bundle controller-gen kustomize setup operator app
 
 #
@@ -57,7 +63,7 @@ image:
 build: go-generate compile test
 
 compile:
-	CGO_ENABLED=0 go build -o hawtio-operator ./cmd/manager/main.go
+	CGO_ENABLED=0 go build $(GOFLAGS) -o hawtio-operator ./cmd/manager/main.go
 
 # Generate Go code
 go-generate:
