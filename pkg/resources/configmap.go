@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -17,8 +17,8 @@ const (
 )
 
 // GetHawtioConfig reads the console configuration from the config map
-func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.HawtioConfig, error) {
-	var config *hawtiov1alpha1.HawtioConfig
+func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1.HawtioConfig, error) {
+	var config *hawtiov1.HawtioConfig
 
 	data, ok := configMap.Data[hawtioConfigKey]
 	if !ok {
@@ -33,7 +33,7 @@ func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov1alpha1.HawtioConfig,
 	return config, nil
 }
 
-func NewConfigMap(hawtio *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
+func NewConfigMap(hawtio *hawtiov1.Hawtio) (*corev1.ConfigMap, error) {
 	config, err := configForHawtio(hawtio)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func NewConfigMap(hawtio *hawtiov1alpha1.Hawtio) (*corev1.ConfigMap, error) {
 	return configMap, nil
 }
 
-func configForHawtio(hawtio *hawtiov1alpha1.Hawtio) (string, error) {
+func configForHawtio(hawtio *hawtiov1.Hawtio) (string, error) {
 	data, err := util.LoadConfigFromFile(hawtioConfigPath)
 	if err != nil {
 		return "", err
