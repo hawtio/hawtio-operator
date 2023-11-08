@@ -76,7 +76,7 @@ func getCRFile(t *testing.T, dir string) string {
 }
 
 func getSchema(t *testing.T) validation.Schema {
-	crdFile := "../../../../deploy/crd/hawtio_v1_hawtio_crd.yaml"
+	crdFile := "../../../../deploy/crd/hawt.io_hawtios.yaml"
 	bytes, err := ioutil.ReadFile(crdFile)
 	assert.NoError(t, err, "Error reading CRD yaml %v", crdFile)
 	schema, err := validation.NewVersioned(bytes, "v1")

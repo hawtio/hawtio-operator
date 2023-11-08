@@ -1,4 +1,4 @@
-apiVersion: hawt.io/v1alpha1
+apiVersion: hawt.io/v1
 kind: Hawtio
 metadata:
   name: hawtio-online
