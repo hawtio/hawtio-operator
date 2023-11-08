@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 )
 
 var log = logs.GetLogger("openshift-webconsole")
@@ -41,7 +41,7 @@ func CreateConsoleYAMLSamples(ctx context.Context, c client.Client, productName 
 			log.Info("yaml", " name: ", filename, " not created: ", err.Error())
 			continue
 		}
-		hawtio := hawtiov1alpha1.Hawtio{}
+		hawtio := hawtiov1.Hawtio{}
 		err = yaml.Unmarshal([]byte(yamlStr), &hawtio)
 		if err != nil {
 			log.Info("yaml", " name: ", filename, " not created: ", err.Error())

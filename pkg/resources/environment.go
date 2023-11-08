@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 )
 
 const (
@@ -23,9 +23,9 @@ const (
 	NginxSubrequestOutputBufferSize = "NGINX_SUBREQUEST_OUTPUT_BUFFER_SIZE"
 )
 
-func envVarsForHawtio(deploymentType hawtiov1alpha1.HawtioDeploymentType, name string) []corev1.EnvVar {
+func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string) []corev1.EnvVar {
 	oauthClientId := name
-	if deploymentType == hawtiov1alpha1.ClusterHawtioDeploymentType {
+	if deploymentType == hawtiov1.ClusterHawtioDeploymentType {
 		// Pin to a known name for cluster-wide OAuthClient
 		oauthClientId = OAuthClientName
 	}
@@ -41,7 +41,7 @@ func envVarsForHawtio(deploymentType hawtiov1alpha1.HawtioDeploymentType, name s
 		},
 	}
 
-	if deploymentType == hawtiov1alpha1.NamespaceHawtioDeploymentType {
+	if deploymentType == hawtiov1.NamespaceHawtioDeploymentType {
 		envVars = append(envVars, corev1.EnvVar{
 			Name: HawtioNamespaceEnvVar,
 			ValueFrom: &corev1.EnvVarSource{
@@ -74,7 +74,7 @@ func envVarsForOpenshift4(openShiftVersion string, openShiftConsoleURL string) [
 	return envVars
 }
 
-func envVarsForRBAC(rbac hawtiov1alpha1.HawtioRBAC) []corev1.EnvVar {
+func envVarsForRBAC(rbac hawtiov1.HawtioRBAC) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
 
 	aclPath := ""
@@ -96,7 +96,7 @@ func envVarsForRBAC(rbac hawtiov1alpha1.HawtioRBAC) []corev1.EnvVar {
 	return envVars
 }
 
-func envVarsForNginx(nginx hawtiov1alpha1.HawtioNginx) []corev1.EnvVar {
+func envVarsForNginx(nginx hawtiov1.HawtioNginx) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
 	if nginx.ClientBodyBufferSize != "" {
 		envVars = append(envVars, corev1.EnvVar{

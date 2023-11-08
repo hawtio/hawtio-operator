@@ -1,7 +1,7 @@
 package resources
 
 import (
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -18,7 +18,7 @@ func labelsForHawtio(name string) map[string]string {
 	}
 }
 
-func propagateAnnotations(hawtio *hawtiov1alpha1.Hawtio, annotations map[string]string) {
+func propagateAnnotations(hawtio *hawtiov1.Hawtio, annotations map[string]string) {
 	for k, v := range hawtio.GetAnnotations() {
 		// Only propagate specified annotations
 		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Annotations, k) {
@@ -31,7 +31,7 @@ func propagateAnnotations(hawtio *hawtiov1alpha1.Hawtio, annotations map[string]
 	}
 }
 
-func propagateLabels(hawtio *hawtiov1alpha1.Hawtio, labels map[string]string) {
+func propagateLabels(hawtio *hawtiov1.Hawtio, labels map[string]string) {
 	for k, v := range hawtio.GetLabels() {
 		// Only propagate specified labels
 		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Labels, k) {

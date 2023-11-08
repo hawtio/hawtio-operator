@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 )
 
@@ -87,7 +87,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 
 	t.Run("hawtio-online", func(t *testing.T) {
 		t.Run("check if the Hawtio has been created", func(t *testing.T) {
-			hawtio := hawtiov1alpha1.Hawtio{}
+			hawtio := hawtiov1.Hawtio{}
 			err = r.client.Get(context.TODO(), NamespacedName, &hawtio)
 			require.NoError(t, err)
 		})
@@ -112,17 +112,17 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			config, err := resources.GetHawtioConfig(&configMap)
 			require.NoError(t, err)
 
-			assert.Equal(t, config, &hawtiov1alpha1.HawtioConfig{
-				About: hawtiov1alpha1.HawtioAbout{
+			assert.Equal(t, config, &hawtiov1.HawtioConfig{
+				About: hawtiov1.HawtioAbout{
 					AdditionalInfo: "The Hawtio console eases the discovery and management of 'hawtio-enabled' applications deployed on OpenShift.",
 					Title:          "Hawtio Console",
 				},
-				Branding: hawtiov1alpha1.HawtioBranding{
+				Branding: hawtiov1.HawtioBranding{
 					AppLogoURL: "img/hawtio-logo.svg",
 					AppName:    "Hawtio Console",
 				},
-				Online: hawtiov1alpha1.HawtioOnline{
-					ConsoleLink: hawtiov1alpha1.HawtioConsoleLink{
+				Online: hawtiov1.HawtioOnline{
+					ConsoleLink: hawtiov1.HawtioConsoleLink{
 						ImageRelativePath: "/online/img/favicon.ico",
 						Section:           "Hawtio",
 						Text:              "Hawtio Console",
@@ -140,7 +140,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			assert.ElementsMatch(t, container.Env, []corev1.EnvVar{
 				{
 					Name:  resources.HawtioTypeEnvVar,
-					Value: strings.ToLower(string(hawtiov1alpha1.NamespaceHawtioDeploymentType)),
+					Value: strings.ToLower(string(hawtiov1.NamespaceHawtioDeploymentType)),
 				},
 				{
 					Name: resources.HawtioNamespaceEnvVar,
