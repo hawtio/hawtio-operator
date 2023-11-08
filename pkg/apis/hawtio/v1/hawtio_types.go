@@ -24,8 +24,10 @@ const (
 	NamespaceHawtioDeploymentType HawtioDeploymentType = "Namespace"
 )
 
+// +genclient
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=hawtios,scope=Namespaced,categories=hawtio
+// +kubebuilder:resource:path=hawtios,scope=Namespaced,shortName=hawt,categories=hawtio
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`,description="Creation phase"
@@ -33,7 +35,7 @@ const (
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`,description="Console phase"
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.status.URL`,description="Console URL"
 
-// Hawtio Console
+// Hawtio is the Schema for the Hawtio Console API.
 type Hawtio struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -70,8 +72,6 @@ type HawtioSpec struct {
 	Route HawtioRoute `json:"route,omitempty"`
 	// List of external route names that will be annotated by the operator to access the console using the routes
 	ExternalRoutes []string `json:"externalRoutes,omitempty"`
-	// The Hawtio console container image version. Defaults to 'latest'.
-	Version string `json:"version,omitempty"`
 	// The authentication configuration
 	Auth HawtioAuth `json:"auth,omitempty"`
 	// The Nginx runtime configuration

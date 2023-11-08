@@ -447,7 +447,7 @@ func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result
 	}
 
 	_, err = r.reconcileDeployment(hawtio, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl,
-		hawtio.Spec.Version, configMap, clientCertSecret, tlsRouteSecret, caCertRouteSecret)
+		configMap, clientCertSecret, tlsRouteSecret, caCertRouteSecret)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling deployment")
 		return reconcile.Result{}, err
@@ -697,13 +697,13 @@ func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1.Hawtio) (bool, err
 }
 
 func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio,
-	isOpenShift4 bool, openShiftVersion, openShiftConsoleURL, hawtioVersion string,
+	isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string,
 	configMap *corev1.ConfigMap, clientCertSecret, tlsCustomSecret, caCertRouteSecret *corev1.Secret) (bool, error) {
 	clientCertSecretVersion := ""
 	if clientCertSecret != nil {
 		clientCertSecretVersion = clientCertSecret.GetResourceVersion()
 	}
-	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion,
+	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL,
 		configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
 	if err != nil {
 		return false, err
