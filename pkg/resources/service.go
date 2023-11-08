@@ -5,10 +5,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 )
 
-func NewService(hawtio *hawtiov1alpha1.Hawtio) *corev1.Service {
+func NewService(hawtio *hawtiov1.Hawtio) *corev1.Service {
 	name := hawtio.Name
 
 	annotations := map[string]string{

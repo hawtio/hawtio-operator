@@ -12,7 +12,7 @@ import (
 
 	"github.com/RHsyseng/operator-utils/pkg/validation"
 
-	"github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	"github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 )
 
 func TestSampleCustomResources(t *testing.T) {
@@ -30,7 +30,7 @@ func TestSampleCustomResources(t *testing.T) {
 
 func TestTrialEnvMinimum(t *testing.T) {
 	var inputYaml = `
-apiVersion: hawt.io/v1alpha1
+apiVersion: hawt.io/v1
 kind: Hawtio
 metadata:
   name: trial
@@ -49,7 +49,7 @@ spec:
 // Requires openAPIV3Schema in CRD for function to work properly
 func TestCompleteCRD(t *testing.T) {
 	schema := getSchema(t)
-	missingEntries := schema.GetMissingEntries(&v1alpha1.Hawtio{})
+	missingEntries := schema.GetMissingEntries(&v1.Hawtio{})
 	for _, missing := range missingEntries {
 		if strings.HasPrefix(missing.Path, "/spec/auth/clientCertExpirationDate") {
 			// operator-utils does not deal with Time type validation correctly
@@ -76,10 +76,10 @@ func getCRFile(t *testing.T, dir string) string {
 }
 
 func getSchema(t *testing.T) validation.Schema {
-	crdFile := "../../../../deploy/crd/hawtio_v1alpha1_hawtio_crd.yaml"
+	crdFile := "../../../../deploy/crd/hawtio_v1_hawtio_crd.yaml"
 	bytes, err := ioutil.ReadFile(crdFile)
 	assert.NoError(t, err, "Error reading CRD yaml %v", crdFile)
-	schema, err := validation.NewVersioned(bytes, "v1alpha1")
+	schema, err := validation.NewVersioned(bytes, "v1")
 	assert.NoError(t, err)
 	return schema
 }

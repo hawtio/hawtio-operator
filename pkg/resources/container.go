@@ -6,12 +6,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 )
 
 const containerPortName = "https"
 
-func newContainer(hawtio *hawtiov1alpha1.Hawtio, envVars []corev1.EnvVar, imageRepository string) corev1.Container {
+func newContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageRepository string) corev1.Container {
 	container := corev1.Container{
 		Name:  hawtio.Name + "-container",
 		Image: getImageFor(hawtio.Spec.Version, imageRepository),

@@ -8,10 +8,10 @@ import (
 
 	routev1 "github.com/openshift/api/route/v1"
 
-	hawtiov1alpha1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1alpha1"
+	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 )
 
-func NewRoute(hawtio *hawtiov1alpha1.Hawtio, routeTLSSecret, caCertRouteSecret *v1.Secret) *routev1.Route {
+func NewRoute(hawtio *hawtiov1.Hawtio, routeTLSSecret, caCertRouteSecret *v1.Secret) *routev1.Route {
 	name := hawtio.Name
 
 	annotations := map[string]string{}
