@@ -24,7 +24,6 @@ var (
 		},
 		Spec: hawtiov1.HawtioSpec{
 			Type:          hawtiov1.NamespaceHawtioDeploymentType,
-			Version:       "latest",
 			RouteHostName: "hawtio.cluster",
 			Config: hawtiov1.HawtioConfig{
 				Online: hawtiov1.HawtioOnline{

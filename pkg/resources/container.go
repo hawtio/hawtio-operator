@@ -11,10 +11,10 @@ import (
 
 const containerPortName = "https"
 
-func newContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageRepository string) corev1.Container {
+func newContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageVersion string, imageRepository string) corev1.Container {
 	container := corev1.Container{
 		Name:  hawtio.Name + "-container",
-		Image: getImageFor(hawtio.Spec.Version, imageRepository),
+		Image: getImageFor(imageVersion, imageRepository),
 		Env:   envVars,
 		ReadinessProbe: &corev1.Probe{
 			InitialDelaySeconds: 5,
@@ -52,12 +52,7 @@ func newContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageReposit
 	return container
 }
 
-//TODO(): will replace that function with update code committed in PR #23
-func getImageFor(version string, imageRepository string) string {
-	tag := "latest"
-	if len(version) > 0 {
-		tag = version
-	}
+func getImageFor(tag string, imageRepository string) string {
 	repository := os.Getenv("IMAGE_REPOSITORY")
 	if repository == "" {
 		if imageRepository != "" {

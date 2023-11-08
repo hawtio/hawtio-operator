@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"os"
 	"path"
 
 	"github.com/Masterminds/semver"
@@ -31,8 +32,8 @@ const (
 	serverRootDirectory                       = "/usr/share/nginx/html"
 )
 
-func NewDeployment(hawtio *hawtiov1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
-	podTemplateSpec, err := newPodTemplateSpec(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, hawtioVersion, configMapVersion, clientCertSecretVersion, buildVariables)
+func NewDeployment(hawtio *hawtiov1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
+	podTemplateSpec, err := newPodTemplateSpec(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL, configMapVersion, clientCertSecretVersion, buildVariables)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +72,9 @@ func newDeployment(hawtio *hawtiov1.Hawtio, replicas *int32, pts corev1.PodTempl
 	}
 }
 
-func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, hawtioVersion string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
-	container := newContainer(hawtio, newEnvVars(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), buildVariables.ImageRepository)
+func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
+	hawtioVersion := getVersion(buildVariables)
+	container := newContainer(hawtio, newEnvVars(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL), hawtioVersion, buildVariables.ImageRepository)
 
 	annotations := map[string]string{
 		configVersionAnnotation: configMapVersion,
@@ -232,4 +234,16 @@ func getServingCertificateMountPath(version string, legacyServingCertificateMoun
 		}
 	}
 	return serviceSigningSecretVolumeMountPath, nil
+}
+
+func getVersion(buildVariables util.BuildVariables) string {
+	version := os.Getenv("IMAGE_VERSION")
+	if version == "" {
+		if len(version) > 0 {
+			version = buildVariables.ImageVersion
+		} else {
+			version = "latest"
+		}
+	}
+	return version
 }

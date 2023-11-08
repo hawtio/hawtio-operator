@@ -81,6 +81,8 @@ manifests: controller-gen
 k8s-generate: controller-gen
 	$(CONTROLLER_GEN) paths="./..." object
 
+generate: k8s-generate go-generate manifests
+
 #
 # Installation of just the CRD
 # Can only be executed as a cluster-admin

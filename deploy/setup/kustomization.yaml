@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: hawtio
 
 resources:
-- ../crd/hawtio_v1alpha1_hawtio_crd.yaml
+- ../crd
 - ../cluster_role.yaml
 - ../cluster_role_binding.yaml
 - ../role.yaml
