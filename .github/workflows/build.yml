@@ -1,20 +1,16 @@
-name: build
+name: Build
 
 on:
   pull_request:
     branches:
       - main
-    paths:
-      - "cmd/**"
-      - "deploy/**"
-      - "pkg/**"
+    paths-ignore:
+      - "**.md"
   push:
     branches:
       - main
-    paths:
-      - "cmd/**"
-      - "deploy/**"
-      - "pkg/**"
+    paths-ignore:
+      - "**.md"
 
 jobs:
   build:
