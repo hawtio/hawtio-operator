@@ -5,8 +5,10 @@ DEFAULT_IMAGE := docker.io/hawtio/operator
 IMAGE ?= $(DEFAULT_IMAGE)
 DEFAULT_TAG := latest
 TAG ?= $(DEFAULT_TAG)
-VERSION ?= 0.5.0
+VERSION ?= 1.0.0
 DEBUG ?= false
+LAST_RELEASED_IMAGE_NAME := hawtio-operator
+LAST_RELEASED_VERSION ?= 0.5.0
 
 #
 # Versions of tools and binaries
@@ -103,8 +105,56 @@ endif
 
 # Generate bundle manifests and metadata
 
-bundle: kustomize operator-sdk
-	$(KUSTOMIZE) build bundle | $(OPERATOR_SDK) generate bundle --kustomize-dir bundle --version $(VERSION)
+DEFAULT_CHANNEL ?= $(shell echo "stable-v$(word 1,$(subst ., ,$(lastword $(VERSION))))")
+CHANNELS ?= $(DEFAULT_CHANNEL),latest
+PACKAGE := hawtio-operator
+MANIFESTS := bundle
+CSV_VERSION := $(VERSION)
+CSV_NAME := $(PACKAGE).v$(CSV_VERSION)
+CSV_DISPLAY_NAME := Hawtio Operator
+CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
+CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
+CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
+IMAGE_NAME ?= docker.io/hawtio/operator
+
+# Options for 'bundle-build'
+ifneq ($(origin CHANNELS), undefined)
+BUNDLE_CHANNELS := --channels=$(CHANNELS)
+endif
+ifneq ($(origin DEFAULT_CHANNEL), undefined)
+BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
+endif
+ifneq ($(origin PACKAGE), undefined)
+BUNDLE_PACKAGE := --package=$(PACKAGE)
+endif
+BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL) $(BUNDLE_PACKAGE)
+
+#
+# Tailor the manifest according to default values for this project
+# Note. to successfully make the bundle the name must match that specified in the PROJECT file
+#
+pre-bundle:
+	# bundle name must match that which appears in PROJECT file
+	@sed -i 's/projectName: .*/projectName: $(PACKAGE)/' PROJECT
+	@sed -i 's~^    containerImage: .*~    containerImage: $(IMAGE):$(VERSION)~' $(CSV_PATH)
+	@sed -i 's/^  name: .*.\(v.*\)/  name: $(CSV_NAME)/' $(CSV_PATH)
+	@sed -i 's/^  displayName: .*/  displayName: $(CSV_DISPLAY_NAME)/' $(CSV_PATH)
+	@sed -i 's/^  version: .*/  version: $(CSV_VERSION)/' $(CSV_PATH)
+	@if grep -q replaces $(CSV_PATH); \
+		then sed -i 's/^  replaces: .*/  replaces: $(CSV_REPLACES)/' $(CSV_PATH); \
+		else sed -i '/  version: ${CSV_VERSION}/a \ \ replaces: $(CSV_REPLACES)' $(CSV_PATH); \
+	fi
+
+bundle: kustomize operator-sdk pre-bundle
+	@# Display BUNDLE_METADATA_OPTS for debugging
+	$(info BUNDLE_METADATA_OPTS=$(BUNDLE_METADATA_OPTS))
+	@# Sets the operator image to the preferred image:tag
+	@cd bundle && $(KUSTOMIZE) edit set image $(IMAGE_NAME)=$(IMAGE):$(VERSION)
+	@# Build kustomize manifests
+	$(KUSTOMIZE) build bundle | $(OPERATOR_SDK) generate bundle \
+		--kustomize-dir bundle \
+		--version $(VERSION) -q --overwrite \
+		$(BUNDLE_METADATA_OPTS)
 
 validate-bundle: operator-sdk
 	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
@@ -141,12 +191,12 @@ endif
 
 operator-sdk: detect-os
 	@echo "####### Installing operator-sdk version $(OPERATOR_SDK_VERSION)..."
-	curl \
+	@curl \
 		-s -L https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$(OS_LOWER)_amd64 \
 		-o operator-sdk ; \
 		chmod +x operator-sdk ;\
 		mkdir -p $(GOBIN) ;\
-	mv operator-sdk $(GOBIN)/ ;
+		mv operator-sdk $(GOBIN)/ ;
 OPERATOR_SDK=$(GOBIN)/operator-sdk
 
 #
