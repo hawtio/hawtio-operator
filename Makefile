@@ -1,11 +1,13 @@
 ORG = hawtio
 NAMESPACE ?= hawtio
 PROJECT = operator
-DEFAULT_IMAGE := docker.io/hawtio/operator
+DEFAULT_IMAGE := docker.io/${ORG}/${PROJECT}
 IMAGE ?= $(DEFAULT_IMAGE)
 DEFAULT_TAG := latest
 TAG ?= $(DEFAULT_TAG)
 VERSION ?= 1.0.0
+HAWTIO_ONLINE_VERSION ?= latest
+HAWTIO_ONLINE_IMAGE_NAME ?= docker.io/${ORG}/hawtio
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
 LAST_RELEASED_VERSION ?= 0.5.0
@@ -60,7 +62,10 @@ endef
 default: image
 
 image:
-	docker build -t docker.io/${ORG}/${PROJECT}:${TAG} .
+	docker build -t ${IMAGE}:${TAG} \
+	--build-arg HAWTIO_ONLINE_IMAGE_NAME=${HAWTIO_ONLINE_IMAGE_NAME} \
+	--build-arg HAWTIO_ONLINE_VERSION=${HAWTIO_ONLINE_VERSION} \
+	.
 
 build: go-generate compile test
 
