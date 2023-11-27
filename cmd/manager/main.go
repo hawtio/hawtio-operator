@@ -26,6 +26,7 @@ import (
 // Go build-time variables
 var (
 	ImageRepository                      string
+	ImageVersion                         string
 	LegacyServingCertificateMountVersion string
 	ProductName                          string
 	ServerRootDirectory                  string
@@ -128,6 +129,7 @@ func operatorRun(namespace string, cfg *rest.Config) error {
 	// Setup all Controllers
 	bv := util.BuildVariables{
 		ImageRepository:                      ImageRepository,
+		ImageVersion:                         ImageVersion,
 		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
 		ProductName:                          ProductName,
 		ServerRootDirectory:                  ServerRootDirectory,
