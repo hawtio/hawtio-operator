@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"fmt"
 	"os"
 	"path"
 
@@ -237,11 +238,13 @@ func getServingCertificateMountPath(version string, legacyServingCertificateMoun
 }
 
 func getVersion(buildVariables util.BuildVariables) string {
+	fmt.Println("Getting version from IMAGE_VERSION environment variable ...")
 	version := os.Getenv("IMAGE_VERSION")
 	if version == "" {
-		if len(version) > 0 {
-			version = buildVariables.ImageVersion
-		} else {
+		fmt.Println("Getting version from build variable ImageVersion")
+		version = buildVariables.ImageVersion
+		if len(version) == 0 {
+			fmt.Println("Defaulting to version being latest")
 			version = "latest"
 		}
 	}
