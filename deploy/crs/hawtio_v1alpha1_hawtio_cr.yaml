@@ -4,7 +4,7 @@ metadata:
   name: hawtio-online
 spec:
   type: Namespace
-  version: 1.12
+  version: "1.12"
   replicas: 1
   auth:
     clientCertCheckSchedule: "* */12 * * *"

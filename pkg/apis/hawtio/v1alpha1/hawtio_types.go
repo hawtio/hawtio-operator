@@ -24,8 +24,10 @@ const (
 	NamespaceHawtioDeploymentType HawtioDeploymentType = "Namespace"
 )
 
+// +genclient
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=hawtios,scope=Namespaced,categories=hawtio
+// +kubebuilder:resource:path=hawtios,scope=Namespaced,shortName=hwt;hio;hawt,categories=hawtio
+// +kubebuilder:deprecatedversion:warning="v1alpha1.Hawtio is deprecated, please, use v1.Hawtio instead"
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`,description="Creation phase"
@@ -33,7 +35,7 @@ const (
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`,description="Console phase"
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.status.URL`,description="Console URL"
 
-// Hawtio Console
+// Hawtio is the Schema for the Hawtio Console API.
 type Hawtio struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
