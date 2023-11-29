@@ -1,7 +1,7 @@
 FROM golang:1.20-alpine3.18 AS builder
 
 ARG HAWTIO_ONLINE_VERSION=latest
-ARG HAWTIO_ONLINE_IMAGE_NAME=docker.io/hawtio/hawtio
+ARG HAWTIO_ONLINE_IMAGE_NAME=quay.io/hawtio/online
 
 ENV IMAGE_VERSION_FLAG="-X main.ImageVersion=${HAWTIO_ONLINE_VERSION}"
 ENV IMAGE_REPOSITORY_FLAG="-X main.ImageRepository=${HAWTIO_ONLINE_IMAGE_NAME}"

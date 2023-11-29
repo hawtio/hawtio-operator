@@ -58,7 +58,7 @@ func getImageFor(tag string, imageRepository string) string {
 		if imageRepository != "" {
 			repository = imageRepository
 		} else {
-			repository = "docker.io/hawtio/online"
+			repository = "quay.io/hawtio/online"
 		}
 	}
 

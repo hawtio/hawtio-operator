@@ -15,7 +15,7 @@ spec:
       serviceAccountName: hawtio-operator
       containers:
         - name: hawtio-operator
-          image: docker.io/hawtio/operator
+          image: quay.io/hawtio/operator
           ports:
           - containerPort: 8080
             name: metrics

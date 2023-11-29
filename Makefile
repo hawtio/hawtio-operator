@@ -1,16 +1,21 @@
 ORG = hawtio
 NAMESPACE ?= hawtio
 PROJECT = operator
-DEFAULT_IMAGE := docker.io/${ORG}/${PROJECT}
+DEFAULT_IMAGE := quay.io/${ORG}/${PROJECT}
 IMAGE ?= $(DEFAULT_IMAGE)
-DEFAULT_TAG := latest
-TAG ?= $(DEFAULT_TAG)
-VERSION ?= 1.0.0
+VERSION ?= 1.0.0-SNAPSHOT
 HAWTIO_ONLINE_VERSION ?= latest
-HAWTIO_ONLINE_IMAGE_NAME ?= docker.io/${ORG}/hawtio
+HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
-LAST_RELEASED_VERSION ?= 0.5.0
+LAST_RELEASED_VERSION ?= main
+
+# Drop suffix for use with bundle and CSV
+OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
+
+# Replace SNAPSHOT with the timestamp for the tag
+DATETIMESTAMP=$(shell date -u '+%Y%m%d-%H%M%S')
+VERSION := $(subst -SNAPSHOT,-$(DATETIMESTAMP),$(VERSION))
 
 #
 # Versions of tools and binaries
@@ -56,15 +61,15 @@ endif
 define set-kvars
 	cd $(1) && \
 	$(KUSTOMIZE) edit set namespace $(NAMESPACE) && \
-	$(KUSTOMIZE) edit set image $(DEFAULT_IMAGE)=$(IMAGE):$(TAG)
+	$(KUSTOMIZE) edit set image $(DEFAULT_IMAGE)=$(IMAGE):$(VERSION)
 endef
 
 default: image
 
 image:
-	docker build -t ${IMAGE}:${TAG} \
-	--build-arg HAWTIO_ONLINE_IMAGE_NAME=${HAWTIO_ONLINE_IMAGE_NAME} \
-	--build-arg HAWTIO_ONLINE_VERSION=${HAWTIO_ONLINE_VERSION} \
+	docker build -t $(IMAGE):$(VERSION) \
+	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
+	--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
 	.
 
 build: go-generate compile test
@@ -89,6 +94,12 @@ k8s-generate: controller-gen
 
 generate: k8s-generate go-generate manifests
 
+get-image:
+	@echo $(IMAGE)
+
+get-version:
+	@echo $(VERSION)
+
 #
 # Installation of just the CRD
 # Can only be executed as a cluster-admin
@@ -109,18 +120,17 @@ else
 endif
 
 # Generate bundle manifests and metadata
-
-DEFAULT_CHANNEL ?= $(shell echo "stable-v$(word 1,$(subst ., ,$(lastword $(VERSION))))")
+DEFAULT_CHANNEL ?= $(shell echo "stable-v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
 CHANNELS ?= $(DEFAULT_CHANNEL),latest
 PACKAGE := hawtio-operator
 MANIFESTS := bundle
-CSV_VERSION := $(VERSION)
+CSV_VERSION := $(OPERATOR_VERSION)
 CSV_NAME := $(PACKAGE).v$(CSV_VERSION)
 CSV_DISPLAY_NAME := Hawtio Operator
 CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
 CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
 CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
-IMAGE_NAME ?= docker.io/hawtio/operator
+IMAGE_NAME ?= $(DEFAULT_IMAGE)
 
 # Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
@@ -158,7 +168,7 @@ bundle: kustomize operator-sdk pre-bundle
 	@# Build kustomize manifests
 	$(KUSTOMIZE) build bundle | $(OPERATOR_SDK) generate bundle \
 		--kustomize-dir bundle \
-		--version $(VERSION) -q --overwrite \
+		--version $(OPERATOR_VERSION) -q --overwrite \
 		$(BUNDLE_METADATA_OPTS)
 
 validate-bundle: operator-sdk
