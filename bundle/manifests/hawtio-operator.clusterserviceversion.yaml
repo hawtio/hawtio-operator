@@ -26,7 +26,8 @@ metadata:
                 "memory": "32Mi"
               }
             },
-            "type": "Namespace"
+            "type": "Namespace",
+            "version": "1.12"
           }
         },
         {
@@ -52,7 +53,7 @@ metadata:
               }
             },
             "type": "Namespace",
-            "version": 1.12
+            "version": "1.12"
           }
         }
       ]
@@ -60,9 +61,10 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: quay.io/hawtio/operator:1.0.2
-    createdAt: "2024-04-04T14:20:31Z"
+    createdAt: "2024-04-05T13:13:52Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
+    olm.skipRange: '>=1.0.0 <1.0.2'
     operators.operatorframework.io/builder: operator-sdk-v1.28.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
     repository: https://github.com/hawtio/hawtio-operator

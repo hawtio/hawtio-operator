@@ -26,7 +26,7 @@ const (
 
 // +genclient
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:path=hawtios,scope=Namespaced,shortName=hawt,categories=hawtio
+// +kubebuilder:resource:path=hawtios,scope=Namespaced,shortName=hwt;hio;hawt,categories=hawtio
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
@@ -72,6 +72,10 @@ type HawtioSpec struct {
 	Route HawtioRoute `json:"route,omitempty"`
 	// List of external route names that will be annotated by the operator to access the console using the routes
 	ExternalRoutes []string `json:"externalRoutes,omitempty"`
+	// The Hawtio console container image version.
+	// Deprecated: Remains for legacy purposes in respect of older
+	// operators (<1.0.0) still requiring it for their installs
+	Version string `json:"version,omitempty"`
 	// The authentication configuration
 	Auth HawtioAuth `json:"auth,omitempty"`
 	// The Nginx runtime configuration

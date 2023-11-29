@@ -202,7 +202,8 @@ CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
 CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
 # Not required for first version to be deployed to Operator Hub
 CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
-#CSV_SKIP_RANGE :=
+# Hides the 1.0.0 & 1.0.1 releases with the CRD that removes the 'version' property
+CSV_SKIP_RANGE := >=1.0.0 <1.0.2
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
 
 # Test Bundle Index
@@ -233,10 +234,19 @@ pre-bundle:
 	@sed -i 's/^  name: .*.\(v.*\)/  name: $(CSV_NAME)/' $(CSV_PATH)
 	@sed -i 's/^  displayName: .*/  displayName: $(CSV_DISPLAY_NAME)/' $(CSV_PATH)
 	@sed -i 's/^  version: .*/  version: $(CSV_VERSION)/' $(CSV_PATH)
+# If there is a replaces version then insert/update it
 	@if grep -q replaces $(CSV_PATH); \
-		then sed -i 's/^  replaces: .*/  replaces: $(CSV_REPLACES)/' $(CSV_PATH); \
-		else sed -i '/  version: ${CSV_VERSION}/a \ \ replaces: $(CSV_REPLACES)' $(CSV_PATH); \
+		then sed -i "s/^  replaces: .*/  replaces: $(CSV_REPLACES)/" $(CSV_PATH); \
+		else sed -i "/  version: ${CSV_VERSION}/a \ \ replaces: $(CSV_REPLACES)" $(CSV_PATH); \
 	fi
+# If there is a skipRange version range then insert/update it
+ifneq ($(CSV_SKIP_RANGE), "")
+	@if grep -q olm.skipRange $(CSV_PATH); \
+		then sed -i "s/olm.skipRange: .*/olm.skipRange: '$(CSV_SKIP_RANGE)'/" $(CSV_PATH); \
+		else sed -i "/  annotations:/a \ \ \ \ olm.skipRange: '$(CSV_SKIP_RANGE)'" $(CSV_PATH); \
+	fi
+endif
+
 
 #---
 #
@@ -300,7 +310,7 @@ bundle-build: bundle
 bundle-index: opm yq
 	BUNDLE_INDEX=$(BUNDLE_INDEX) INDEX_DIR=$(INDEX_DIR) PACKAGE=$(PACKAGE) YQ=$(YQ) \
 	OPM=$(OPM) BUNDLE_IMAGE=$(BUNDLE_IMAGE_NAME):$(VERSION) CSV_NAME=$(CSV_NAME) \
-	CSV_SKIPS=$(CSV_SKIP_RANGE) CSV_REPLACES=$(CSV_REPLACES) CHANNELS="$(CHANNELS)" \
+	CSV_SKIPS="$(CSV_SKIP_RANGE)" CSV_REPLACES=$(CSV_REPLACES) CHANNELS="$(CHANNELS)" \
 	./script/build_bundle_index.sh
 
 #
