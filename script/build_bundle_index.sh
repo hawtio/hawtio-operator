@@ -79,6 +79,12 @@ fi
 mkdir -p "${INDEX_DIR}"
 
 if [ ! -f ${INDEX_BASE_YAML} ]; then
+	# Pull the latest version of the catalog index image
+	docker pull ${BUNDLE_INDEX}
+	if [ $? != 0 ]; then
+    echo "Error: failed to pull latest version of bundle catalog index image"
+    exit 1
+  fi
   ${OPM} render ${BUNDLE_INDEX} -o yaml > ${INDEX_BASE_YAML}
   if [ $? != 0 ]; then
     echo "Error: failed to render the base catalog"

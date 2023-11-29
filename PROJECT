@@ -7,8 +7,7 @@ resources:
   domain: hawt.io
   group: hawt.io
   kind: Hawtio
-  # TODO(user): Update the package path for your API if the below value is incorrect.
-  path: github.com/hawtio/hawtio-operator/pkg/apis/v1alpha1
+  path: github.com/hawtio/hawtio-operator/pkg/apis/v1
   version: v1alpha1
 version: "3"
 plugins:

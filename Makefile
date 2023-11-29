@@ -56,7 +56,7 @@ ifeq ($(DEBUG),true)
 GOFLAGS += -gcflags="all=-N -l"
 endif
 
-.PHONY: image build compile go-generate test manifests k8s-generate install deploy bundle controller-gen kubectl kustomize check-admin setup operator app
+.PHONY: image publish-image build compile go-generate test manifests k8s-generate install deploy bundle controller-gen kubectl kustomize check-admin setup operator app
 
 #
 # Function for editing kustomize parameters
@@ -90,6 +90,22 @@ image:
 
 #---
 #
+#@ publish-image
+#
+#== Compile the operator as a docker image then push the image to the repository
+#
+#* PARAMETERS:
+#** IMAGE:                     Set a custom image for the container image
+#** VERSION:                   Set a custom version for the container image tag
+#** HAWTIO_ONLINE_IMAGE_NAME   Set the operator's target hawtio-online image name
+#** HAWTIO_ONLINE_VERSION      Set the operator's target hawtio-online image version
+#
+#---
+publish-image: image
+	docker push $(IMAGE):$(VERSION)
+
+#---
+#
 #@ build
 #== Build and test the operator binary
 #
@@ -97,7 +113,7 @@ image:
 #** GOLDFLAGS:                 Add any go-lang ldflags, eg. -X main.ImageVersion=2.0.0-202312061128 will compile in the operand version
 #
 #---
-build: go-generate compile test
+build: generate compile test
 
 compile:
 	CGO_ENABLED=0 go build $(GOFLAGS) -o hawtio-operator ./cmd/manager/main.go
@@ -140,9 +156,16 @@ get-version:
 #
 #=== Can only be executed as a cluster-admin
 #
+#* PARAMETERS:
+#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#
 #---
 deploy-crd: kubectl
-	kubectl apply -f $(INSTALL_ROOT)/crd/hawt.io_hawtios.yaml
+ifeq ($(DEBUG), false)
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/crd | kubectl apply -f -
+else
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/crd
+endif
 
 #---
 #
@@ -270,7 +293,7 @@ bundle-build: bundle
 #== Builds a test catalog index for installing the operator via an OLM
 #
 #* PARAMETERS:
-#** IMAGE:                     Set the custom image name (suffixed with '-bundle')
+#** IMAGE:                     Set the custom image name (will be suffixed with '-bundle')
 #** VERSION:                   Set the custom version for the bundle image
 #
 #---
