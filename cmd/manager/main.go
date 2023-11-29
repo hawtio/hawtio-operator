@@ -4,12 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
+	"runtime"
+
 	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"os"
-	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -39,6 +40,11 @@ var log = logf.Log.WithName("cmd")
 func printVersion() {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
+}
+
+func printBuildVars(bv util.BuildVariables) {
+	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.ImageRepository))
+	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.ImageVersion))
 }
 
 func main() {
@@ -136,6 +142,9 @@ func operatorRun(namespace string, cfg *rest.Config) error {
 		ClientCertCommonName:                 CertificateCommonName,
 		AdditionalLabels:                     AdditionalLabels,
 	}
+
+	printBuildVars(bv)
+
 	if err := controller.AddToManager(mgr, bv); err != nil {
 		log.Error(err, "")
 		return err
