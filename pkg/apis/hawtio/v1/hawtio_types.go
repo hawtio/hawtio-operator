@@ -169,7 +169,9 @@ type HawtioList struct {
 	Items           []Hawtio `json:"items"`
 }
 
-// HawtioConfig defines the hawtconfig.json structure
+// HawtioConfig defines the hawtconfig.json structure.
+// This type reflects only part of the whole definitions hawtconfig.json can have.
+// Only the options that may be used by the operator are defined.
 type HawtioConfig struct {
 	// The information to be displayed in the About page
 	About HawtioAbout `json:"about,omitempty"`
