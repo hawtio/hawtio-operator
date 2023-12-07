@@ -36,7 +36,7 @@ GEN_SUFFIX := gen.yaml
 #
 # See https://kubectl.docs.kubernetes.io/faq/kustomize
 #
-KOPTIONS := --load_restrictor LoadRestrictionsNone
+KOPTIONS := --load-restrictor LoadRestrictionsNone
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -64,14 +64,34 @@ define set-kvars
 	$(KUSTOMIZE) edit set image $(DEFAULT_IMAGE)=$(IMAGE):$(VERSION)
 endef
 
-default: image
-
+#---
+#
+#@ image
+#
+#== Compile the operator as a docker image
+#
+#* PARAMETERS:
+#** IMAGE:                     Set a custom image for the container image
+#** VERSION:                   Set a custom version for the container image tag
+#** HAWTIO_ONLINE_IMAGE_NAME   Set the operator's target hawtio-online image name
+#** HAWTIO_ONLINE_VERSION      Set the operator's target hawtio-online image version
+#
+#---
 image:
 	docker build -t $(IMAGE):$(VERSION) \
 	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
-	.
 
+#---
+#
+#@ build
+#
+#* PARAMETERS:
+#** GOLDFLAGS:                 Add any go-lang ldflags, eg. -X main.ImageVersion=2.0.0-202312061128 will compile in the operand version
+#
+#== Build and test the operator binary
+#
+#---
 build: go-generate compile test
 
 compile:
@@ -84,7 +104,6 @@ go-generate:
 test:
 	CGO_ENABLED=0 go test -count=1 ./...
 
-# Generate manifests, e.g. CRDs
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=$(INSTALL_ROOT)/crd
 
@@ -100,17 +119,33 @@ get-image:
 get-version:
 	@echo $(VERSION)
 
+#---
 #
-# Installation of just the CRD
-# Can only be executed as a cluster-admin
+#@ deploy-crd
 #
-install:
-	kubectl apply -f $(INSTALL_ROOT)/crd/hawtio_v1alpha1_hawtio_crd.yaml
+#== Deploys only the CRD
+#
+#=== Can only be executed as a cluster-admin
+#
+#---
+deploy-crd:
+	kubectl apply -f $(INSTALL_ROOT)/crd/hawt.io_hawtios.yaml
 
+#---
 #
-# Full deploy of all resources.
-# Can only be executed as a cluster-admin
+#@ deploy
 #
+#== Deploy all the resources of the operator to the current cluster
+#
+#=== Can only be executed as a cluster-admin
+#
+#* PARAMETERS:
+#** IMAGE:                     Set a custom image for the deployment
+#** VERSION:                   Set a custom version for the deployment
+#** NAMESPACE:                 Set the namespace for the resources
+#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#
+#---
 deploy: install kustomize
 	$(call set-kvars,$(INSTALL_ROOT))
 ifeq ($(DEBUG), false)
@@ -160,6 +195,19 @@ pre-bundle:
 		else sed -i '/  version: ${CSV_VERSION}/a \ \ replaces: $(CSV_REPLACES)' $(CSV_PATH); \
 	fi
 
+#---
+#
+#@ bundle
+#
+#== Create the manifest bundle artifacts
+#
+#* PARAMETERS:
+#** IMAGE:                     Set a custom image for the deployment
+#** VERSION:                   Set a custom version for the deployment
+#** NAMESPACE:                 Set the namespace for the resources
+#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#
+#---
 bundle: kustomize operator-sdk pre-bundle
 	@# Display BUNDLE_METADATA_OPTS for debugging
 	$(info BUNDLE_METADATA_OPTS=$(BUNDLE_METADATA_OPTS))
@@ -171,6 +219,13 @@ bundle: kustomize operator-sdk pre-bundle
 		--version $(OPERATOR_VERSION) -q --overwrite \
 		$(BUNDLE_METADATA_OPTS)
 
+#---
+#
+#@ validate-bundle
+#
+#== Validate the manifest bundle artifacts generated in bundle directory
+#
+#---
 validate-bundle: operator-sdk
 	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
 
@@ -214,14 +269,17 @@ operator-sdk: detect-os
 		mv operator-sdk $(GOBIN)/ ;
 OPERATOR_SDK=$(GOBIN)/operator-sdk
 
+#---
 #
-# Cluster-Admin install step that configures cluster roles and
-# installs the CRD. Grants a user the necessary privileges to
-# install the operator.
+#@ setup
 #
-# Setup the installation by installing crds, roles and granting
-# privileges for the installing user.
+#== Setup the installation by installing crds, roles and granting privileges for the installing user.
 #
+#* PARAMETERS:
+#** IMAGE:                     Set a custom image for the deployment
+#** VERSION:                   Set a custom version for the deployment
+#** NAMESPACE:                 Set the namespace for the resources
+#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
 setup: kustomize
 	#@ Must be invoked by a user with cluster-admin privileges
 	$(call set-kvars,$(INSTALL_ROOT)/setup)
@@ -231,11 +289,21 @@ else
 	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/setup
 endif
 
+#---
 #
-# Install just the operator as a normal user
-# (must be granted the privileges by the Cluster-Admin
-# executed `setup` procedure)
+#@ operator
 #
+#== Install just the operator as a normal user
+#
+#=== (must be granted the privileges by the Cluster-Admin executed `setup` procedure)
+#
+#* PARAMETERS:
+#** IMAGE:                     Set a custom image for the deployment
+#** VERSION:                   Set a custom version for the deployment
+#** NAMESPACE:                 Set the namespace for the resources
+#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#
+#---
 operator: kustomize
 	#@ Can be invoked by a user with namespace privileges (rather than a cluster-admin)
 	$(call set-kvars,$(INSTALL_ROOT)/operator)
@@ -245,11 +313,21 @@ else
 	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/operator
 endif
 
+#---
 #
-# Install the app CR and deploy the operator as a normal user
-# (must be granted the privileges by the Cluster-Admin
-# executed `setup` procedure)
+#@ app
 #
+#== Install the app CR and deploy the operator as a normal user
+#
+#=== (must be granted the privileges by the Cluster-Admin executed `setup` procedure)
+#
+#* PARAMETERS:
+#** IMAGE:                     Set a custom image for the deployment
+#** VERSION:                   Set a custom version for the deployment
+#** NAMESPACE:                 Set the namespace for the resources
+#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#
+#---
 app: operator kustomize
 	#@ Can be invoked by a user with namespace privileges (rather than a cluster-admin)
 	$(call set-kvars,$(INSTALL_ROOT)/app)
@@ -258,3 +336,8 @@ ifeq ($(DEBUG), false)
 else
 		$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app
 endif
+
+.DEFAULT_GOAL := help
+.PHONY: help
+help: ## Show this help screen.
+	@awk 'BEGIN { printf "\nUsage: make \033[31m<PARAM1=val1 PARAM2=val2>\033[0m \033[36m<target>\033[0m\n"; printf "\nAvailable targets are:\n" } /^#@/ { printf "\033[36m%-15s\033[0m", $$2; subdesc=0; next } /^#===/ { printf "%-14s \033[32m%s\033[0m\n", " ", substr($$0, 5); subdesc=1; next } /^#==/ { printf "\033[0m%s\033[0m\n\n", substr($$0, 4); next } /^#\*\*/ { printf "%-14s \033[31m%s\033[0m\n", " ", substr($$0, 4); next } /^#\*/ && (subdesc == 1) { printf "\n"; next } /^#\-\-\-/ { printf "\n"; next }' $(MAKEFILE_LIST)
