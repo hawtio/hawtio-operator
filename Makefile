@@ -81,6 +81,7 @@ image:
 	docker build -t $(IMAGE):$(VERSION) \
 	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
+	.
 
 #---
 #
