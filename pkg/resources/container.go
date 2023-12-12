@@ -2,6 +2,7 @@ package resources
 
 import (
 	"os"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -60,6 +61,11 @@ func getImageFor(tag string, imageRepository string) string {
 		} else {
 			repository = "quay.io/hawtio/online"
 		}
+	}
+
+	if strings.HasPrefix(tag, "sha256:") {
+		// tag is a sha checksum tag
+		return repository + "@" + tag
 	}
 
 	return repository + ":" + tag
