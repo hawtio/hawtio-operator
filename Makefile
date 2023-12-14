@@ -8,7 +8,7 @@ HAWTIO_ONLINE_VERSION ?= latest
 HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
-LAST_RELEASED_VERSION ?= main
+LAST_RELEASED_VERSION ?= 0.5.0
 
 # Drop suffix for use with bundle and CSV
 OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
@@ -86,11 +86,10 @@ image:
 #---
 #
 #@ build
+#== Build and test the operator binary
 #
 #* PARAMETERS:
 #** GOLDFLAGS:                 Add any go-lang ldflags, eg. -X main.ImageVersion=2.0.0-202312061128 will compile in the operand version
-#
-#== Build and test the operator binary
 #
 #---
 build: go-generate compile test
