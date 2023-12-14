@@ -33,3 +33,10 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "hawtio-operator"
+          resources:
+            requests:
+              memory: "100Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
