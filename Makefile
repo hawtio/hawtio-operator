@@ -9,6 +9,7 @@ HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
 LAST_RELEASED_VERSION ?= 0.5.0
+BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 
 # Drop suffix for use with bundle and CSV
 OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
@@ -23,6 +24,7 @@ VERSION := $(subst -SNAPSHOT,-$(DATETIMESTAMP),$(VERSION))
 CONTROLLER_GEN_VERSION := v0.6.1
 KUSTOMIZE_VERSION := v4.5.4
 OPERATOR_SDK_VERSION := v1.28.0
+OPM_VERSION := v1.24.0
 
 CRD_OPTIONS ?= crd:crdVersions=v1,preserveUnknownFields=false
 
@@ -164,8 +166,15 @@ CSV_NAME := $(PACKAGE).v$(CSV_VERSION)
 CSV_DISPLAY_NAME := Hawtio Operator
 CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
 CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
-CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
+# Not required for first version to be deployed to Operator Hub
+#CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
+#CSV_SKIP_RANGE :=
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
+
+# Test Bundle Index
+BUNDLE_INDEX := quay.io/operatorhubio/catalog:latest
+INDEX_DIR := index
+OPM := opm
 
 # Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
@@ -229,6 +238,37 @@ bundle: kustomize operator-sdk pre-bundle
 validate-bundle: operator-sdk
 	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
 
+#---
+#
+#@  bundle-build
+#
+#== Build the bundle image.
+#
+#* PARAMETERS:
+#** IMAGE:                     Set the custom image name (suffixed with '-bundle')
+#** VERSION:                   Set the custom version for the bundle image
+#
+#---
+bundle-build: bundle
+	docker build -f bundle.Dockerfile -t $(BUNDLE_IMAGE_NAME):$(VERSION) .
+
+#---
+#
+#@ bundle-index
+#
+#== Builds a test catalog index for installing the operator via an OLM
+#
+#* PARAMETERS:
+#** IMAGE:                     Set the custom image name (suffixed with '-bundle')
+#** VERSION:                   Set the custom version for the bundle image
+#
+#---
+bundle-index: opm yq
+	BUNDLE_INDEX=$(BUNDLE_INDEX) INDEX_DIR=$(INDEX_DIR) PACKAGE=$(PACKAGE) YQ=$(YQ) \
+	OPM=$(OPM) BUNDLE_IMAGE=$(BUNDLE_IMAGE_NAME):$(VERSION) CSV_NAME=$(CSV_NAME) \
+	CSV_SKIPS=$(CSV_SKIP_RANGE) CSV_REPLACES=$(CSV_REPLACES) CHANNELS="$(CHANNELS)" \
+	./script/build_bundle_index.sh
+
 # find or download controller-gen
 # download controller-gen if necessary
 controller-gen:
@@ -268,6 +308,35 @@ operator-sdk: detect-os
 		mkdir -p $(GOBIN) ;\
 		mv operator-sdk $(GOBIN)/ ;
 OPERATOR_SDK=$(GOBIN)/operator-sdk
+
+opm: detect-os
+ifeq (, $(shell command -v opm 2> /dev/null))
+	@{ \
+	set -e ;\
+	curl \
+		-L https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$(OS_LOWER)-amd64-opm \
+		-o opm; \
+	chmod +x opm;\
+	mkdir -p $(GOBIN) ;\
+	mv opm $(GOBIN)/ ;\
+	}
+OPM=$(GOBIN)/opm
+else
+	@{ \
+	echo -n "opm already installed: "; \
+  opm version | sed -n 's/.*"v\([^"]*\)".*/\1/p'; \
+	echo " If this is less than $(OPM_VERSION) then please consider moving it aside and allowing the approved version to be downloaded."; \
+	}
+OPM=$(shell command -v opm 2> /dev/null)
+endif
+
+yq:
+ifeq (, $(shell command -v yq 2> /dev/null))
+	@GO111MODULE=on go install github.com/mikefarah/yq/v3
+YQ=$(GOBIN)/yq
+else
+YQ=$(shell command -v yq 2> /dev/null)
+endif
 
 #---
 #
