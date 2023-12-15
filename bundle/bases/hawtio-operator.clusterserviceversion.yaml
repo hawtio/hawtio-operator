@@ -68,4 +68,3 @@ spec:
     type: MultiNamespace
   - supported: false
     type: AllNamespaces
-  replaces: hawtio-operator.v0.5.0
