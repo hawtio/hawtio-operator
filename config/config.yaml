@@ -1,12 +1,13 @@
 about:
-  title: Hawtio Console
-  additionalInfo: The Hawtio console eases the discovery and management of 'hawtio-enabled'
+  title: Hawtio Online Console
+  productInfo: []
+  additionalInfo: The Hawtio Online Console eases the discovery and management of 'hawtio-enabled'
     applications deployed on OpenShift.
+  imgSrc: /online/hawtio-logo.svg
 branding:
-  appName: Hawtio Console
-  appLogoUrl: img/hawtio-logo.svg
-online:
-  consoleLink:
-    text: Hawtio Console
-    section: Hawtio
-    imageRelativePath: /online/img/favicon.ico
+  appName: Hawtio Online Console
+  appLogoUrl: /online/hawtio-logo.svg
+  favicon: /online/favicon.ico
+  showAppName: true
+login:
+  title: Log in with your token
