@@ -4,4 +4,4 @@ kind: Kustomization
 namespace: hawtio
 
 resources:
-- ../crs/hawtio_v1alpha1_hawtio_cr.yaml
+- ../crs/hawtio_v1_hawtio_cr.yaml
