@@ -83,3 +83,7 @@ tags
 *.iml
 *.ipr
 *.iws
+
+### bundle index directory for install testing
+index
+index.Dockerfile
