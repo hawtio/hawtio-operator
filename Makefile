@@ -167,7 +167,7 @@ CSV_DISPLAY_NAME := Hawtio Operator
 CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
 CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
 # Not required for first version to be deployed to Operator Hub
-#CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
+CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
 #CSV_SKIP_RANGE :=
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
 

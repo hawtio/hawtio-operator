@@ -60,7 +60,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: quay.io/hawtio/operator:1.0.0
-    createdAt: "2023-11-13T16:00:10Z"
+    createdAt: "2023-12-21T18:56:35Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     operators.operatorframework.io/builder: operator-sdk-v1.28.0
@@ -72,26 +72,14 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - kind: Hawtio
-      name: hawtios.hawt.io
-      version: v1
-    - description: A Hawtio Console
+    - description: An Hawtio console that eases the discovery and management of hawtio-enabled
+        applications
       displayName: Hawtio
       kind: Hawtio
       name: hawtios.hawt.io
-      specDescriptors:
-      - description: The number of Hawtio pods to deploy
-        displayName: Replicas
-        path: replicas
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:fieldGroup:Deployment
-        - urn:alm:descriptor:com.tectonic.ui:podCount
-      - description: The version used for the Hawtio
-        displayName: Version
-        path: version
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:fieldGroup:Deployment
-        - urn:alm:descriptor:com.tectonic.ui:text
+      version: v1
+    - kind: Hawtio
+      name: hawtios.hawt.io
       version: v1alpha1
   description: |
     Hawtio
@@ -302,4 +290,5 @@ spec:
   minKubeVersion: 1.11.0
   provider:
     name: Red Hat
+  replaces: hawtio-operator.v0.5.0
   version: 1.0.0
