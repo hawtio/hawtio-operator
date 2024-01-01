@@ -9,8 +9,6 @@ import (
 	"time"
 
 
-	"github.com/Masterminds/semver"
-
 	"github.com/RHsyseng/operator-utils/pkg/resource/compare"
 	"github.com/RHsyseng/operator-utils/pkg/resource/read"
 	"github.com/RHsyseng/operator-utils/pkg/resource/write"
@@ -24,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kclient "k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -43,6 +42,7 @@ import (
 	oauthclient "github.com/openshift/client-go/oauth/clientset/versioned"
 
 	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
@@ -93,11 +93,18 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 	}
 	r.configClient = configClient
 
-	coreClient, err := corev1client.NewForConfig(mgr.GetConfig())
+	apiClient, err := kclient.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
-	r.coreClient = coreClient
+	r.apiClient = apiClient
+	r.coreClient = apiClient.CoreV1()
+
+	// Identify cluster capabilities
+	r.apiSpec, err = capabilities.APICapabilities(context.TODO(), r.apiClient, r.configClient)
+	if err != nil {
+		return errs.Wrap(err, "Cluster API capability discovery failed")
+	}
 
 	if err := openshift.ConsoleYAMLSampleExists(); err == nil {
 		openshift.CreateConsoleYAMLSamples(context.TODO(), mgr.GetClient(), r.ProductName)
@@ -177,9 +184,11 @@ type ReconcileHawtio struct {
 	// that reads objects from the cache and writes to the API server
 	client       client.Client
 	scheme       *runtime.Scheme
-	coreClient   *corev1client.CoreV1Client
+	coreClient   corev1client.CoreV1Interface
 	oauthClient  oauthclient.Interface
 	configClient configclient.Interface
+	apiClient    kclient.Interface
+	apiSpec      *capabilities.ApiServerSpec
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -204,6 +213,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+
+	reqLogger.Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
 
 	// Delete phase
 
@@ -262,33 +273,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	// Check OpenShift version
-	var openShiftSemVer *semver.Version
-	clusterVersion, err := r.configClient.ConfigV1().ClusterVersions().Get(ctx, "version", metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Let's default to OpenShift 3 as ClusterVersion API was introduced in OpenShift 4
-			openShiftSemVer, _ = semver.NewVersion("3")
-		} else {
-			reqLogger.Error(err, "Error reading cluster version")
-			return reconcile.Result{}, err
-		}
-	} else {
-		// Let's take the latest version from the history
-		v := clusterVersion.Status.History[0].Version
-		openShiftSemVer, err = semver.NewVersion(v)
-		if err != nil {
-			reqLogger.Error(err, "Error parsing cluster semantic version", "version", v)
-			return reconcile.Result{}, err
-		}
-	}
-	constraint4, _ := semver.NewConstraint(">= 4-0")
-	isOpenShift4 := constraint4.Check(openShiftSemVer)
-	constraint43, _ := semver.NewConstraint(">= 4.3")
-	isOpenShift43Plus := constraint43.Check(openShiftSemVer)
-
 	var openShiftConsoleUrl string
-	if isOpenShift4 {
+	if r.apiSpec.IsOpenShift4 {
 		// Retrieve OpenShift Web console public URL
 		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
 		if err != nil {
@@ -301,7 +287,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		}
 	}
 
-	if isOpenShift4 {
+	if r.apiSpec.IsOpenShift4 {
 		cronJob := &batchv1.CronJob{}
 		cronJobName := request.Name + "-certificate-expiry-check"
 		cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob)
@@ -443,7 +429,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		caCertRouteSecret = nil
 	}
 
-	_, err = r.reconcileDeployment(hawtio, isOpenShift4, openShiftSemVer.String(), openShiftConsoleUrl,
+	_, err = r.reconcileDeployment(hawtio, r.apiSpec.IsOpenShift4, r.apiSpec.Version, openShiftConsoleUrl,
 		configMap, clientCertSecret, tlsRouteSecret, caCertRouteSecret)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling deployment")
@@ -477,7 +463,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Add link to OpenShift console
 	consoleLinkName := request.Name + "-" + request.Namespace
-	if isOpenShift4 && hawtio.Status.Phase == hawtiov1.HawtioPhaseInitialized {
+	if r.apiSpec.IsOpenShift4 && hawtio.Status.Phase == hawtiov1.HawtioPhaseInitialized {
 		consoleLink := &consolev1.ConsoleLink{}
 		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
@@ -495,7 +481,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		consoleLink = &consolev1.ConsoleLink{}
 		if isClusterDeployment {
 			consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
-		} else if isOpenShift43Plus {
+		} else if r.apiSpec.IsOpenShift43Plus {
 			consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 		}
 		if consoleLink.Spec.Location != "" {
@@ -563,7 +549,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Reconcile console link in OpenShift console
-	if isOpenShift4 {
+	if r.apiSpec.IsOpenShift4 {
 		consoleLink := &consolev1.ConsoleLink{}
 		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
@@ -571,7 +557,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 				// If not found, create a console link
 				if isClusterDeployment {
 					consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
-				} else if isOpenShift43Plus {
+				} else if r.apiSpec.IsOpenShift43Plus {
 					consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 				}
 				if consoleLink.Spec.Location != "" {
@@ -589,7 +575,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			consoleLinkCopy := consoleLink.DeepCopy()
 			if isClusterDeployment {
 				openshift.UpdateApplicationMenuLink(consoleLinkCopy, route, hawtconfig)
-			} else if isOpenShift43Plus {
+			} else if r.apiSpec.IsOpenShift43Plus {
 				openshift.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
 			}
 			err = r.client.Patch(ctx, consoleLinkCopy, client.MergeFrom(consoleLink))
