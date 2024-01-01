@@ -12,15 +12,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 )
 
 func TestNonWatchedResourceNameNotFound(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	objs := []runtime.Object{
 		&hawtio,
@@ -35,13 +36,13 @@ func TestNonWatchedResourceNameNotFound(t *testing.T) {
 		},
 	}
 
-	result, err := r.Reconcile(request)
+	result, err := r.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, result)
 }
 
 func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	objs := []runtime.Object{
 		&hawtio,
@@ -56,13 +57,13 @@ func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
 		},
 	}
 
-	result, err := r.Reconcile(request)
+	result, err := r.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, result)
 }
 
 func TestHawtioController_Reconcile(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	objs := []runtime.Object{
 		&hawtio,
 	}
@@ -73,15 +74,15 @@ func TestHawtioController_Reconcile(t *testing.T) {
 	request := reconcile.Request{NamespacedName: NamespacedName}
 
 	// Created phase
-	res, err := r.Reconcile(request)
+	res, err := r.Reconcile(context.TODO(), request)
 	assert.NoError(t, err, "reconcile Error")
 	assert.Equal(t, reconcile.Result{Requeue: true}, res)
 	// Initialized phase
-	res, err = r.Reconcile(request)
+	res, err = r.Reconcile(context.TODO(), request)
 	assert.NoError(t, err, "reconcile Error")
 	assert.Equal(t, reconcile.Result{Requeue: true}, res)
 	// Deployed phase
-	res, err = r.Reconcile(request)
+	res, err = r.Reconcile(context.TODO(), request)
 	assert.NoError(t, err, "reconcile Error")
 	assert.Equal(t, reconcile.Result{}, res)
 

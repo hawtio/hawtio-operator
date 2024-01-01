@@ -12,7 +12,6 @@ import (
 
 	"github.com/Masterminds/semver"
 
-	"github.com/RHsyseng/operator-utils/pkg/resource"
 	"github.com/RHsyseng/operator-utils/pkg/resource/compare"
 	"github.com/RHsyseng/operator-utils/pkg/resource/read"
 	"github.com/RHsyseng/operator-utils/pkg/resource/write"
@@ -31,10 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	consolev1 "github.com/openshift/api/console/v1"
@@ -119,7 +118,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	err = c.Watch(&source.Kind{Type: &hawtiov1.Hawtio{}}, &handler.EnqueueRequestForObject{}, predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			// Ignore updates to CR status in which case metadata.Generation does not change
-			return e.MetaOld.GetGeneration() != e.MetaNew.GetGeneration()
+			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			// Evaluates to false if the object has been confirmed deleted
@@ -188,11 +187,9 @@ type ReconcileHawtio struct {
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileHawtio) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling Hawtio")
-
-	ctx := context.TODO()
 
 	// Fetch the Hawtio instance
 	hawtio := &hawtiov1.Hawtio{}
@@ -693,7 +690,7 @@ func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1.Hawtio) (bool, err
 	if err != nil {
 		return false, err
 	}
-	return r.reconcileResources(hawtio, []resource.KubernetesResource{configMap}, []runtime.Object{&corev1.ConfigMapList{}})
+	return r.reconcileResources(hawtio, []client.Object{configMap}, []client.ObjectList{&corev1.ConfigMapList{}})
 }
 
 func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio,
@@ -722,8 +719,8 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio,
 	}
 
 	return r.reconcileResources(hawtio,
-		[]resource.KubernetesResource{deployment, service, route, serviceAccount},
-		[]runtime.Object{
+		[]client.Object{deployment, service, route, serviceAccount},
+		[]client.ObjectList{
 			&corev1.ServiceList{},
 			&appsv1.DeploymentList{},
 			&routev1.RouteList{},
@@ -733,7 +730,7 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio,
 }
 
 func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1.Hawtio,
-	requestedResources []resource.KubernetesResource, listObjects []runtime.Object) (bool, error) {
+	requestedResources []client.Object, listObjects []client.ObjectList) (bool, error) {
 	reqLogger := log.WithName(hawtio.Name)
 
 	for _, res := range requestedResources {
@@ -782,7 +779,7 @@ func getComparator() compare.MapComparator {
 	resourceComparator := compare.DefaultComparator()
 
 	configMapType := reflect.TypeOf(corev1.ConfigMap{})
-	resourceComparator.SetComparator(configMapType, func(deployed resource.KubernetesResource, requested resource.KubernetesResource) bool {
+	resourceComparator.SetComparator(configMapType, func(deployed client.Object, requested client.Object) bool {
 		configMap1 := deployed.(*corev1.ConfigMap)
 		configMap2 := requested.(*corev1.ConfigMap)
 		var pairs [][2]interface{}
@@ -802,7 +799,7 @@ func getComparator() compare.MapComparator {
 	return compare.MapComparator{Comparator: resourceComparator}
 }
 
-func getDeployedResources(hawtio *hawtiov1.Hawtio, client client.Client, listObjects []runtime.Object) (map[reflect.Type][]resource.KubernetesResource, error) {
+func getDeployedResources(hawtio *hawtiov1.Hawtio, client client.Client, listObjects []client.ObjectList) (map[reflect.Type][]client.Object, error) {
 	reader := read.New(client).WithNamespace(hawtio.Namespace).WithOwnerObject(hawtio)
 	resourceMap, err := reader.ListAll(listObjects...)
 	if err != nil {
