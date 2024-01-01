@@ -8,13 +8,12 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	v1 "k8s.io/api/batch/v1"
-	"k8s.io/api/batch/v1beta1"
 	"math/big"
 	rand2 "math/rand"
 	"strconv"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -107,20 +106,20 @@ func ValidateCertificate(caSecret corev1.Secret, validAtLeastForHours float64) (
 	return false, nil
 }
 
-func createCertValidationCronJob(name, namespace, schedule, serviceAccountName string, container corev1.Container, period int) *v1beta1.CronJob {
+func createCertValidationCronJob(name, namespace, schedule, serviceAccountName string, container corev1.Container, period int) *batchv1.CronJob {
 	if period == 0 {
 		period = 24
 	}
-	cronjob := &v1beta1.CronJob{
+	cronjob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: v1beta1.CronJobSpec{
+		Spec: batchv1.CronJobSpec{
 			Schedule:          schedule,
-			ConcurrencyPolicy: v1beta1.ForbidConcurrent,
-			JobTemplate: v1beta1.JobTemplateSpec{
-				Spec: v1.JobSpec{
+			ConcurrencyPolicy: batchv1.ForbidConcurrent,
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: batchv1.JobSpec{
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
 							ServiceAccountName: serviceAccountName,
@@ -151,7 +150,7 @@ func createCertValidationCronJob(name, namespace, schedule, serviceAccountName s
 	return cronjob
 }
 
-func updateExpirationPeriod(cronJob *v1beta1.CronJob, newPeriod int) bool {
+func updateExpirationPeriod(cronJob *batchv1.CronJob, newPeriod int) bool {
 	arguments := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Args
 	for i, arg := range arguments {
 		if arg == "--cert-expiration-period" {

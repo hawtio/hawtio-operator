@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/api/batch/v1beta1"
 
 	"github.com/Masterminds/semver"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/RHsyseng/operator-utils/pkg/resource/write"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -302,7 +302,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if isOpenShift4 {
-		cronJob := &v1beta1.CronJob{}
+		cronJob := &batchv1.CronJob{}
 		cronJobName := request.Name + "-certificate-expiry-check"
 		cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob)
 
@@ -600,7 +600,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		}
 	}
 	// Reconcile the client certificate cronJob
-	cronJob := &v1beta1.CronJob{}
+	cronJob := &batchv1.CronJob{}
 	cronJobName := request.Name + "-certificate-expiry-check"
 
 	if cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob); cronJobErr == nil {
