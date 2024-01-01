@@ -103,8 +103,13 @@ compile:
 go-generate:
 	go generate ./...
 
-test:
-	CGO_ENABLED=0 go test -count=1 ./...
+gotestfmt-install:
+ifeq (, $(shell command -v gotestfmt 2> /dev/null))
+	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+endif
+
+test: gotestfmt-install
+	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1 | gotestfmt
 
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=$(INSTALL_ROOT)/crd
