@@ -1,6 +1,7 @@
 package hawtio
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/version"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -15,8 +17,11 @@ import (
 
 	fakeconfig "github.com/openshift/client-go/config/clientset/versioned/fake"
 	fakeoauth "github.com/openshift/client-go/oauth/clientset/versioned/fake"
+	discoveryfake "k8s.io/client-go/discovery/fake"
+	fakekube "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/hawtio/hawtio-operator/pkg/apis"
+	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 )
 
 //buildReconcileWithFakeClientWithMocks return *ReconcileHawtio with fake client, scheme and mock objects
@@ -44,11 +49,29 @@ func buildReconcileWithFakeClientWithMocks(objs []runtime.Object, t *testing.T) 
 	}
 
 	client := fake.NewFakeClientWithScheme(scheme, objs...)
+	apiClient := fakekube.NewSimpleClientset()
+
+	fd := apiClient.Discovery().(*discoveryfake.FakeDiscovery)
+	fd.FakedServerVersion = &version.Info{
+		Major: "4",
+		Minor: "13",
+	}
+
+	configClient := fakeconfig.NewSimpleClientset()
+	coreClient := apiClient.CoreV1()
+
+	apiSpec, err := capabilities.APICapabilities(context.TODO(), apiClient, configClient)
+	if err != nil {
+		assert.Fail(t, "unable to define api capabilities")
+	}
 
 	return &ReconcileHawtio{
 		scheme:       scheme,
 		client:       client,
-		configClient: fakeconfig.NewSimpleClientset(),
+		configClient: configClient,
+		coreClient:   coreClient,
 		oauthClient:  fakeoauth.NewSimpleClientset(),
+		apiClient:    apiClient,
+		apiSpec:      apiSpec,
 	}
 }
