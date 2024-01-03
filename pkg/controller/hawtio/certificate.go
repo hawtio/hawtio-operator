@@ -1,6 +1,7 @@
 package hawtio
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -18,25 +19,44 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func generateCertificateSecret(name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
-	caCertFile := caSecret.Data["tls.crt"]
-	pemBlock, _ := pem.Decode(caCertFile)
-	if pemBlock == nil {
-		return nil, errors.New("failed to decode CA certificate")
-	}
-	caCert, err := x509.ParseCertificate(pemBlock.Bytes)
-	if err != nil {
-		return nil, err
+
+func generateSelfSignedCertSecret(name string, namespace string, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
+	return generateCertificateSecret(name, namespace, nil, commonName, expirationDate)
+}
+
+func generateCASignedCertSecret(name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
+	if caSecret == nil {
+		return nil, errors.New("Generating a CA-signed certificate requires the CA Secret")
 	}
 
-	caKey := caSecret.Data["tls.key"]
-	pemBlock, _ = pem.Decode(caKey)
-	if pemBlock == nil {
-		return nil, errors.New("failed to decode CA certificate signing key")
-	}
-	caPrivateKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
-	if err != nil {
-		return nil, err
+	return generateCertificateSecret(name, namespace, caSecret, commonName, expirationDate)
+}
+
+func generateCertificateSecret(name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
+	var caCert *x509.Certificate
+	var caPrivateKey crypto.PrivateKey
+	var err error
+
+	if caSecret != nil {
+		caCertFile := caSecret.Data["tls.crt"]
+		pemBlock, _ := pem.Decode(caCertFile)
+		if pemBlock == nil {
+			return nil, errors.New("failed to decode CA certificate")
+		}
+		caCert, err = x509.ParseCertificate(pemBlock.Bytes)
+		if err != nil {
+			return nil, err
+		}
+
+		caKey := caSecret.Data["tls.key"]
+		pemBlock, _ = pem.Decode(caKey)
+		if pemBlock == nil {
+			return nil, errors.New("failed to decode CA certificate signing key")
+		}
+		caPrivateKey, err = x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	serialNumber := big.NewInt(rand2.Int63())
@@ -51,10 +71,20 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 	}
 
+	if caCert == nil {
+		// No CA certificate provided so create self-signed certificate
+		caCert = cert
+	}
+
 	// generate cert private key
 	certPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
+	}
+
+	if caPrivateKey == nil {
+		// No CA certificate provided so create self-signed certificate
+		caPrivateKey = certPrivateKey
 	}
 
 	privateKeyBytes := x509.MarshalPKCS1PrivateKey(certPrivateKey)

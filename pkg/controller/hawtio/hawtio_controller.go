@@ -349,7 +349,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 				if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
 					expirationDate = date.Time
 				}
-				certSecret, err := generateCertificateSecret(clientSecretName, request.Namespace, caSecret, commonName, expirationDate)
+				certSecret, err := generateCASignedCertSecret(clientSecretName, request.Namespace, caSecret, commonName, expirationDate)
 				if err != nil {
 					reqLogger.Error(err, "Generating the client certificate failed")
 					return reconcile.Result{}, err
