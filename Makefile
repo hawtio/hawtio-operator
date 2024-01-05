@@ -53,7 +53,7 @@ ifeq ($(DEBUG),true)
 GOFLAGS += -gcflags="all=-N -l"
 endif
 
-.PHONY: image build compile go-generate test manifests k8s-generate install deploy bundle controller-gen kustomize setup operator app
+.PHONY: image build compile go-generate test manifests k8s-generate install deploy bundle controller-gen kubectl kustomize check-admin setup operator app
 
 #
 # Function for editing kustomize parameters
@@ -135,7 +135,7 @@ get-version:
 #=== Can only be executed as a cluster-admin
 #
 #---
-deploy-crd:
+deploy-crd: kubectl
 	kubectl apply -f $(INSTALL_ROOT)/crd/hawt.io_hawtios.yaml
 
 #---
@@ -153,7 +153,7 @@ deploy-crd:
 #** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
 #
 #---
-deploy: install kustomize
+deploy: kubectl kustomize install
 	$(call set-kvars,$(INSTALL_ROOT))
 ifeq ($(DEBUG), false)
 	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT) | kubectl apply -f -
@@ -274,6 +274,13 @@ bundle-index: opm yq
 	CSV_SKIPS=$(CSV_SKIP_RANGE) CSV_REPLACES=$(CSV_REPLACES) CHANNELS="$(CHANNELS)" \
 	./script/build_bundle_index.sh
 
+#
+# Checks if the cluster user has the necessary privileges to be a cluster-admin
+# In this case if the user can list the CRDs then probably a cluster-admin
+#
+check-admin: kubectl
+	@output=$$(kubectl get crd 2>&1) || (echo "****" && echo "**** ERROR: Cannot continue as user is not a Cluster-Admin ****" && echo "****"; exit 1)
+
 # find or download controller-gen
 # download controller-gen if necessary
 controller-gen:
@@ -282,6 +289,11 @@ ifeq (, $(shell command -v controller-gen 2> /dev/null))
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell command -v controller-gen 2> /dev/null)
+endif
+
+kubectl:
+ifeq (, $(shell command -v kubectl 2> /dev/null))
+	$(error "No kubectl found in PATH. Please install and re-run")
 endif
 
 kustomize:
@@ -349,12 +361,14 @@ endif
 #
 #== Setup the installation by installing crds, roles and granting privileges for the installing user.
 #
+#=== Calls check-admin
+#
 #* PARAMETERS:
 #** IMAGE:                     Set a custom image for the deployment
 #** VERSION:                   Set a custom version for the deployment
 #** NAMESPACE:                 Set the namespace for the resources
 #** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
-setup: kustomize
+setup: kubectl kustomize check-admin
 	#@ Must be invoked by a user with cluster-admin privileges
 	$(call set-kvars,$(INSTALL_ROOT)/setup)
 ifeq ($(DEBUG), false)
@@ -378,7 +392,7 @@ endif
 #** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
 #
 #---
-operator: kustomize
+operator: kubectl kustomize
 	#@ Can be invoked by a user with namespace privileges (rather than a cluster-admin)
 	$(call set-kvars,$(INSTALL_ROOT)/operator)
 ifeq ($(DEBUG), false)
@@ -402,14 +416,39 @@ endif
 #** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
 #
 #---
-app: operator kustomize
+app: kubectl kustomize operator
 	#@ Can be invoked by a user with namespace privileges (rather than a cluster-admin)
 	$(call set-kvars,$(INSTALL_ROOT)/app)
 ifeq ($(DEBUG), false)
-		$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app | kubectl apply -f -
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app | kubectl apply -f -
 else
-		$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app
 endif
+
+UNINSTALLS = .uninstall-app .uninstall-operator .uninstall-setup
+
+$(UNINSTALLS): kubectl kustomize
+	@$(call set-kvars,$(INSTALL_ROOT)/$(subst .uninstall-,,$@))
+ifeq ($(DEBUG), false)
+	@$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/$(subst .uninstall-,,$@) | kubectl delete --ignore-not-found=true -f -
+else
+	@$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/$(subst .uninstall-,,$@) | kubectl delete --dry-run=client -f -
+endif
+
+#---
+#
+#@ uninstall
+#
+#== Uninstalls the app CR, operator and setup resources
+#
+#=== Calls check-admin
+#
+#* PARAMETERS:
+#** NAMESPACE:                 Set the namespace for the resources
+#** DEBUG:                     Print the resources to be deleted instead of deleting them [ true | false ]
+#
+#---
+uninstall: kubectl kustomize check-admin $(UNINSTALLS)
 
 .DEFAULT_GOAL := help
 .PHONY: help
