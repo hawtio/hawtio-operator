@@ -403,6 +403,26 @@ endif
 
 #---
 #
+#@ cr
+#
+#== Install the app CR only
+#
+#* PARAMETERS:
+#** NAMESPACE:                 Set the namespace for the resources
+#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#
+#---
+cr: kubectl kustomize
+	#@ Can be invoked by a user with namespace privileges (rather than a cluster-admin)
+	$(call set-kvars,$(INSTALL_ROOT)/app)
+ifeq ($(DEBUG), false)
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app | kubectl apply -f -
+else
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app
+endif
+
+#---
+#
 #@ app
 #
 #== Install the app CR and deploy the operator as a normal user
