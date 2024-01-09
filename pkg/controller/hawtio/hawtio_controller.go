@@ -209,6 +209,15 @@ type ReconcileHawtio struct {
 	apiSpec      *capabilities.ApiServerSpec
 }
 
+// DeploymentConfiguration acquires properties used in deployment
+type DeploymentConfiguration struct {
+	openShiftConsoleURL string
+	configMap           *corev1.ConfigMap
+	clientCertSecret    *corev1.Secret
+	tlsRouteSecret      *corev1.Secret
+	caCertRouteSecret   *corev1.Secret
+}
+
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
 // and what is in the Hawtio.Spec
 // Note:
@@ -231,6 +240,10 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+
+	deploymentConfig := DeploymentConfiguration{}
+	// This secret name should be the same as used in deployment.go
+	clientSecretName := hawtio.Name + "-tls-proxying"
 
 	reqLogger.Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
 
@@ -291,7 +304,6 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	var openShiftConsoleUrl string
 	if r.apiSpec.IsOpenShift4 {
 		// Retrieve OpenShift Web console public URL
 		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
@@ -301,7 +313,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 				return reconcile.Result{}, err
 			}
 		} else {
-			openShiftConsoleUrl = cm.Data["consoleURL"]
+			deploymentConfig.openShiftConsoleURL = cm.Data["consoleURL"]
 		}
 	}
 
@@ -311,13 +323,12 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob)
 
 		// Check whether client certificate secret exists
-		secretName := request.Name + "-tls-proxying"
 		clientCertSecret := corev1.Secret{}
-		err := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, &clientCertSecret)
+		err := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: clientSecretName}, &clientCertSecret)
 		// TODO: Update the client certificate when the Hawtio resource changes
 		if err != nil {
 			if errors.IsNotFound(err) {
-				reqLogger.Info("Client certificate secret not found, creating a new one", "secret", secretName)
+				reqLogger.Info("Client certificate secret not found, creating a new one", "secret", clientSecretName)
 
 				caSecret, err := r.coreClient.Secrets("openshift-service-ca").Get(ctx, "signing-key", metav1.GetOptions{})
 				if err != nil {
@@ -338,7 +349,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 				if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
 					expirationDate = date.Time
 				}
-				certSecret, err := generateCertificateSecret(secretName, request.Namespace, caSecret, commonName, expirationDate)
+				certSecret, err := generateCertificateSecret(clientSecretName, request.Namespace, caSecret, commonName, expirationDate)
 				if err != nil {
 					reqLogger.Error(err, "Generating the client certificate failed")
 					return reconcile.Result{}, err
@@ -348,7 +359,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 					return reconcile.Result{}, err
 				}
 				_, err = r.coreClient.Secrets(request.Namespace).Create(ctx, certSecret, metav1.CreateOptions{})
-				reqLogger.Info("Client certificate created successfully", "secret", secretName)
+				reqLogger.Info("Client certificate created successfully", "secret", clientSecretName)
 				if err != nil {
 					reqLogger.Error(err, "Creating the client certificate secret failed")
 					return reconcile.Result{}, err
@@ -413,42 +424,40 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	configMap := &corev1.ConfigMap{}
-	err = r.client.Get(ctx, request.NamespacedName, configMap)
+	deploymentConfig.configMap = &corev1.ConfigMap{}
+	err = r.client.Get(ctx, request.NamespacedName, deploymentConfig.configMap)
 	if err != nil {
 		reqLogger.Error(err, "Failed to get config map")
 		return reconcile.Result{}, err
 	}
 
-	secretName := request.Name + "-tls-proxying"
-	var clientCertSecret = &corev1.Secret{}
-	err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, clientCertSecret)
+	deploymentConfig.clientCertSecret = &corev1.Secret{}
+	err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: clientSecretName}, deploymentConfig.clientCertSecret)
 	if err != nil {
-		// clientCertSecret isn't used on openshift 3
-		clientCertSecret = nil
+		// clientCertSecret is only used on OpenShift
+		deploymentConfig.clientCertSecret = nil
 	}
 
-	tlsRouteSecret := &corev1.Secret{}
+	//
+	// Custom Route certificates defined in Hawtio CR
+	//
 	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
-		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, tlsRouteSecret)
+		deploymentConfig.tlsRouteSecret = &corev1.Secret{}
+		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, deploymentConfig.tlsRouteSecret)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-	} else {
-		tlsRouteSecret = nil
-	}
-	caCertRouteSecret := &corev1.Secret{}
-	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
-		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: caCertSecretName}, caCertRouteSecret)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	} else {
-		caCertRouteSecret = nil
 	}
 
-	_, err = r.reconcileDeployment(hawtio, r.apiSpec.IsOpenShift4, r.apiSpec.Version, openShiftConsoleUrl,
-		configMap, clientCertSecret, tlsRouteSecret, caCertRouteSecret)
+	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
+		deploymentConfig.caCertRouteSecret = &corev1.Secret{}
+		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: caCertSecretName}, deploymentConfig.caCertRouteSecret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	_, err = r.reconcileDeployment(hawtio, deploymentConfig)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling deployment")
 		return reconcile.Result{}, err
@@ -473,7 +482,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Read Hawtio configuration
-	hawtconfig, err := resources.GetHawtioConfig(configMap)
+	hawtconfig, err := resources.GetHawtioConfig(deploymentConfig.configMap)
 	if err != nil {
 		reqLogger.Error(err, "Failed to get hawtconfig")
 		return reconcile.Result{}, err
@@ -697,21 +706,19 @@ func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1.Hawtio) (bool, err
 	return r.reconcileResources(hawtio, []client.Object{configMap}, []client.ObjectList{&corev1.ConfigMapList{}})
 }
 
-func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio,
-	isOpenShift4 bool, openShiftVersion string, openShiftConsoleURL string,
-	configMap *corev1.ConfigMap, clientCertSecret, tlsCustomSecret, caCertRouteSecret *corev1.Secret) (bool, error) {
+func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymentConfig DeploymentConfiguration) (bool, error) {
 	clientCertSecretVersion := ""
-	if clientCertSecret != nil {
-		clientCertSecretVersion = clientCertSecret.GetResourceVersion()
+	if deploymentConfig.clientCertSecret != nil {
+		clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
 	}
-	deployment, err := resources.NewDeployment(hawtio, isOpenShift4, openShiftVersion, openShiftConsoleURL,
-		configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
+	deployment, err := resources.NewDeployment(hawtio, r.apiSpec, deploymentConfig.openShiftConsoleURL,
+		deploymentConfig.configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
 	if err != nil {
 		return false, err
 	}
 
 	service := resources.NewService(hawtio)
-	route := resources.NewRoute(hawtio, tlsCustomSecret, caCertRouteSecret)
+	route := resources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret)
 
 	var serviceAccount *corev1.ServiceAccount
 	if hawtio.Spec.Type == hawtiov1.NamespaceHawtioDeploymentType {
