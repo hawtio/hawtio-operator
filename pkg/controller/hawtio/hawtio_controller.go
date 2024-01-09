@@ -2,20 +2,22 @@ package hawtio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"time"
 
-
 	"github.com/RHsyseng/operator-utils/pkg/resource/compare"
 	"github.com/RHsyseng/operator-utils/pkg/resource/read"
 	"github.com/RHsyseng/operator-utils/pkg/resource/write"
+	errs "github.com/pkg/errors"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -110,15 +112,15 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 		openshift.CreateConsoleYAMLSamples(context.TODO(), mgr.GetClient(), r.ProductName)
 	}
 
-	return add(mgr, r)
+	return add(mgr, r, r.apiSpec.Routes)
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
+func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 	// Create a new controller
 	c, err := controller.New("hawtio-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
-		return err
+		return errs.Wrap(err, "Failed to create new controller")
 	}
 
 	// Watch for changes to primary resource Hawtio
@@ -133,7 +135,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		},
 	})
 	if err != nil {
-		return err
+		return errs.Wrap(err, "Failed to create watch for Hawtio resource")
 	}
 
 	// Watch for changes to secondary resources and requeue the owner Hawtio
@@ -142,15 +144,27 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		OwnerType:    &hawtiov1.Hawtio{},
 	})
 	if err != nil {
-		return err
+		return errs.Wrap(err, "Failed to create watch for ConfigMap resource")
 	}
-	err = c.Watch(&source.Kind{Type: &routev1.Route{}}, &handler.EnqueueRequestForOwner{
+
+	if routeSupport {
+		err = c.Watch(&source.Kind{Type: &routev1.Route{}}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &hawtiov1.Hawtio{},
+		})
+		if err != nil {
+			return errs.Wrap(err, "Failed to create watch for Route resource")
+		}
+	}
+
+	err = c.Watch(&source.Kind{Type: &networkingv1.Ingress{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &hawtiov1.Hawtio{},
 	})
 	if err != nil {
-		return err
+		return errs.Wrap(err, "Failed to create watch for Ingress resource")
 	}
+
 	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &hawtiov1.Hawtio{},
@@ -163,13 +177,17 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 			return oldDeployment.Status.Replicas != newDeployment.Status.Replicas
 		},
 	})
+	if err != nil {
+		return errs.Wrap(err, "Failed to create watch for Deployment resource")
+	}
+
 	//watch secret
 	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &hawtiov1.Hawtio{},
 	})
 	if err != nil {
-		return err
+		return errs.Wrap(err, "Failed to create watch for Secret resource")
 	}
 
 	return nil
