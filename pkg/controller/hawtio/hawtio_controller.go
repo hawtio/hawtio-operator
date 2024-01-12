@@ -539,6 +539,9 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			// And requeue to create a new route in the next reconcile loop
 			return reconcile.Result{Requeue: true}, nil
 		}
+	} else {
+		ingressRouteURL = kresources.GetIngressURL(ingress)
+		hawtioCopy.Status.URL = ingressRouteURL
 	}
 
 	// Reconcile console link in OpenShift console
