@@ -1,4 +1,4 @@
-package resources
+package openshift
 
 import (
 	"time"
@@ -9,18 +9,20 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 
 	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+
+	"github.com/hawtio/hawtio-operator/pkg/resources"
 )
 
-func NewRoute(hawtio *hawtiov1.Hawtio, routeTLSSecret, caCertRouteSecret *v1.Secret) *routev1.Route {
+func NewRoute(hawtio *hawtiov1.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSecret *v1.Secret) *routev1.Route {
 	name := hawtio.Name
 
 	annotations := map[string]string{}
-	propagateAnnotations(hawtio, annotations)
+	resources.PropagateAnnotations(hawtio, annotations)
 
 	labels := map[string]string{
-		labelAppKey: "hawtio",
+		resources.LabelAppKey: "hawtio",
 	}
-	propagateLabels(hawtio, labels)
+	resources.PropagateLabels(hawtio, labels)
 
 	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{

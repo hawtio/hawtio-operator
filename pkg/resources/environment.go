@@ -12,6 +12,7 @@ import (
 const (
 	HawtioTypeEnvVar                = "HAWTIO_ONLINE_MODE"
 	HawtioNamespaceEnvVar           = "HAWTIO_ONLINE_NAMESPACE"
+	HawtioAuthEnvVar                = "HAWTIO_ONLINE_AUTH"
 	HawtioOAuthClientEnvVar         = "HAWTIO_OAUTH_CLIENT_ID"
 	HawtioRbacEnvVar                = "HAWTIO_ONLINE_RBAC_ACL"
 	HawtioGatewayEnvVar             = "HAWTIO_ONLINE_GATEWAY"
@@ -21,9 +22,11 @@ const (
 	NginxClientBodyBufferSize       = "NGINX_CLIENT_BODY_BUFFER_SIZE"
 	NginxProxyBuffers               = "NGINX_PROXY_BUFFERS"
 	NginxSubrequestOutputBufferSize = "NGINX_SUBREQUEST_OUTPUT_BUFFER_SIZE"
+	HawtioAuthTypeForm              = "form"
+	HawtioAuthTypeOAuth             = "oauth"
 )
 
-func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string) []corev1.EnvVar {
+func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string, isOpenShift bool) []corev1.EnvVar {
 	oauthClientId := name
 	if deploymentType == hawtiov1.ClusterHawtioDeploymentType {
 		// Pin to a known name for cluster-wide OAuthClient
@@ -40,6 +43,19 @@ func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string)
 			Value: oauthClientId,
 		},
 	}
+
+	// Ensure that we provide the correct mode of authentication
+	var authType string
+	if isOpenShift {
+		authType = HawtioAuthTypeOAuth
+	} else {
+		authType = HawtioAuthTypeForm
+	}
+	authTypeEnvVar := corev1.EnvVar{
+		Name:  HawtioAuthEnvVar,
+		Value: authType,
+	}
+	envVars = append(envVars, authTypeEnvVar)
 
 	if deploymentType == hawtiov1.NamespaceHawtioDeploymentType {
 		envVars = append(envVars, corev1.EnvVar{

@@ -160,6 +160,10 @@ func TestHawtioController_Reconcile(t *testing.T) {
 					Name:  resources.HawtioRbacEnvVar,
 					Value: "",
 				},
+				{
+					Name:  resources.HawtioAuthEnvVar,
+					Value: "form",
+				},
 			})
 		})
 	})

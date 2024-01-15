@@ -6,19 +6,20 @@ import (
 )
 
 const (
-	labelAppKey      = "app"
+	LabelAppKey      = "app"
 	labelResourceKey = "deployment"
 )
 
-// Set labels in a map
-func labelsForHawtio(name string) map[string]string {
+// LabelsForHawtio Set labels in a map
+func LabelsForHawtio(name string) map[string]string {
 	return map[string]string{
-		labelAppKey:      "hawtio",
+		LabelAppKey:      "hawtio",
 		labelResourceKey: name,
 	}
 }
 
-func propagateAnnotations(hawtio *hawtiov1.Hawtio, annotations map[string]string) {
+// PropagateAnnotations propagate annotations from hawtio CR
+func PropagateAnnotations(hawtio *hawtiov1.Hawtio, annotations map[string]string) {
 	for k, v := range hawtio.GetAnnotations() {
 		// Only propagate specified annotations
 		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Annotations, k) {
@@ -31,7 +32,8 @@ func propagateAnnotations(hawtio *hawtiov1.Hawtio, annotations map[string]string
 	}
 }
 
-func propagateLabels(hawtio *hawtiov1.Hawtio, labels map[string]string) {
+// PropagateLabels propagate labels from hawtio CR
+func PropagateLabels(hawtio *hawtiov1.Hawtio, labels map[string]string) {
 	for k, v := range hawtio.GetLabels() {
 		// Only propagate specified labels
 		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Labels, k) {
