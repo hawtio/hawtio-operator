@@ -19,7 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,6 +47,8 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
+	kresources "github.com/hawtio/hawtio-operator/pkg/resources/kubernetes"
+	oresources "github.com/hawtio/hawtio-operator/pkg/resources/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -213,9 +215,10 @@ type ReconcileHawtio struct {
 type DeploymentConfiguration struct {
 	openShiftConsoleURL string
 	configMap           *corev1.ConfigMap
-	clientCertSecret    *corev1.Secret
-	tlsRouteSecret      *corev1.Secret
-	caCertRouteSecret   *corev1.Secret
+	clientCertSecret    *corev1.Secret // -proxying certificate secret
+	tlsRouteSecret      *corev1.Secret // custom route certificate secret
+	caCertRouteSecret   *corev1.Secret // custom CA certificate secret
+	servingCertSecret   *corev1.Secret // -serving certificate secret
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -231,7 +234,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	hawtio := &hawtiov1.Hawtio{}
 	err := r.client.Get(ctx, request.NamespacedName, hawtio)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -242,8 +245,6 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	deploymentConfig := DeploymentConfiguration{}
-	// This secret name should be the same as used in deployment.go
-	clientSecretName := hawtio.Name + "-tls-proxying"
 
 	reqLogger.Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
 
@@ -308,7 +309,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		// Retrieve OpenShift Web console public URL
 		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
 		if err != nil {
-			if !errors.IsNotFound(err) && !errors.IsForbidden(err) {
+			if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
 				reqLogger.Error(err, "Error getting OpenShift managed configuration")
 				return reconcile.Result{}, err
 			}
@@ -318,82 +319,40 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if r.apiSpec.IsOpenShift4 {
-		cronJob := &batchv1.CronJob{}
-		cronJobName := request.Name + "-certificate-expiry-check"
-		cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob)
-
-		// Check whether client certificate secret exists
-		clientCertSecret := corev1.Secret{}
-		err := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: clientSecretName}, &clientCertSecret)
-		// TODO: Update the client certificate when the Hawtio resource changes
+		// Create -proxying certificate
+		// -serving certificate is automatically created
+		clientCertSecret, err := osCreateClientCertificate(ctx, r, hawtio, request.Name, request.Namespace)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				reqLogger.Info("Client certificate secret not found, creating a new one", "secret", clientSecretName)
+			reqLogger.Error(err, "Failed to create OpenShift proxying certificate")
+			return reconcile.Result{}, err
+		}
+		deploymentConfig.clientCertSecret = clientCertSecret
+	} else {
+		// Create -serving certificate
+		servingCertSecret, err := kubeCreateServingCertificate(ctx, r, hawtio, request.Name, request.Namespace)
+		if err != nil {
+			reqLogger.Error(err, "Failed to create serving certificate")
+			return reconcile.Result{}, err
+		}
+		deploymentConfig.servingCertSecret = servingCertSecret
+	}
 
-				caSecret, err := r.coreClient.Secrets("openshift-service-ca").Get(ctx, "signing-key", metav1.GetOptions{})
-				if err != nil {
-					reqLogger.Error(err, "Reading certificate authority signing key failed")
-					return reconcile.Result{}, err
-				}
+	//
+	// Custom Route certificates defined in Hawtio CR
+	//
+	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
+		deploymentConfig.tlsRouteSecret = &corev1.Secret{}
+		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, deploymentConfig.tlsRouteSecret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
 
-				commonName := hawtio.Spec.Auth.ClientCertCommonName
-				if commonName == "" {
-					if r.ClientCertCommonName == "" {
-						commonName = "hawtio-online.hawtio.svc"
-					} else {
-						commonName = r.ClientCertCommonName
-					}
-				}
-				// Let's default to one year validity period
-				expirationDate := time.Now().AddDate(1, 0, 0)
-				if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
-					expirationDate = date.Time
-				}
-				certSecret, err := generateCASignedCertSecret(clientSecretName, request.Namespace, caSecret, commonName, expirationDate)
-				if err != nil {
-					reqLogger.Error(err, "Generating the client certificate failed")
-					return reconcile.Result{}, err
-				}
-				err = controllerutil.SetControllerReference(hawtio, certSecret, r.scheme)
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-				_, err = r.coreClient.Secrets(request.Namespace).Create(ctx, certSecret, metav1.CreateOptions{})
-				reqLogger.Info("Client certificate created successfully", "secret", clientSecretName)
-				if err != nil {
-					reqLogger.Error(err, "Creating the client certificate secret failed")
-					return reconcile.Result{}, err
-				}
-
-				// check if certificate rotation is enabled
-				if hawtio.Spec.Auth.ClientCertCheckSchedule != "" {
-					// generate auto-renewal cron job for the secret if it already hasn't been generated.
-					if cronJobErr != nil && errors.IsNotFound(cronJobErr) {
-						pod, err := getOperatorPod(ctx, r.client, request.Namespace)
-						if err != nil {
-							return reconcile.Result{}, err
-						}
-
-						//create cronJob to validate the Cert
-						cronJob = createCertValidationCronJob(cronJobName, request.Namespace,
-							hawtio.Spec.Auth.ClientCertCheckSchedule, pod.Spec.ServiceAccountName, pod.Spec.Containers[0],
-							hawtio.Spec.Auth.ClientCertExpirationPeriod)
-
-						err = controllerutil.SetControllerReference(hawtio, cronJob, r.scheme)
-						if err != nil {
-							return reconcile.Result{}, err
-						}
-						err = r.client.Create(ctx, cronJob)
-
-						if err != nil {
-							log.Error(err, "Cronjob haven't been created")
-							return reconcile.Result{}, err
-						}
-					}
-				}
-			} else {
-				return reconcile.Result{}, err
-			}
+	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
+		deploymentConfig.caCertRouteSecret = &corev1.Secret{}
+		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: caCertSecretName}, deploymentConfig.caCertRouteSecret)
+		if err != nil {
+			return reconcile.Result{}, err
 		}
 	}
 
@@ -402,7 +361,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		var rbacConfigMap corev1.ConfigMap
 		err := r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: cm}, &rbacConfigMap)
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if kerrors.IsNotFound(err) {
 				reqLogger.Info("RBAC ConfigMap must be created", "ConfigMap", cm)
 				// Let's poll for the RBAC ConfigMap to be created
 				return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
@@ -431,52 +390,51 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	deploymentConfig.clientCertSecret = &corev1.Secret{}
-	err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: clientSecretName}, deploymentConfig.clientCertSecret)
-	if err != nil {
-		// clientCertSecret is only used on OpenShift
-		deploymentConfig.clientCertSecret = nil
-	}
-
-	//
-	// Custom Route certificates defined in Hawtio CR
-	//
-	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
-		deploymentConfig.tlsRouteSecret = &corev1.Secret{}
-		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, deploymentConfig.tlsRouteSecret)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
-	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
-		deploymentConfig.caCertRouteSecret = &corev1.Secret{}
-		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: caCertSecretName}, deploymentConfig.caCertRouteSecret)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
 	_, err = r.reconcileDeployment(hawtio, deploymentConfig)
 	if err != nil {
 		reqLogger.Error(err, "Error reconciling deployment")
 		return reconcile.Result{}, err
 	}
 
-	route := &routev1.Route{}
-	err = r.client.Get(ctx, request.NamespacedName, route)
-	if err != nil && errors.IsNotFound(err) {
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get route")
-		return reconcile.Result{}, err
+	var ingress *networkingv1.Ingress
+	var route *routev1.Route
+	if r.apiSpec.Routes {
+		route = &routev1.Route{}
+		err = r.client.Get(ctx, request.NamespacedName, route)
+		if err != nil && kerrors.IsNotFound(err) {
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to get route")
+			return reconcile.Result{}, err
+		}
+
+		if route == nil {
+			err := errors.New("Route could not be found")
+			reqLogger.Error(err, "Route failure")
+			return reconcile.Result{}, err
+		}
+	} else {
+		ingress = &networkingv1.Ingress{}
+		err = r.client.Get(ctx, request.NamespacedName, ingress)
+		if err != nil && kerrors.IsNotFound(err) {
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to get ingress")
+			return reconcile.Result{}, err
+		}
+
+		if ingress == nil {
+			err := errors.New("Ingress could not be found")
+			reqLogger.Error(err, "Ingress failure")
+			return reconcile.Result{}, err
+		}
 	}
 
 	if isClusterDeployment {
 		// Add OAuth client
 		oauthClient := resources.NewOAuthClient(resources.OAuthClientName)
 		err = r.client.Create(ctx, oauthClient)
-		if err != nil && !errors.IsAlreadyExists(err) {
+		if err != nil && !kerrors.IsAlreadyExists(err) {
 			return reconcile.Result{}, err
 		}
 	}
@@ -490,11 +448,13 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Add link to OpenShift console
 	consoleLinkName := request.Name + "-" + request.Namespace
-	if r.apiSpec.IsOpenShift4 && hawtio.Status.Phase == hawtiov1.HawtioPhaseInitialized {
+	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes && hawtio.Status.Phase == hawtiov1.HawtioPhaseInitialized {
+		// With checks above, route should not be null
+
 		consoleLink := &consolev1.ConsoleLink{}
 		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
-			if !errors.IsNotFound(err) {
+			if !kerrors.IsNotFound(err) {
 				reqLogger.Error(err, "Failed to get console link")
 				return reconcile.Result{}, err
 			}
@@ -505,6 +465,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 				return reconcile.Result{}, err
 			}
 		}
+
 		consoleLink = &consolev1.ConsoleLink{}
 		if isClusterDeployment {
 			consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
@@ -537,7 +498,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	deployment := &appsv1.Deployment{}
 	err = r.client.Get(ctx, request.NamespacedName, deployment)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && kerrors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get deployment")
@@ -557,30 +518,37 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Reconcile Hawtio status image field from deployment container image
 	hawtioCopy.Status.Image = deployment.Spec.Template.Spec.Containers[0].Image
 
-	// Reconcile route URL into Hawtio status
-	url := resources.GetRouteURL(route)
-	hawtioCopy.Status.URL = url
+	var ingressRouteURL string
+	if r.apiSpec.Routes {
+		// With checks above, route should not be null
 
-	// Reconcile route host from routeHostName field
-	if hostName := hawtio.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
-		// Emptying route host is ignored so it's not possible to re-generate the host
-		// See https://github.com/openshift/origin/pull/9425
-		// In that case, let's delete the route
-		err := r.client.Delete(ctx, route)
-		if err != nil {
-			reqLogger.Error(err, "Failed to delete route to auto-generate hostname")
-			return reconcile.Result{}, err
+		// Reconcile route URL into Hawtio status
+		ingressRouteURL = oresources.GetRouteURL(route)
+		hawtioCopy.Status.URL = ingressRouteURL
+
+		// Reconcile route host from routeHostName field
+		if hostName := hawtio.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
+			// Emptying route host is ignored so it's not possible to re-generate the host
+			// See https://github.com/openshift/origin/pull/9425
+			// In that case, let's delete the route
+			err := r.client.Delete(ctx, route)
+			if err != nil {
+				reqLogger.Error(err, "Failed to delete route to auto-generate hostname")
+				return reconcile.Result{}, err
+			}
+			// And requeue to create a new route in the next reconcile loop
+			return reconcile.Result{Requeue: true}, nil
 		}
-		// And requeue to create a new route in the next reconcile loop
-		return reconcile.Result{Requeue: true}, nil
 	}
 
 	// Reconcile console link in OpenShift console
-	if r.apiSpec.IsOpenShift4 {
+	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes {
+		// With checks above, route should not be null
+
 		consoleLink := &consolev1.ConsoleLink{}
 		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if kerrors.IsNotFound(err) {
 				// If not found, create a console link
 				if isClusterDeployment {
 					consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
@@ -612,6 +580,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			}
 		}
 	}
+
 	// Reconcile the client certificate cronJob
 	cronJob := &batchv1.CronJob{}
 	cronJobName := request.Name + "-certificate-expiry-check"
@@ -637,55 +606,60 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		}
 	}
 
-	// Reconcile OAuth client
-	// Do not use the default client whose cached informers require
-	// permission to list cluster wide oauth clients
-	// err = r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
-	oc, err := r.oauthClient.OauthV1().OAuthClients().Get(ctx, resources.OAuthClientName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// OAuth client should not be found for namespace deployment type
-			// except when it changes from "cluster" to "namespace"
-			if isClusterDeployment {
-				return reconcile.Result{Requeue: true}, nil
-			}
-		} else if !(errors.IsForbidden(err) && isNamespaceDeployment) {
-			// We tolerate 403 for namespace deployment as the operator
-			// may not have permission to read cluster wide resources
-			// like OAuth clients
-			reqLogger.Error(err, "Failed to get OAuth client")
-			return reconcile.Result{}, err
-		}
-	}
-	// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
-	// wait until the deployment is successful before deleting resources
-	if isClusterDeployment {
-		// First remove old URL from OAuthClient
-		if resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL) {
-			err := r.client.Update(ctx, oc)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile OAuth client")
+	/*
+	 * Reconcile OAuth client
+	 * Do not use the default client whose cached informers require
+	 * permission to list cluster wide oauth clients
+	 */
+	if r.apiSpec.IsOpenShift4 {
+		oc, err := r.oauthClient.OauthV1().OAuthClients().Get(ctx, resources.OAuthClientName, metav1.GetOptions{})
+		if err != nil {
+			if kerrors.IsNotFound(err) {
+				// OAuth client should not be found for namespace deployment type
+				// except when it changes from "cluster" to "namespace"
+				if isClusterDeployment {
+					return reconcile.Result{Requeue: true}, nil
+				}
+			} else if !(kerrors.IsForbidden(err) && isNamespaceDeployment) {
+				// We tolerate 403 for namespace deployment as the operator
+				// may not have permission to read cluster wide resources
+				// like OAuth clients
+				reqLogger.Error(err, "Failed to get OAuth client")
 				return reconcile.Result{}, err
 			}
 		}
-		// Add route URL to OAuthClient authorized redirect URIs
-		if ok, _ := resources.OauthClientContainsRedirectURI(oc, url); !ok {
-			oc.RedirectURIs = append(oc.RedirectURIs, url)
-			err := r.client.Update(ctx, oc)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile OAuth client")
-				return reconcile.Result{}, err
+
+		// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
+		// wait until the deployment is successful before deleting resources
+		if isClusterDeployment && oc != nil {
+			// First remove old URL from OAuthClient
+			if resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL) {
+				err := r.client.Update(ctx, oc)
+				if err != nil {
+					reqLogger.Error(err, "Failed to reconcile OAuth client")
+					return reconcile.Result{}, err
+				}
+			}
+			// Add route URL to OAuthClient authorized redirect URIs
+			if ok, _ := resources.OauthClientContainsRedirectURI(oc, ingressRouteURL); !ok {
+				oc.RedirectURIs = append(oc.RedirectURIs, ingressRouteURL)
+				err := r.client.Update(ctx, oc)
+				if err != nil {
+					reqLogger.Error(err, "Failed to reconcile OAuth client")
+					return reconcile.Result{}, err
+				}
 			}
 		}
-	}
-	if isNamespaceDeployment && oc != nil {
-		// Clean-up OAuth client if any. This happens when the deployment type is changed
-		// from "cluster" to "namespace".
-		if resources.RemoveRedirectURIFromOauthClient(oc, url) {
-			err := r.client.Update(ctx, oc)
-			if err != nil {
-				reqLogger.Error(err, "Failed to reconcile OAuth client")
-				return reconcile.Result{}, err
+
+		if isNamespaceDeployment && oc != nil {
+			// Clean-up OAuth client if any. This happens when the deployment type is changed
+			// from "cluster" to "namespace".
+			if resources.RemoveRedirectURIFromOauthClient(oc, ingressRouteURL) {
+				err := r.client.Update(ctx, oc)
+				if err != nil {
+					reqLogger.Error(err, "Failed to reconcile OAuth client")
+					return reconcile.Result{}, err
+				}
 			}
 		}
 	}
@@ -711,14 +685,32 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymen
 	if deploymentConfig.clientCertSecret != nil {
 		clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
 	}
+
+	var deployedResources []client.Object
+	var resourceListTypes []client.ObjectList
+
 	deployment, err := resources.NewDeployment(hawtio, r.apiSpec, deploymentConfig.openShiftConsoleURL,
 		deploymentConfig.configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
 	if err != nil {
 		return false, err
 	}
 
+	deployedResources = append(deployedResources, deployment)
+	resourceListTypes = append(resourceListTypes, &appsv1.DeploymentList{})
+
 	service := resources.NewService(hawtio)
-	route := resources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret)
+	deployedResources = append(deployedResources, service)
+	resourceListTypes = append(resourceListTypes, &corev1.ServiceList{})
+
+	if r.apiSpec.Routes {
+		route := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret)
+		deployedResources = append(deployedResources, route)
+		resourceListTypes = append(resourceListTypes, &routev1.RouteList{})
+	} else {
+		ingress := kresources.NewIngress(hawtio, deploymentConfig.servingCertSecret)
+		deployedResources = append(deployedResources, ingress)
+		resourceListTypes = append(resourceListTypes, &networkingv1.IngressList{})
+	}
 
 	var serviceAccount *corev1.ServiceAccount
 	if hawtio.Spec.Type == hawtiov1.NamespaceHawtioDeploymentType {
@@ -727,17 +719,11 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymen
 		if err != nil {
 			return false, fmt.Errorf("error UpdateResources : %s", err)
 		}
+		deployedResources = append(deployedResources, serviceAccount)
+		resourceListTypes = append(resourceListTypes, &corev1.ServiceAccountList{})
 	}
 
-	return r.reconcileResources(hawtio,
-		[]client.Object{deployment, service, route, serviceAccount},
-		[]client.ObjectList{
-			&corev1.ServiceList{},
-			&appsv1.DeploymentList{},
-			&routev1.RouteList{},
-			&corev1.ServiceAccountList{},
-		},
-	)
+	return r.reconcileResources(hawtio, deployedResources, resourceListTypes)
 }
 
 func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1.Hawtio,
@@ -830,7 +816,7 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1.Hawtio)
 		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
 		err := r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
-		if err != nil && !errors.IsNotFound(err) {
+		if err != nil && !kerrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get OAuth client: %v", err)
 		}
 		updated := resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL)
@@ -849,7 +835,7 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1.Hawtio)
 		},
 	}
 	err := r.client.Delete(ctx, consoleLink)
-	if err != nil && !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+	if err != nil && !kerrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 		return fmt.Errorf("failed to delete console link: %v", err)
 	}
 

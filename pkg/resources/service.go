@@ -14,12 +14,12 @@ func NewService(hawtio *hawtiov1.Hawtio) *corev1.Service {
 	annotations := map[string]string{
 		"service.beta.openshift.io/serving-cert-secret-name": name + "-tls-serving",
 	}
-	propagateAnnotations(hawtio, annotations)
+	PropagateAnnotations(hawtio, annotations)
 
 	labels := map[string]string{
-		labelAppKey: "hawtio",
+		LabelAppKey: "hawtio",
 	}
-	propagateLabels(hawtio, labels)
+	PropagateLabels(hawtio, labels)
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -36,7 +36,7 @@ func NewService(hawtio *hawtiov1.Hawtio) *corev1.Service {
 					TargetPort: intstr.FromString(containerPortName),
 				},
 			},
-			Selector:                 labelsForHawtio(name),
+			Selector:                 LabelsForHawtio(name),
 			SessionAffinity:          "None",
 			PublishNotReadyAddresses: true,
 		},

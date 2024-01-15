@@ -44,10 +44,10 @@ func NewDeployment(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec,
 
 func newDeployment(hawtio *hawtiov1.Hawtio, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
 	annotations := map[string]string{}
-	propagateAnnotations(hawtio, annotations)
+	PropagateAnnotations(hawtio, annotations)
 
-	labels := labelsForHawtio(hawtio.Name)
-	propagateLabels(hawtio, labels)
+	labels := LabelsForHawtio(hawtio.Name)
+	PropagateLabels(hawtio, labels)
 
 	// Deployment replicas field is defaulted to '1', so we have to equal that defaults, otherwise
 	// the comparison algorithm assumes the requested resource is different, which leads to an infinite
@@ -64,7 +64,7 @@ func newDeployment(hawtio *hawtiov1.Hawtio, replicas *int32, pts corev1.PodTempl
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &r,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labelsForHawtio(hawtio.Name),
+				MatchLabels: LabelsForHawtio(hawtio.Name),
 			},
 			Template: pts,
 			Strategy: appsv1.DeploymentStrategy{
@@ -84,7 +84,7 @@ func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServer
 	if clientCertSecretVersion != "" {
 		annotations[clientCertSecretVersionAnnotation] = clientCertSecretVersion
 	}
-	propagateAnnotations(hawtio, annotations)
+	PropagateAnnotations(hawtio, annotations)
 
 	volumeMounts, err := newVolumeMounts(apiSpec.IsOpenShift4, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables)
 	if err != nil {
@@ -95,7 +95,7 @@ func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServer
 	}
 	volumes := newVolumes(hawtio, apiSpec.IsOpenShift4)
 
-	labels := labelsForHawtio(hawtio.Name)
+	labels := LabelsForHawtio(hawtio.Name)
 	additionalLabels, err := labelUtils.ConvertSelectorToLabelsMap(buildVariables.AdditionalLabels)
 	if err != nil {
 		return corev1.PodTemplateSpec{}, err
@@ -103,7 +103,7 @@ func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServer
 	for name, value := range additionalLabels {
 		labels[name] = value
 	}
-	propagateLabels(hawtio, labels)
+	PropagateLabels(hawtio, labels)
 
 	pod := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -151,7 +151,7 @@ func newVolumes(hawtio *hawtiov1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 func newEnvVars(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
 
-	envVarsForHawtio := envVarsForHawtio(hawtio.Spec.Type, hawtio.Name)
+	envVarsForHawtio := envVarsForHawtio(hawtio.Spec.Type, hawtio.Name, apiSpec.IsOpenShift4)
 	envVars = append(envVars, envVarsForHawtio...)
 
 	if apiSpec.IsOpenShift4 {

@@ -35,7 +35,7 @@ func TestPropagateAnnotations(t *testing.T) {
 	annotations := map[string]string{
 		"annotation1": "value0",
 	}
-	propagateAnnotations(hawtio, annotations)
+	PropagateAnnotations(hawtio, annotations)
 	assert.Len(t, annotations, 5)
 	assert.Equal(t, "value0", annotations["annotation1"])
 	assert.Equal(t, "value2", annotations["annotation2"])
@@ -69,7 +69,7 @@ func TestPropagateLabels(t *testing.T) {
 	labels := map[string]string{
 		"label1": "value0",
 	}
-	propagateLabels(hawtio, labels)
+	PropagateLabels(hawtio, labels)
 	assert.Len(t, labels, 5)
 	assert.Equal(t, "value0", labels["label1"])
 	assert.Equal(t, "value2", labels["label2"])

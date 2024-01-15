@@ -8,15 +8,16 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	routev1 "github.com/openshift/api/route/v1"
-
 	fakeconfig "github.com/openshift/client-go/config/clientset/versioned/fake"
 	fakeoauth "github.com/openshift/client-go/oauth/clientset/versioned/fake"
+	networkingv1 "k8s.io/api/networking/v1"
 	discoveryfake "k8s.io/client-go/discovery/fake"
 	fakekube "k8s.io/client-go/kubernetes/fake"
 
@@ -39,6 +40,11 @@ func buildReconcileWithFakeClientWithMocks(objs []runtime.Object, t *testing.T) 
 	}
 
 	err = routev1.Install(scheme)
+	if err != nil {
+		assert.Fail(t, "unable to build scheme")
+	}
+
+	err = networkingv1.AddToScheme(scheme)
 	if err != nil {
 		assert.Fail(t, "unable to build scheme")
 	}
