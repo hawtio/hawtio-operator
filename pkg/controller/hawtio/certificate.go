@@ -180,17 +180,20 @@ func createCertValidationCronJob(name, namespace, schedule, serviceAccountName s
 	return cronjob
 }
 
-func updateExpirationPeriod(cronJob *batchv1.CronJob, newPeriod int) bool {
+func updateExpirationPeriod(cronJob *batchv1.CronJob, newPeriod int) (bool, error) {
 	arguments := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Args
 	for i, arg := range arguments {
 		if arg == "--cert-expiration-period" {
-			period, _ := strconv.Atoi(arguments[i+1])
+			period, err := strconv.Atoi(arguments[i+1])
+			if err != nil {
+				return false, err
+			}
 			if period == newPeriod {
-				return false
+				return false, nil
 			}
 			cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Args[i+1] = strconv.Itoa(newPeriod)
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
