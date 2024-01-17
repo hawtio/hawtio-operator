@@ -595,7 +595,12 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 				cronJob.Spec.Schedule = hawtio.Spec.Auth.ClientCertCheckSchedule
 				update = true
 			}
-			if update || updateExpirationPeriod(cronJob, hawtio.Spec.Auth.ClientCertExpirationPeriod) {
+			updateExp, err := updateExpirationPeriod(cronJob, hawtio.Spec.Auth.ClientCertExpirationPeriod)
+			if err != nil {
+				log.Error(err, "CronJob haven't been updated")
+			}
+
+			if update || updateExp {
 				err = r.client.Update(ctx, cronJob)
 
 				if err != nil {
@@ -606,6 +611,9 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			//if cronjob exists and ClientCertRotate is disabled, cronjob has to be deleted
 		} else {
 			err = r.client.Delete(ctx, cronJob)
+			if err != nil {
+				log.Error(err, "CronJob could not be deleted")
+			}
 		}
 	}
 

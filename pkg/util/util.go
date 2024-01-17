@@ -56,7 +56,10 @@ func MatchPatterns(patterns []string, target string) bool {
 // Match provides simple string pattern match that only supports wildcard '*'.
 func Match(pattern, str string) bool {
 	var b strings.Builder
-	b.WriteRune('^')
+	_, err := b.WriteRune('^')
+	if err != nil {
+		return false
+	}
 	for _, c := range pattern {
 		var s string
 		switch c {
@@ -67,9 +70,15 @@ func Match(pattern, str string) bool {
 		default:
 			s = string(c)
 		}
-		b.WriteString(s)
+		_, err := b.WriteString(s)
+		if err != nil {
+			return false
+		}
 	}
-	b.WriteRune('$')
+	_, err = b.WriteRune('$')
+	if err != nil {
+		return false
+	}
 
 	match, err := regexp.MatchString(b.String(), str)
 	if err != nil {
