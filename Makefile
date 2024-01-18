@@ -11,6 +11,9 @@ LAST_RELEASED_IMAGE_NAME := hawtio-operator
 LAST_RELEASED_VERSION ?= 0.5.0
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 
+# Is this build part of an automated CI pipeline
+CI_BUILD ?= false
+
 # Drop suffix for use with bundle and CSV
 OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
 
@@ -103,13 +106,16 @@ compile:
 go-generate:
 	go generate ./...
 
-gotestfmt-install:
+# Only use gotestfmt if building / testing locally
+test:
+ifeq ($(CI_BUILD), false)
 ifeq (, $(shell command -v gotestfmt 2> /dev/null))
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 endif
-
-test: gotestfmt-install
 	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1 | gotestfmt
+else
+	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1
+endif
 
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=$(INSTALL_ROOT)/crd
