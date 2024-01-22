@@ -17,11 +17,10 @@ package leader
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/operator-framework/operator-lib/internal/utils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,26 +32,27 @@ import (
 
 // ErrNoNamespace indicates that a namespace could not be found for the current
 // environment
-var ErrNoNamespace = fmt.Errorf("namespace not found for current environment")
+var ErrNoNamespace = utils.ErrNoNamespace
 
 // podNameEnvVar is the constant for env variable POD_NAME
 // which is the name of the current pod.
 const podNameEnvVar = "POD_NAME"
 
-var readNamespace = func() ([]byte, error) {
-	return ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-}
+var readNamespace = utils.GetOperatorNamespace
 
 var log = logf.Log.WithName("leader")
 
-// maxBackoffInterval defines the maximum amount of time to wait between
+// defaultMaxBackoffInterval defines the default maximum amount of time to wait between
 // attempts to become the leader.
-const maxBackoffInterval = time.Second * 16
+const defaultMaxBackoffInterval = time.Second * 16
 
+// Option is a function that can modify Become's Config
 type Option func(*Config) error
 
+// Config defines the configuration for Become
 type Config struct {
-	Client crclient.Client
+	Client             crclient.Client
+	MaxBackoffInterval time.Duration
 }
 
 func (c *Config) setDefaults() error {
@@ -68,9 +68,16 @@ func (c *Config) setDefaults() error {
 		}
 		c.Client = client
 	}
+
+	// Humans tend to understand a duration value as positive numbers. The constant
+	// defaultMaxBackoffInterval will overwrite the content to avoid an unintended behaviour.
+	if c.MaxBackoffInterval <= 0 {
+		c.MaxBackoffInterval = defaultMaxBackoffInterval
+	}
 	return nil
 }
 
+// WithClient returns an Option that sets the Client used by Become
 func WithClient(cl crclient.Client) Option {
 	return func(c *Config) error {
 		c.Client = cl
@@ -100,7 +107,7 @@ func Become(ctx context.Context, lockName string, opts ...Option) error {
 		return err
 	}
 
-	ns, err := getOperatorNamespace()
+	ns, err := readNamespace()
 	if err != nil {
 		return err
 	}
@@ -179,6 +186,14 @@ func Become(ctx context.Context, lockName string, opts ...Option) error {
 					if err != nil {
 						log.Error(err, "Leader pod could not be deleted.")
 					}
+				case isNotReadyNode(ctx, config.Client, leaderPod.Spec.NodeName):
+					log.Info("the status of the node where operator pod with leader lock was running has been 'notReady'")
+					log.Info("Deleting the leader.")
+
+					//Mark the termainating status to the leaderPod and Delete the configmap lock
+					if err := deleteLeader(ctx, config.Client, leaderPod, existing); err != nil {
+						return err
+					}
 
 				default:
 					log.Info("Not the leader. Waiting.")
@@ -187,7 +202,7 @@ func Become(ctx context.Context, lockName string, opts ...Option) error {
 
 			select {
 			case <-time.After(wait.Jitter(backoff, .2)):
-				if backoff < maxBackoffInterval {
+				if backoff < config.MaxBackoffInterval {
 					backoff *= 2
 				}
 				continue
@@ -225,20 +240,6 @@ func isPodEvicted(pod corev1.Pod) bool {
 	return podFailed && podEvicted
 }
 
-// getOperatorNamespace returns the namespace the operator should be running in.
-func getOperatorNamespace() (string, error) {
-	nsBytes, err := readNamespace()
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", ErrNoNamespace
-		}
-		return "", err
-	}
-	ns := strings.TrimSpace(string(nsBytes))
-	log.V(1).Info("Found namespace", "Namespace", ns)
-	return ns, nil
-}
-
 // getPod returns a Pod object that corresponds to the pod in which the code
 // is currently running.
 // It expects the environment variable POD_NAME to be set by the downwards API.
@@ -266,4 +267,45 @@ func getPod(ctx context.Context, client crclient.Client, ns string) (*corev1.Pod
 	log.V(1).Info("Found Pod", "Pod.Namespace", ns, "Pod.Name", pod.Name)
 
 	return pod, nil
+}
+
+func getNode(ctx context.Context, client crclient.Client, nodeName string, node *corev1.Node) error {
+	key := crclient.ObjectKey{Namespace: "", Name: nodeName}
+	err := client.Get(ctx, key, node)
+	if err != nil {
+		log.Error(err, "Failed to get Node", "Node.Name", nodeName)
+		return err
+	}
+	return nil
+}
+
+func isNotReadyNode(ctx context.Context, client crclient.Client, nodeName string) bool {
+	leaderNode := &corev1.Node{}
+	if err := getNode(ctx, client, nodeName, leaderNode); err != nil {
+		return false
+	}
+	for _, condition := range leaderNode.Status.Conditions {
+		if condition.Type == corev1.NodeReady && condition.Status != corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+
+}
+
+func deleteLeader(ctx context.Context, client crclient.Client, leaderPod *corev1.Pod, existing *corev1.ConfigMap) error {
+	err := client.Delete(ctx, leaderPod)
+	if err != nil {
+		log.Error(err, "Leader pod could not be deleted.")
+		return err
+	}
+	err = client.Delete(ctx, existing)
+	switch {
+	case apierrors.IsNotFound(err):
+		log.Info("ConfigMap has been deleted by prior operator.")
+		return err
+	case err != nil:
+		return err
+	}
+	return nil
 }
