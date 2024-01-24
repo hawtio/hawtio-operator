@@ -157,14 +157,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 		if err != nil {
 			return errs.Wrap(err, "Failed to create watch for Route resource")
 		}
-	}
-
-	err = c.Watch(&source.Kind{Type: &networkingv1.Ingress{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &hawtiov1.Hawtio{},
-	})
-	if err != nil {
-		return errs.Wrap(err, "Failed to create watch for Ingress resource")
+	} else {
+		err = c.Watch(&source.Kind{Type: &networkingv1.Ingress{}}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &hawtiov1.Hawtio{},
+		})
+		if err != nil {
+			return errs.Wrap(err, "Failed to create watch for Ingress resource")
+		}
 	}
 
 	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
