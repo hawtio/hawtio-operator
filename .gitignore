@@ -87,3 +87,6 @@ tags
 ### bundle index directory for install testing
 index
 index.Dockerfile
+
+# snyk
+.dccache
