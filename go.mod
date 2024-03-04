@@ -11,7 +11,7 @@ require (
 	// OpenShift 4.5 (via replace statement)
 	github.com/openshift/client-go v3.9.0+incompatible
 	github.com/operator-framework/operator-lib v0.1.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	k8s.io/api v0.21.1
 	k8s.io/apiextensions-apiserver v0.21.1
 	k8s.io/apimachinery v0.21.1
