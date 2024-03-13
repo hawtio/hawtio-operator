@@ -15,7 +15,6 @@ const (
 	HawtioAuthEnvVar                = "HAWTIO_ONLINE_AUTH"
 	HawtioOAuthClientEnvVar         = "HAWTIO_OAUTH_CLIENT_ID"
 	HawtioRbacEnvVar                = "HAWTIO_ONLINE_RBAC_ACL"
-	HawtioGatewayEnvVar             = "HAWTIO_ONLINE_GATEWAY"
 	HawtioDisableRbacRegistry       = "HAWTIO_ONLINE_DISABLE_RBAC_REGISTRY"
 	OpenShiftClusterVersionEnvVar   = "OPENSHIFT_CLUSTER_VERSION"
 	OpenShiftWebConsoleUrlEnvVar    = "OPENSHIFT_WEB_CONSOLE_URL"
@@ -74,10 +73,6 @@ func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string,
 
 func envVarsForOpenshift4(openShiftVersion string, openShiftConsoleURL string) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{
-		{
-			Name:  HawtioGatewayEnvVar,
-			Value: "true",
-		},
 		{
 			Name:  OpenShiftClusterVersionEnvVar,
 			Value: openShiftVersion,
