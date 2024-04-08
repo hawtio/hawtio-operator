@@ -133,8 +133,11 @@ else
 	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1
 endif
 
+# Only instigate re-generation of manifests in non-production builds
 manifests: controller-gen
+ifeq ($(CI_BUILD), false)
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=$(INSTALL_ROOT)/crd
+endif
 
 # Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations
 k8s-generate: controller-gen
