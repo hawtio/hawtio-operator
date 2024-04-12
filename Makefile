@@ -141,7 +141,9 @@ endif
 
 # Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations
 k8s-generate: controller-gen
+ifeq ($(CI_BUILD), false)
 	$(CONTROLLER_GEN) paths="./..." object
+endif
 
 generate: k8s-generate go-generate manifests
 
