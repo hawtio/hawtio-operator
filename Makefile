@@ -327,12 +327,19 @@ check-admin: kubectl
 
 # find or download controller-gen
 # download controller-gen if necessary
+#
+# Only install in non-production builds
+#
 controller-gen:
+ifeq ($(CI_BUILD), false)
+CONTROLLER_GEN=controller-gen-not-used-in-ci-build
+else
 ifeq (, $(shell command -v controller-gen 2> /dev/null))
 	go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell command -v controller-gen 2> /dev/null)
+endif
 endif
 
 kubectl:
