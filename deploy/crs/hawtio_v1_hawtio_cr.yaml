@@ -3,7 +3,7 @@ kind: Hawtio
 metadata:
   name: hawtio-online
 spec:
-  type: Namespace
+  type: Cluster
 
   # Included for backward compatibility - not used in hawtio-online 2.0.0+
   version: "1.12"

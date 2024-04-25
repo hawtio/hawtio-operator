@@ -3,7 +3,7 @@ kind: Hawtio
 metadata:
   name: hawtio-online
 spec:
-  type: Namespace
+  type: Cluster
   version: "1.12"
   replicas: 1
   auth:
