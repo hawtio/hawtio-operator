@@ -3,12 +3,12 @@ NAMESPACE ?= hawtio
 PROJECT = operator
 DEFAULT_IMAGE := quay.io/${ORG}/${PROJECT}
 IMAGE ?= $(DEFAULT_IMAGE)
-VERSION ?= 1.1.0
+VERSION ?= 1.1.1
 HAWTIO_ONLINE_VERSION ?= 2.1.0
 HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
-LAST_RELEASED_VERSION ?= 1.0.1
+LAST_RELEASED_VERSION ?= 1.1.0
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 
 # Is this build part of an automated CI pipeline
