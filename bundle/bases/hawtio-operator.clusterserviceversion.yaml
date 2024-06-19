@@ -10,6 +10,12 @@ metadata:
     containerImage: quay.io/hawtio/operator:1.1.1
     repository: https://github.com/hawtio/hawtio-operator
     support: Red Hat
+  labels:
+    operatorframework.io/arch.s390x: supported
+    operatorframework.io/arch.ppc64le: supported
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/os.linux: supported
+    operatorframework.io/os.zos: supported
   name: hawtio-operator.v1.1.1
 spec:
   displayName: Hawtio Operator
