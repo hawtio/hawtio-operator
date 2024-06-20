@@ -7,10 +7,10 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     description: Hawtio eases the discovery and management of Java applications deployed on OpenShift.
-    containerImage: quay.io/hawtio/operator:1.0.2
+    containerImage: quay.io/hawtio/operator:1.1.0
     repository: https://github.com/hawtio/hawtio-operator
     support: Red Hat
-  name: hawtio-operator.v1.0.2
+  name: hawtio-operator.v1.1.0
 spec:
   displayName: Hawtio Operator
   maintainers:
@@ -18,8 +18,8 @@ spec:
     name: The Hawtio team
   provider:
     name: Red Hat
-  version: 1.0.2
-  replaces: hawtio-operator.v1.0.1
+  version: 1.1.0
+  replaces: hawtio-operator.v1.0.2
   maturity: alpha
   minKubeVersion: 1.11.0
   description: |
