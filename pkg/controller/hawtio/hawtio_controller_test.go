@@ -102,8 +102,11 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			err = r.client.Get(context.TODO(), NamespacedName, &deployment)
 			require.NoError(t, err)
 
-			container := deployment.Spec.Template.Spec.Containers[0]
-			assert.Equal(t, container.Resources, hawtio.Spec.Resources)
+			hawtioContainer := deployment.Spec.Template.Spec.Containers[0]
+			assert.Equal(t, hawtioContainer.Resources, hawtio.Spec.Resources)
+
+			gatewayContainer := deployment.Spec.Template.Spec.Containers[1]
+			assert.Equal(t, gatewayContainer.Resources, hawtio.Spec.Resources)
 		})
 		t.Run("check if the ConfigMap has been created", func(t *testing.T) {
 			configMap := corev1.ConfigMap{}
@@ -137,8 +140,8 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			err = r.client.Get(context.TODO(), NamespacedName, &deployment)
 			require.NoError(t, err)
 
-			container := deployment.Spec.Template.Spec.Containers[0]
-			assert.ElementsMatch(t, container.Env, []corev1.EnvVar{
+			hawtioContainer := deployment.Spec.Template.Spec.Containers[0]
+			assert.ElementsMatch(t, hawtioContainer.Env, []corev1.EnvVar{
 				{
 					Name:  resources.HawtioTypeEnvVar,
 					Value: strings.ToLower(string(hawtiov1.NamespaceHawtioDeploymentType)),
@@ -157,14 +160,35 @@ func TestHawtioController_Reconcile(t *testing.T) {
 					Value: hawtio.Name,
 				},
 				{
-					Name:  resources.HawtioRbacEnvVar,
-					Value: "",
-				},
-				{
 					Name:  resources.HawtioAuthEnvVar,
 					Value: "form",
 				},
 			})
+
+			gatewayContainer := deployment.Spec.Template.Spec.Containers[1]
+			assert.ElementsMatch(t, gatewayContainer.Env, []corev1.EnvVar{
+				{
+					Name:  resources.GatewayWebSvrEnvVar,
+					Value: "https://localhost:8443",
+				},
+				{
+					Name:  resources.GatewaySSLKeyEnvVar,
+					Value: "/etc/tls/private/serving/tls.key",
+				},
+				{
+					Name:  resources.GatewaySSLCertEnvVar,
+					Value: "/etc/tls/private/serving/tls.crt",
+				},
+				{
+					Name:  resources.GatewaySSLCertCAEnvVar,
+					Value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+				},
+				{
+					Name:  resources.GatewayRbacEnvVar,
+					Value: "",
+				},
+			})
+
 		})
 	})
 }

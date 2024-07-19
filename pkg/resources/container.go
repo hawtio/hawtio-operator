@@ -11,11 +11,45 @@ import (
 )
 
 const containerPortName = "https"
+const containerGatewayPortName = "express"
 
-func newContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageVersion string, imageRepository string) corev1.Container {
+func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageVersion string, imageRepository string) corev1.Container {
+	/*
+	 * - name: hawtio-online-container
+	 *   image: quay.io/hawtio/online
+	 *   imagePullPolicy: Always
+	 *   ports:
+	 *   - name: https
+	 *     containerPort: 8443
+	 *   livenessProbe:
+	 *     httpGet:
+	 *       path: /online
+	 *       port: https
+	 *       scheme: HTTPS
+	 *     periodSeconds: 10
+	 *     timeoutSeconds: 1
+	 *   readinessProbe:
+	 *     httpGet:
+	 *       path: /online
+	 *       port: https
+	 *       scheme: HTTPS
+	 *     initialDelaySeconds: 5
+	 *     periodSeconds: 5
+	 *     timeoutSeconds: 1
+	 *   resources:
+	 *     requests:
+	 *       cpu: "0.2"
+	 *       memory: 32Mi
+	 *     limits:
+	 *       cpu: "1.0"
+	 *       memory: 500Mi
+	 *   volumeMounts:
+	 *     - name: hawtio-online-tls-serving
+	 *       mountPath: /etc/tls/private/serving
+	 */
 	container := corev1.Container{
 		Name:  hawtio.Name + "-container",
-		Image: getImageFor(imageVersion, imageRepository),
+		Image: getHawtioImageFor(imageVersion, imageRepository),
 		Env:   envVars,
 		ReadinessProbe: &corev1.Probe{
 			InitialDelaySeconds: 5,
@@ -53,13 +87,84 @@ func newContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageVersion
 	return container
 }
 
-func getImageFor(tag string, imageRepository string) string {
-	repository := os.Getenv("IMAGE_REPOSITORY")
+func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageVersion string, imageGatewayRepository string) corev1.Container {
+	/*
+	 * - name: hawtio-online-gateway-container
+	 *   image: quay.io/hawtio/online-gateway
+	 *   ports:
+	 *     - name: express
+	 *       containerPort: 3000
+	 *   livenessProbe:
+	 *      httpGet:
+	 *        path: /status
+	 *        port: express
+	 *        scheme: HTTPS
+	 *      periodSeconds: 120
+	 *      timeoutSeconds: 1
+	 *   readinessProbe:
+	 *      httpGet:
+	 *        path: /status
+	 *        port: express
+	 *        scheme: HTTPS
+	 *      initialDelaySeconds: 5
+	 *      periodSeconds: 30
+	 *      timeoutSeconds: 1
+	 */
+	container := corev1.Container{
+		Name:  hawtio.Name + "-gateway-container",
+		Image: getGatewayImageFor(imageVersion, imageGatewayRepository),
+		Env:   envVars,
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          containerGatewayPortName,
+				ContainerPort: 3000,
+				Protocol:      "TCP",
+			},
+		},
+		LivenessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Port:   intstr.FromString(containerGatewayPortName),
+					Path:   "/status",
+					Scheme: "HTTPS",
+				},
+			},
+			PeriodSeconds:  10,
+			TimeoutSeconds: 1,
+		},
+		ReadinessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Port:   intstr.FromString(containerGatewayPortName),
+					Path:   "/status",
+					Scheme: "HTTPS",
+				},
+			},
+			InitialDelaySeconds: 5,
+			PeriodSeconds:       5,
+			TimeoutSeconds:      1,
+		},
+		Resources: hawtio.Spec.Resources,
+	}
+
+	return container
+}
+
+func getHawtioImageFor(tag string, imageRepository string) string {
+	return getImageFor(tag, imageRepository, "IMAGE_REPOSITORY", "quay.io/hawtio/online")
+}
+
+func getGatewayImageFor(tag string, gatewayImgRepository string) string {
+	return getImageFor(tag, gatewayImgRepository, "GATEWAY_IMAGE_REPOSITORY", "quay.io/hawtio/online-gateway")
+}
+
+func getImageFor(tag string, imgRepo string, envVar string, defaultVal string) string {
+	repository := os.Getenv(envVar)
 	if repository == "" {
-		if imageRepository != "" {
-			repository = imageRepository
+		if imgRepo != "" {
+			repository = imgRepo
 		} else {
-			repository = "quay.io/hawtio/online"
+			repository = defaultVal
 		}
 	}
 
