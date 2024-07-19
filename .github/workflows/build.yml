@@ -36,3 +36,9 @@ jobs:
             ${{ runner.os }}-go-
       - name: Build
         run: make build
+      - name: Build image
+        run: |
+          make image
+      - name: Display image
+        run: |
+          docker images
