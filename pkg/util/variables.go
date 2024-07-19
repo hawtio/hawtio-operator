@@ -4,6 +4,8 @@ package util
 type BuildVariables struct {
 	// The hawtio-online operand image repository
 	ImageRepository string
+	// The hawtio-online-gateway operand image repository
+	GatewayImageRepository string
 	// The hawtio-online operand image version
 	ImageVersion string
 	// Legacy serving certificate version

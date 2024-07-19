@@ -6,6 +6,7 @@ IMAGE ?= $(DEFAULT_IMAGE)
 VERSION ?= 1.1.1
 HAWTIO_ONLINE_VERSION ?= 2.1.0
 HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
+HAWTIO_ONLINE_GATEWAY_IMAGE_NAME ?= quay.io/${ORG}/online-gateway
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
 LAST_RELEASED_VERSION ?= 1.1.0
@@ -76,15 +77,17 @@ endef
 #== Compile the operator as a docker image
 #
 #* PARAMETERS:
-#** IMAGE:                     Set a custom image for the container image
-#** VERSION:                   Set a custom version for the container image tag
-#** HAWTIO_ONLINE_IMAGE_NAME   Set the operator's target hawtio-online image name
-#** HAWTIO_ONLINE_VERSION      Set the operator's target hawtio-online image version
+#** IMAGE:                            Set a custom image for the container image
+#** VERSION:                          Set a custom version for the container image tag
+#** HAWTIO_ONLINE_IMAGE_NAME          Set the operator's target hawtio-online image name
+#** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME  Set the operator's target hawtio-online-gateway image name
+#** HAWTIO_ONLINE_VERSION             Set the operator's target hawtio-online image version
 #
 #---
 image:
 	docker build -t $(IMAGE):$(VERSION) \
 	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
+	--build-arg HAWTIO_ONLINE_GATEWAY_IMAGE_NAME=$(HAWTIO_ONLINE_GATEWAY_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
 	.
 
@@ -95,10 +98,11 @@ image:
 #== Compile the operator as a docker image then push the image to the repository
 #
 #* PARAMETERS:
-#** IMAGE:                     Set a custom image for the container image
-#** VERSION:                   Set a custom version for the container image tag
-#** HAWTIO_ONLINE_IMAGE_NAME   Set the operator's target hawtio-online image name
-#** HAWTIO_ONLINE_VERSION      Set the operator's target hawtio-online image version
+#** IMAGE:                            Set a custom image for the container image
+#** VERSION:                          Set a custom version for the container image tag
+#** HAWTIO_ONLINE_IMAGE_NAME          Set the operator's target hawtio-online image name
+#** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME  Set the operator's target hawtio-online-gateway image name
+#** HAWTIO_ONLINE_VERSION             Set the operator's target hawtio-online image version
 #
 #---
 publish-image: image
