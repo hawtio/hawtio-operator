@@ -6,6 +6,7 @@ IMAGE ?= $(DEFAULT_IMAGE)
 VERSION ?= 1.1.0
 HAWTIO_ONLINE_VERSION ?= 2.1.0
 HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
+HAWTIO_ONLINE_GATEWAY_VERSION ?= 2.1.0
 HAWTIO_ONLINE_GATEWAY_IMAGE_NAME ?= quay.io/${ORG}/online-gateway
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
@@ -82,6 +83,7 @@ endef
 #** HAWTIO_ONLINE_IMAGE_NAME          Set the operator's target hawtio-online image name
 #** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME  Set the operator's target hawtio-online-gateway image name
 #** HAWTIO_ONLINE_VERSION             Set the operator's target hawtio-online image version
+#** HAWTIO_ONLINE_GATEWAY_VERSION     Set the operator's target hawtio-online-gateway image version
 #
 #---
 image:
@@ -89,6 +91,7 @@ image:
 	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_GATEWAY_IMAGE_NAME=$(HAWTIO_ONLINE_GATEWAY_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
+	--build-arg HAWTIO_ONLINE_GATEWAY_VERSION=$(HAWTIO_ONLINE_GATEWAY_VERSION) \
 	.
 
 #---
@@ -103,6 +106,7 @@ image:
 #** HAWTIO_ONLINE_IMAGE_NAME          Set the operator's target hawtio-online image name
 #** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME  Set the operator's target hawtio-online-gateway image name
 #** HAWTIO_ONLINE_VERSION             Set the operator's target hawtio-online image version
+#** HAWTIO_ONLINE_GATEWAY_VERSION     Set the operator's target hawtio-online-gateway image version
 #
 #---
 publish-image: image
