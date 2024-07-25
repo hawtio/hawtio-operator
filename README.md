@@ -49,8 +49,10 @@ spec:
 
 ### Overriding the Version of `Hawtio-Online`
 Unlike previous versions of the operator, the version of the `Hawtio-Online` operand is now specified during the building of the operator. Therefore, it should be unnecessary to specify this version of the container image. However, should an override be required then it is possible to add extra environment variables to the deployment resource of this operator. Specifically:
-- IMAGE_VERSION: Adding this environment variable will override the version / tag of the `Hawtio-Online` container image, eg. `2.0.0-20231208`;
-- IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online` container image, eg. `quay.io/hawtio/online`.
+- IMAGE_VERSION: Adding this environment variable will override the version / tag of the `Hawtio-Online` container image, eg. `2.1.0-20240725`;
+- IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online` container image, eg. `quay.io/hawtio/online`;
+- GATEWAY_IMAGE_VERSION: Adding this environment variable will override the version / tag of the 'Hawtio-Online-Gateway' container image, eg. `2.1.0-20240725`;
+- GATEWAY_IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online-Gateway` container image, eg. `quay.io/hawtio/gateway`.
 
 ## Features
 
