@@ -82,9 +82,10 @@ func newDeployment(hawtio *hawtiov1.Hawtio, replicas *int32, pts corev1.PodTempl
  *
  */
 func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
-	hawtioVersion := getVersion(buildVariables)
+	hawtioVersion := getOnlineVersion(buildVariables)
 	hawtioContainer := newHawtioContainer(hawtio, newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL), hawtioVersion, buildVariables.ImageRepository)
-	gatewayContainer := newGatewayContainer(hawtio, newGatewayEnvVars(hawtio), hawtioVersion, buildVariables.GatewayImageRepository)
+	gatewayVersion := getGatewayVersion(buildVariables)
+	gatewayContainer := newGatewayContainer(hawtio, newGatewayEnvVars(hawtio), gatewayVersion, buildVariables.GatewayImageRepository)
 
 	annotations := map[string]string{
 		configVersionAnnotation: configMapVersion,
@@ -271,7 +272,7 @@ func getServingCertificateMountPath(version string, legacyServingCertificateMoun
 	return serviceSigningSecretVolumeMountPath, nil
 }
 
-func getVersion(buildVariables util.BuildVariables) string {
+func getOnlineVersion(buildVariables util.BuildVariables) string {
 	fmt.Println("Getting version from IMAGE_VERSION environment variable ...")
 	version := os.Getenv("IMAGE_VERSION")
 	if version == "" {
@@ -280,6 +281,20 @@ func getVersion(buildVariables util.BuildVariables) string {
 		if len(version) == 0 {
 			fmt.Println("Defaulting to version being latest")
 			version = "latest"
+		}
+	}
+	return version
+}
+
+func getGatewayVersion(buildVariables util.BuildVariables) string {
+	fmt.Println("Getting version from GATEWAY_IMAGE_VERSION environment variable ...")
+	version := os.Getenv("GATEWAY_IMAGE_VERSION")
+	if version == "" {
+		fmt.Println("Getting version from build variable GatewayImageVersion")
+		version = buildVariables.GatewayImageVersion
+		if len(version) == 0 {
+			fmt.Println("Defaulting to online version")
+			version = getOnlineVersion(buildVariables)
 		}
 	}
 	return version

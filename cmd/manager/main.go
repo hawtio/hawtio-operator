@@ -29,6 +29,7 @@ import (
 var (
 	ImageRepository                      string
 	ImageVersion                         string
+	GatewayImageVersion                  string
 	GatewayImageRepository               string
 	LegacyServingCertificateMountVersion string
 	ProductName                          string
@@ -48,6 +49,7 @@ func printBuildVars(bv util.BuildVariables) {
 	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.ImageRepository))
 	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.ImageVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Repository: %s", bv.GatewayImageRepository))
+	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Version: %s", bv.GatewayImageVersion))
 }
 
 func main() {
@@ -139,6 +141,7 @@ func operatorRun(namespace string, cfg *rest.Config) error {
 	bv := util.BuildVariables{
 		ImageRepository:                      ImageRepository,
 		ImageVersion:                         ImageVersion,
+		GatewayImageVersion:                  GatewayImageVersion,
 		GatewayImageRepository:               GatewayImageRepository,
 		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
 		ProductName:                          ProductName,
