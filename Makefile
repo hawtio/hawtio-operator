@@ -4,7 +4,7 @@ PROJECT = operator
 DEFAULT_IMAGE := quay.io/${ORG}/${PROJECT}
 IMAGE ?= $(DEFAULT_IMAGE)
 VERSION ?= 1.1.1
-HAWTIO_ONLINE_VERSION ?= 2.1.0
+HAWTIO_ONLINE_VERSION ?= 2.1.1
 HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
@@ -208,7 +208,8 @@ CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
 # Not required for first version to be deployed to Operator Hub
 CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
 # Hides the 1.0.0 & 1.0.1 releases with the CRD that removes the 'version' property
-CSV_SKIP_RANGE := >=1.0.0 <1.0.2
+# Hides the 1.1.0 which is installing the problematic 2.1.0
+CSV_SKIP_RANGE := >=1.0.0 <1.1.0
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
 
 # Test Bundle Index
