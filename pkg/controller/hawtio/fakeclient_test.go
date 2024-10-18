@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -26,7 +27,7 @@ import (
 )
 
 //buildReconcileWithFakeClientWithMocks return *ReconcileHawtio with fake client, scheme and mock objects
-func buildReconcileWithFakeClientWithMocks(objs []runtime.Object, t *testing.T) *ReconcileHawtio {
+func buildReconcileWithFakeClientWithMocks(objs []client.Object, t *testing.T) *ReconcileHawtio {
 	var scheme = runtime.NewScheme()
 
 	err := corev1.AddToScheme(scheme)
@@ -54,7 +55,10 @@ func buildReconcileWithFakeClientWithMocks(objs []runtime.Object, t *testing.T) 
 		assert.Fail(t, "unable to build scheme")
 	}
 
-	client := fake.NewFakeClientWithScheme(scheme, objs...)
+	client := fake.NewClientBuilder().WithScheme(scheme).
+		WithStatusSubresource(objs...).
+		WithObjects(objs...).
+		Build()
 	apiClient := fakekube.NewSimpleClientset()
 
 	fd := apiClient.Discovery().(*discoveryfake.FakeDiscovery)
