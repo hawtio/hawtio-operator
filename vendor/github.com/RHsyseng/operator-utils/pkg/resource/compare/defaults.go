@@ -3,10 +3,12 @@ package compare
 import (
 	"fmt"
 	"reflect"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sort"
 	"strings"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/go-test/deep"
 	oappsv1 "github.com/openshift/api/apps/v1"
 	buildv1 "github.com/openshift/api/build/v1"
 	routev1 "github.com/openshift/api/route/v1"
@@ -176,7 +178,11 @@ func equalDeploymentConfigs(deployed client.Object, requested client.Object) boo
 	pairs = append(pairs, [2]interface{}{dc1.Spec, dc2.Spec})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -237,7 +243,7 @@ func equalDeployment(deployed client.Object, requested client.Object) bool {
 	pairs = append(pairs, [2]interface{}{d1.Spec, d2.Spec})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
 	}
 	return equal
 }
@@ -399,6 +405,20 @@ func equalServices(deployed client.Object, requested client.Object) bool {
 	if service2.Spec.SessionAffinity == "" {
 		service1.Spec.SessionAffinity = ""
 	}
+
+	if len(service2.Spec.ClusterIPs) == 0 {
+		service1.Spec.ClusterIPs = nil
+	}
+	if len(service2.Spec.IPFamilies) == 0 {
+		service1.Spec.IPFamilies = nil
+	}
+	if service2.Spec.IPFamilyPolicy == nil {
+		service1.Spec.IPFamilyPolicy = nil
+	}
+	if service2.Spec.InternalTrafficPolicy == nil {
+		service1.Spec.InternalTrafficPolicy = nil
+	}
+
 	for _, port2 := range service2.Spec.Ports {
 		if found, port1 := findServicePort(port2, service1.Spec.Ports); found {
 			if port2.Protocol == "" {
@@ -416,7 +436,11 @@ func equalServices(deployed client.Object, requested client.Object) bool {
 	pairs = append(pairs, [2]interface{}{service1.Spec, service2.Spec})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -462,7 +486,11 @@ func equalRoutes(deployed client.Object, requested client.Object) bool {
 	pairs = append(pairs, [2]interface{}{route1.Spec, route2.Spec})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -478,7 +506,11 @@ func equalRoles(deployed client.Object, requested client.Object) bool {
 	pairs = append(pairs, [2]interface{}{role1.Rules, role2.Rules})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -493,7 +525,11 @@ func equalServiceAccounts(deployed client.Object, requested client.Object) bool 
 	pairs = append(pairs, [2]interface{}{sa1.Annotations, sa2.Annotations})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -510,7 +546,11 @@ func equalRoleBindings(deployed client.Object, requested client.Object) bool {
 	pairs = append(pairs, [2]interface{}{binding1.RoleRef.Name, binding2.RoleRef.Name})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -528,7 +568,11 @@ func equalSecrets(deployed client.Object, requested client.Object) bool {
 	pairs = append(pairs, [2]interface{}{secret1.Data, secret2.Data})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -601,7 +645,11 @@ func equalBuildConfigs(deployed client.Object, requested client.Object) bool {
 	pairs = append(pairs, [2]interface{}{bc1.Spec, bc2.Spec})
 	equal := EqualPairs(pairs)
 	if !equal {
-		logger.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		} else {
+			logger.Info("Resources are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
@@ -627,9 +675,14 @@ func EqualPairs(objects [][2]interface{}) bool {
 }
 
 func Equals(deployed interface{}, requested interface{}) bool {
-	equal := reflect.DeepEqual(deployed, requested)
+	diffs := deep.Equal(deployed, requested)
+	equal := len(diffs) == 0
 	if !equal {
-		logger.Info("Objects are not equal", "deployed", deployed, "requested", requested)
+		if logger.GetSink().Enabled(1) {
+			logger.V(1).Info("Objects are not equal", "deployed", deployed, "requested", requested, "diffs", diffs)
+		} else {
+			logger.Info("Objects are not equal. For more details set the Operator log level to DEBUG.")
+		}
 	}
 	return equal
 }
