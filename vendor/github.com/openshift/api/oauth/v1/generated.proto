@@ -9,7 +9,7 @@ import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 
 // Package-wide variables from generator "generated".
-option go_package = "v1";
+option go_package = "github.com/openshift/api/oauth/v1";
 
 // ClusterRoleScopeRestriction describes restrictions on cluster role scopes
 message ClusterRoleScopeRestriction {
@@ -23,8 +23,18 @@ message ClusterRoleScopeRestriction {
   optional bool allowEscalation = 3;
 }
 
-// OAuthAccessToken describes an OAuth access token
+// OAuthAccessToken describes an OAuth access token.
+// The name of a token must be prefixed with a `sha256~` string, must not contain "/" or "%" characters and must be at
+// least 32 characters long.
+//
+// The name of the token is constructed from the actual token by sha256-hashing it and using URL-safe unpadded
+// base64-encoding (as described in RFC4648) on the hashed result.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthAccessToken {
+  // metadata is the standard object's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // ClientName references the client that created this token.
@@ -58,7 +68,12 @@ message OAuthAccessToken {
 }
 
 // OAuthAccessTokenList is a collection of OAuth access tokens
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthAccessTokenList {
+  // metadata is the standard list's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   // Items is the list of OAuth access tokens
@@ -66,7 +81,12 @@ message OAuthAccessTokenList {
 }
 
 // OAuthAuthorizeToken describes an OAuth authorization token
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthAuthorizeToken {
+  // metadata is the standard object's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // ClientName references the client that created this token.
@@ -99,7 +119,12 @@ message OAuthAuthorizeToken {
 }
 
 // OAuthAuthorizeTokenList is a collection of OAuth authorization tokens
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthAuthorizeTokenList {
+  // metadata is the standard list's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   // Items is the list of OAuth authorization tokens
@@ -107,7 +132,12 @@ message OAuthAuthorizeTokenList {
 }
 
 // OAuthClient describes an OAuth client
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthClient {
+  // metadata is the standard object's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // Secret is the unique secret associated with a client
@@ -150,11 +180,18 @@ message OAuthClient {
   // - 0: Tokens for this client never time out
   // - X: Tokens time out if there is no activity for X seconds
   // The current minimum allowed value for X is 300 (5 minutes)
+  //
+  // WARNING: existing tokens' timeout will not be affected (lowered) by changing this value
   optional int32 accessTokenInactivityTimeoutSeconds = 9;
 }
 
 // OAuthClientAuthorization describes an authorization created by an OAuth client
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthClientAuthorization {
+  // metadata is the standard object's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // ClientName references the client that created this authorization
@@ -172,7 +209,12 @@ message OAuthClientAuthorization {
 }
 
 // OAuthClientAuthorizationList is a collection of OAuth client authorizations
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthClientAuthorizationList {
+  // metadata is the standard list's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   // Items is the list of OAuth client authorizations
@@ -180,7 +222,12 @@ message OAuthClientAuthorizationList {
 }
 
 // OAuthClientList is a collection of OAuth clients
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthClientList {
+  // metadata is the standard list's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   // Items is the list of OAuth clients
@@ -188,7 +235,12 @@ message OAuthClientList {
 }
 
 // OAuthRedirectReference is a reference to an OAuth redirect object.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message OAuthRedirectReference {
+  // metadata is the standard object's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // The reference to an redirect object in the current namespace.
@@ -218,7 +270,10 @@ message ScopeRestriction {
 
 // UserOAuthAccessToken is a virtual resource to mirror OAuthAccessTokens to
 // the user the access token was issued for
+// +openshift:compatibility-gen:level=1
 message UserOAuthAccessToken {
+  // metadata is the standard object's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   // ClientName references the client that created this token.
@@ -253,7 +308,12 @@ message UserOAuthAccessToken {
 
 // UserOAuthAccessTokenList is a collection of access tokens issued on behalf of
 // the requesting user
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 message UserOAuthAccessTokenList {
+  // metadata is the standard list's metadata.
+  // More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated UserOAuthAccessToken items = 2;
