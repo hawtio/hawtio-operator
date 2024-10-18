@@ -3,7 +3,6 @@ package kubernetes
 import (
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -58,8 +57,8 @@ func TestGetIngressURL(t *testing.T) {
 			},
 		},
 		Status: networkingv1.IngressStatus{
-			LoadBalancer: corev1.LoadBalancerStatus{
-				Ingress: []corev1.LoadBalancerIngress{
+			LoadBalancer: networkingv1.IngressLoadBalancerStatus{
+				Ingress: []networkingv1.IngressLoadBalancerIngress{
 					{
 						IP: "192.168.99.9",
 					},

@@ -10,8 +10,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -23,7 +23,7 @@ import (
 func TestNonWatchedResourceNameNotFound(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	objs := []runtime.Object{
+	objs := []client.Object{
 		&hawtio,
 	}
 
@@ -44,7 +44,7 @@ func TestNonWatchedResourceNameNotFound(t *testing.T) {
 func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	objs := []runtime.Object{
+	objs := []client.Object{
 		&hawtio,
 	}
 
@@ -64,7 +64,7 @@ func TestNonWatchedResourceNamespaceNotFound(t *testing.T) {
 
 func TestHawtioController_Reconcile(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
-	objs := []runtime.Object{
+	objs := []client.Object{
 		&hawtio,
 	}
 
