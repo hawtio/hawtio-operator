@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -125,7 +126,19 @@ func operatorRun(namespace string, cfg *rest.Config) error {
 	}
 
 	// Create a new Cmd to provide shared dependencies and start components
-	mgr, err := manager.New(cfg, manager.Options{Namespace: namespace})
+
+	var namespaces map[string]cache.Config
+	if namespace != "" {
+		namespaces = map[string]cache.Config{
+			namespace: {},
+		}
+	}
+
+	mgr, err := manager.New(cfg, manager.Options{
+		Cache: cache.Options{
+			DefaultNamespaces: namespaces,
+		},
+	})
 	if err != nil {
 		log.Error(err, "")
 		return err
