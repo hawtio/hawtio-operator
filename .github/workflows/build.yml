@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        go: ["1.20", "1.21"]
+        go: ["1.21"]
     steps:
       - name: Install Go
         uses: actions/setup-go@v5
