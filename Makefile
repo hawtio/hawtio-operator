@@ -10,7 +10,7 @@ HAWTIO_ONLINE_GATEWAY_VERSION ?= 2.1.0
 HAWTIO_ONLINE_GATEWAY_IMAGE_NAME ?= quay.io/${ORG}/online-gateway
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
-LAST_RELEASED_VERSION ?= 1.0.2
+LAST_RELEASED_VERSION ?= 1.0.3
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 
 # Is this build part of an automated CI pipeline
