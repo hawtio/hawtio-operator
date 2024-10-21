@@ -55,7 +55,7 @@ func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageV
 			InitialDelaySeconds: 5,
 			TimeoutSeconds:      1,
 			PeriodSeconds:       5,
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerPortName),
 					Path:   "/online",
@@ -66,7 +66,7 @@ func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageV
 		LivenessProbe: &corev1.Probe{
 			TimeoutSeconds: 1,
 			PeriodSeconds:  10,
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerPortName),
 					Path:   "/online",
@@ -122,7 +122,7 @@ func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, image
 			},
 		},
 		LivenessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerGatewayPortName),
 					Path:   "/status",
@@ -133,7 +133,7 @@ func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, image
 			TimeoutSeconds: 1,
 		},
 		ReadinessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
+			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerGatewayPortName),
 					Path:   "/status",

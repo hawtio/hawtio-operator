@@ -8,8 +8,14 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // Scheduler holds cluster-wide config information to run the Kubernetes Scheduler
 // and influence its placement decisions. The canonical name for this config is `cluster`.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 type Scheduler struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata is the standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// spec holds user settable values for configuration
@@ -35,8 +41,11 @@ type SchedulerSpec struct {
 	// Valid values are "LowNodeUtilization", "HighNodeUtilization", "NoScoring"
 	// Defaults to "LowNodeUtilization"
 	// +optional
-	// +kubebuilder:default=LowNodeUtilization
-	Profile SchedulerProfile `json:"profile"`
+	Profile SchedulerProfile `json:"profile,omitempty"`
+	// profileCustomizations contains configuration for modifying the default behavior of existing scheduler profiles.
+	// +openshift:enable:FeatureSets=CustomNoUpgrade;TechPreviewNoUpgrade
+	// +optional
+	ProfileCustomizations ProfileCustomizations `json:"profileCustomizations"`
 	// defaultNodeSelector helps set the cluster-wide default node selector to
 	// restrict pod placement to specific nodes. This is applied to the pods
 	// created in all namespaces and creates an intersection with any existing
@@ -88,13 +97,42 @@ var (
 	NoScoring SchedulerProfile = "NoScoring"
 )
 
+// ProfileCustomizations contains various parameters for modifying the default behavior of certain profiles
+type ProfileCustomizations struct {
+	// dynamicResourceAllocation allows to enable or disable dynamic resource allocation within the scheduler.
+	// Dynamic resource allocation is an API for requesting and sharing resources between pods and containers inside a pod.
+	// Third-party resource drivers are responsible for tracking and allocating resources.
+	// Different kinds of resources support arbitrary parameters for defining requirements and initialization.
+	// Valid values are Enabled, Disabled and omitted.
+	// When omitted, this means no opinion and the platform is left to choose a reasonable default,
+	// which is subject to change over time.
+	// The current default is Disabled.
+	// +optional
+	DynamicResourceAllocation DRAEnablement `json:"dynamicResourceAllocation"`
+}
+
+// +kubebuilder:validation:Enum:="";"Enabled";"Disabled"
+type DRAEnablement string
+
+var (
+	// DRAEnablementEnabled enables dynamic resource allocation feature
+	DRAEnablementEnabled DRAEnablement = "Enabled"
+	// DRAEnablementDisabled disables dynamic resource allocation feature
+	DRAEnablementDisabled DRAEnablement = "Disabled"
+)
+
 type SchedulerStatus struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 type SchedulerList struct {
 	metav1.TypeMeta `json:",inline"`
+
+	// metadata is the standard list's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	metav1.ListMeta `json:"metadata"`
 
 	Items []Scheduler `json:"items"`
