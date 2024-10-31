@@ -9,6 +9,9 @@ import (
 	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
 )
 
+// defaultConsoleLinkText Default text for console launcher link
+const defaultConsoleLinkText = "HawtIO Console"
+
 // NewApplicationMenuLink creates an ApplicationMenu ConsoleLink instance
 func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1.HawtioConfig) *consolev1.ConsoleLink {
 	consoleLink := &consolev1.ConsoleLink{
@@ -31,7 +34,13 @@ func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov1.
 func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1.HawtioConfig) {
 	consoleLink.Spec.Location = consolev1.ApplicationMenu
 	consoleLink.Spec.Link.Text = config.Online.ConsoleLink.Text
+
+	if len(consoleLink.Spec.Link.Text) == 0 {
+		consoleLink.Spec.Link.Text = defaultConsoleLinkText
+	}
+
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
+
 	if consoleLink.Spec.ApplicationMenu == nil {
 		consoleLink.Spec.ApplicationMenu = &consolev1.ApplicationMenuSpec{}
 	}
@@ -63,6 +72,11 @@ func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Rou
 func UpdateNamespaceDashboardLink(consoleLink *consolev1.ConsoleLink, route *routev1.Route, config *hawtiov1.HawtioConfig) {
 	consoleLink.Spec.Location = consolev1.NamespaceDashboard
 	consoleLink.Spec.Link.Text = config.Online.ConsoleLink.Text
+
+	if len(consoleLink.Spec.Link.Text) == 0 {
+		consoleLink.Spec.Link.Text = defaultConsoleLinkText
+	}
+
 	consoleLink.Spec.Link.Href = "https://" + route.Spec.Host
 	// ApplicationMenu can be set when the Hawtio type changes from 'cluster' to 'namespace'
 	consoleLink.Spec.ApplicationMenu = nil
