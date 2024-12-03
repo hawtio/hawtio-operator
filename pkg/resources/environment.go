@@ -33,6 +33,22 @@ const (
 	GatewayRbacEnvVar      = "HAWTIO_ONLINE_RBAC_ACL"
 )
 
+func envVarForAuth(isOpenShift bool) corev1.EnvVar {
+	// Ensure that we provide the correct mode of authentication
+	var authType string
+	if isOpenShift {
+		authType = HawtioAuthTypeOAuth
+	} else {
+		authType = HawtioAuthTypeForm
+	}
+	authTypeEnvVar := corev1.EnvVar{
+		Name:  HawtioAuthEnvVar,
+		Value: authType,
+	}
+
+	return authTypeEnvVar
+}
+
 func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string, isOpenShift bool) []corev1.EnvVar {
 	oauthClientId := name
 	if deploymentType == hawtiov1.ClusterHawtioDeploymentType {
@@ -51,17 +67,7 @@ func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string,
 		},
 	}
 
-	// Ensure that we provide the correct mode of authentication
-	var authType string
-	if isOpenShift {
-		authType = HawtioAuthTypeOAuth
-	} else {
-		authType = HawtioAuthTypeForm
-	}
-	authTypeEnvVar := corev1.EnvVar{
-		Name:  HawtioAuthEnvVar,
-		Value: authType,
-	}
+	authTypeEnvVar := envVarForAuth(isOpenShift)
 	envVars = append(envVars, authTypeEnvVar)
 
 	if deploymentType == hawtiov1.NamespaceHawtioDeploymentType {
@@ -116,7 +122,7 @@ func envVarsForNginx(nginx hawtiov1.HawtioNginx) []corev1.EnvVar {
 	return envVars
 }
 
-func envVarsForGateway() []corev1.EnvVar {
+func envVarsForGateway(isOpenShift bool) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{
 		{
 			Name:  GatewayWebSvrEnvVar,
@@ -135,6 +141,10 @@ func envVarsForGateway() []corev1.EnvVar {
 			Value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt", // serviceaccount certificate authority
 		},
 	}
+
+	// Needs to be added to gateway in the same way as the hawtio image
+	authTypeEnvVar := envVarForAuth(isOpenShift)
+	envVars = append(envVars, authTypeEnvVar)
 
 	return envVars
 }

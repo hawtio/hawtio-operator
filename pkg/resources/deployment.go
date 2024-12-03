@@ -85,7 +85,7 @@ func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServer
 	hawtioVersion := getOnlineVersion(buildVariables)
 	hawtioContainer := newHawtioContainer(hawtio, newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL), hawtioVersion, buildVariables.ImageRepository)
 	gatewayVersion := getGatewayVersion(buildVariables)
-	gatewayContainer := newGatewayContainer(hawtio, newGatewayEnvVars(hawtio), gatewayVersion, buildVariables.GatewayImageRepository)
+	gatewayContainer := newGatewayContainer(hawtio, newGatewayEnvVars(hawtio, apiSpec), gatewayVersion, buildVariables.GatewayImageRepository)
 
 	annotations := map[string]string{
 		configVersionAnnotation: configMapVersion,
@@ -184,10 +184,10 @@ func newHawtioEnvVars(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSp
 	return envVars
 }
 
-func newGatewayEnvVars(hawtio *hawtiov1.Hawtio) []corev1.EnvVar {
+func newGatewayEnvVars(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
 
-	envVarsForGateway := envVarsForGateway()
+	envVarsForGateway := envVarsForGateway(apiSpec.IsOpenShift4)
 	envVars = append(envVars, envVarsForGateway...)
 
 	envVarsForRBAC := envVarsForRBAC(hawtio.Spec.RBAC)
