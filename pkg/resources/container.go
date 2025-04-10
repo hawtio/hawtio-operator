@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -48,9 +49,10 @@ func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageV
 	 *       mountPath: /etc/tls/private/serving
 	 */
 	container := corev1.Container{
-		Name:  hawtio.Name + "-container",
-		Image: getHawtioImageFor(imageVersion, imageRepository),
-		Env:   envVars,
+		Name:            hawtio.Name + "-container",
+		Image:           getHawtioImageFor(imageVersion, imageRepository),
+		ImagePullPolicy: getImagePullPolicy(),
+		Env:             envVars,
 		ReadinessProbe: &corev1.Probe{
 			InitialDelaySeconds: 5,
 			TimeoutSeconds:      1,
@@ -111,9 +113,10 @@ func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, image
 	 *      timeoutSeconds: 1
 	 */
 	container := corev1.Container{
-		Name:  hawtio.Name + "-gateway-container",
-		Image: getGatewayImageFor(imageVersion, imageGatewayRepository),
-		Env:   envVars,
+		Name:            hawtio.Name + "-gateway-container",
+		Image:           getGatewayImageFor(imageVersion, imageGatewayRepository),
+		ImagePullPolicy: getImagePullPolicy(),
+		Env:             envVars,
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          containerGatewayPortName,
@@ -174,4 +177,21 @@ func getImageFor(tag string, imgRepo string, envVar string, defaultVal string) s
 	}
 
 	return repository + ":" + tag
+}
+
+func getImagePullPolicy() corev1.PullPolicy {
+	pullPolicy := os.Getenv("IMAGE_PULL_POLICY")
+
+	if pullPolicy == "" {
+		fmt.Println("Defaulting to pull policy of being 'Always'")
+		pullPolicy = "Always"
+	}
+
+	if pullPolicy != "Always" && pullPolicy != "Never" && pullPolicy != "IfNotPresent" {
+		fmt.Printf("Invalid value %s for IMAGE_PULL_POLICY\n", pullPolicy)
+		fmt.Println("Defaulting to pull policy of being 'Always'")
+		pullPolicy = "Always"
+	}
+
+	return corev1.PullPolicy(pullPolicy)
 }
