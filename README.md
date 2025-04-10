@@ -47,12 +47,13 @@ spec:
 > The `version` property present in previous versions of the CRD is no longer applicable
 > and any CRs applied to the cluster, containing this property, will have it automatically removed.
 
-### Overriding the Version of `Hawtio-Online`
+### Overriding configuration of `Hawtio-Online`
 Unlike previous versions of the operator, the version of the `Hawtio-Online` operand is now specified during the building of the operator. Therefore, it should be unnecessary to specify this version of the container image. However, should an override be required then it is possible to add extra environment variables to the deployment resource of this operator. Specifically:
 - IMAGE_VERSION: Adding this environment variable will override the version / tag of the `Hawtio-Online` container image, eg. `2.1.0-20240725`;
 - IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online` container image, eg. `quay.io/hawtio/online`;
 - GATEWAY_IMAGE_VERSION: Adding this environment variable will override the version / tag of the 'Hawtio-Online-Gateway' container image, eg. `2.1.0-20240725`;
 - GATEWAY_IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online-Gateway` container image, eg. `quay.io/hawtio/gateway`.
+- IMAGE_PULL_POLICY: Adding this environment variable will override the default pull policy (Always) of the deployed hawtio-online images. Accepted values are 'Always', 'IfNotPresent' and 'Never'. 
 
 ## Features
 
