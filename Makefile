@@ -71,6 +71,17 @@ define set-kvars
 	$(KUSTOMIZE) edit set image $(DEFAULT_IMAGE)=$(IMAGE):$(VERSION)
 endef
 
+container-builder:
+ifeq (, $(shell command -v podman 2> /dev/null))
+ifeq (, $(shell command -v docker 2> /dev/null))
+        $(error "No podman or docker found in PATH. Please install and re-run")
+else
+CONTAINER_BUILDER=$(shell command -v docker 2> /dev/null)
+endif
+else
+CONTAINER_BUILDER=$(shell command -v podman 2> /dev/null)
+endif
+
 #---
 #
 #@ image
@@ -87,7 +98,7 @@ endef
 #
 #---
 image:
-	docker build -t $(IMAGE):$(VERSION) \
+	$(CONTAINER_BUILDER) build -t $(IMAGE):$(VERSION) \
 	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_GATEWAY_IMAGE_NAME=$(HAWTIO_ONLINE_GATEWAY_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
@@ -110,7 +121,7 @@ image:
 #
 #---
 publish-image: image
-	docker push $(IMAGE):$(VERSION)
+	$(CONTAINER_BUILDER) push $(IMAGE):$(VERSION)
 
 #---
 #
@@ -307,7 +318,7 @@ validate-bundle: operator-sdk
 #
 #---
 bundle-build: bundle
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMAGE_NAME):$(VERSION) .
+	$(CONTAINER_BUILDER) build -f bundle.Dockerfile -t $(BUNDLE_IMAGE_NAME):$(VERSION) .
 
 #---
 #
