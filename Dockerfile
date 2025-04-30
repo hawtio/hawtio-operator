@@ -1,4 +1,4 @@
-FROM golang:1.21.13-alpine3.20 AS builder
+FROM golang:1.23.8-alpine3.20 AS builder
 
 ARG HAWTIO_ONLINE_VERSION=latest
 ARG HAWTIO_ONLINE_IMAGE_NAME=quay.io/hawtio/online
@@ -19,9 +19,9 @@ WORKDIR /hawtio-operator
 
 COPY . .
 
-RUN GOLDFLAGS=${GOLDFLAGS} make build
+RUN GOLDFLAGS=${GOLDFLAGS} CI_BUILD=true make build
 
-FROM alpine:3.18
+FROM alpine:3.21
 
 USER nobody
 

@@ -26,12 +26,12 @@ VERSION := $(subst -SNAPSHOT,-$(DATETIMESTAMP),$(VERSION))
 #
 # Versions of tools and binaries
 #
-CONTROLLER_GEN_VERSION := v0.6.2
+CONTROLLER_GEN_VERSION := v0.17.3
 KUSTOMIZE_VERSION := v4.5.4
 OPERATOR_SDK_VERSION := v1.28.0
 OPM_VERSION := v1.24.0
 
-CRD_OPTIONS ?= crd:crdVersions=v1,preserveUnknownFields=false
+CRD_OPTIONS ?= crd:crdVersions=v1
 
 INSTALL_ROOT := deploy
 GEN_SUFFIX := gen.yaml
@@ -74,7 +74,7 @@ endef
 container-builder:
 ifeq (, $(shell command -v podman 2> /dev/null))
 ifeq (, $(shell command -v docker 2> /dev/null))
-        $(error "No podman or docker found in PATH. Please install and re-run")
+	$(error "No podman or docker found in PATH. Please install and re-run")
 else
 CONTAINER_BUILDER=$(shell command -v docker 2> /dev/null)
 endif
@@ -97,7 +97,7 @@ endif
 #** HAWTIO_ONLINE_GATEWAY_VERSION     Set the operator's target hawtio-online-gateway image version
 #
 #---
-image:
+image: container-builder
 	$(CONTAINER_BUILDER) build -t $(IMAGE):$(VERSION) \
 	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
 	--build-arg HAWTIO_ONLINE_GATEWAY_IMAGE_NAME=$(HAWTIO_ONLINE_GATEWAY_IMAGE_NAME) \
@@ -317,7 +317,7 @@ validate-bundle: operator-sdk
 #** VERSION:                   Set the custom version for the bundle image
 #
 #---
-bundle-build: bundle
+bundle-build: bundle container-builder
 	$(CONTAINER_BUILDER) build -f bundle.Dockerfile -t $(BUNDLE_IMAGE_NAME):$(VERSION) .
 
 #---

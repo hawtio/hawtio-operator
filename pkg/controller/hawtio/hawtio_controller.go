@@ -117,8 +117,8 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 	return add(mgr, r, r.apiSpec.Routes)
 }
 
-func enqueueRequestForOwner(mgr manager.Manager) handler.EventHandler {
-	return handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &hawtiov1.Hawtio{}, handler.OnlyControllerOwner())
+func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedEventHandler[T, reconcile.Request] {
+	return handler.TypedEnqueueRequestForOwner[T](mgr.GetScheme(), mgr.GetRESTMapper(), &hawtiov1.Hawtio{}, handler.OnlyControllerOwner())
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -131,53 +131,64 @@ func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 
 	// Watch for changes to primary resource Hawtio
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &hawtiov1.Hawtio{}), &handler.EnqueueRequestForObject{}, predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			// Ignore updates to CR status in which case metadata.Generation does not change
-			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			// Evaluates to false if the object has been confirmed deleted
-			return !e.DeleteStateUnknown
-		},
-	})
+	err = c.Watch(
+		source.Kind(
+			mgr.GetCache(), &hawtiov1.Hawtio{},
+			&handler.TypedEnqueueRequestForObject[*hawtiov1.Hawtio]{},
+			predicate.TypedFuncs[*hawtiov1.Hawtio]{
+				UpdateFunc: func(e event.TypedUpdateEvent[*hawtiov1.Hawtio]) bool {
+					// Ignore updates to CR status in which case metadata.Generation does not change
+					return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
+				},
+				DeleteFunc: func(e event.TypedDeleteEvent[*hawtiov1.Hawtio]) bool {
+					// Evaluates to false if the object has been confirmed deleted
+					return !e.DeleteStateUnknown
+				},
+			},
+		),
+	)
 	if err != nil {
 		return errs.Wrap(err, "Failed to create watch for Hawtio resource")
 	}
 
 	// Watch for changes to secondary resources and requeue the owner Hawtio
-	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.ConfigMap{}), enqueueRequestForOwner(mgr))
+	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.ConfigMap{}, enqueueRequestForOwner[*corev1.ConfigMap](mgr)))
 	if err != nil {
 		return errs.Wrap(err, "Failed to create watch for ConfigMap resource")
 	}
 
 	if routeSupport {
-		err = c.Watch(source.Kind(mgr.GetCache(), &routev1.Route{}), enqueueRequestForOwner(mgr))
+		err = c.Watch(source.Kind(mgr.GetCache(), &routev1.Route{}, enqueueRequestForOwner[*routev1.Route](mgr)))
 		if err != nil {
 			return errs.Wrap(err, "Failed to create watch for Route resource")
 		}
 	} else {
-		err = c.Watch(source.Kind(mgr.GetCache(), &networkingv1.Ingress{}), enqueueRequestForOwner(mgr))
+		err = c.Watch(source.Kind(mgr.GetCache(), &networkingv1.Ingress{}, enqueueRequestForOwner[*networkingv1.Ingress](mgr)))
 		if err != nil {
 			return errs.Wrap(err, "Failed to create watch for Ingress resource")
 		}
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &appsv1.Deployment{}), enqueueRequestForOwner(mgr), predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldDeployment := e.ObjectOld.(*appsv1.Deployment)
-			newDeployment := e.ObjectNew.(*appsv1.Deployment)
-			// Ignore updates to the Deployment other than the replicas one,
-			// that are used to reconcile the Hawtio replicas.
-			return oldDeployment.Status.Replicas != newDeployment.Status.Replicas
-		},
-	})
+	err = c.Watch(
+		source.Kind(
+			mgr.GetCache(), &appsv1.Deployment{}, enqueueRequestForOwner[*appsv1.Deployment](mgr),
+			predicate.TypedFuncs[*appsv1.Deployment]{
+				UpdateFunc: func(e event.TypedUpdateEvent[*appsv1.Deployment]) bool {
+					oldDeployment := e.ObjectOld
+					newDeployment := e.ObjectNew
+					// Ignore updates to the Deployment other than the replicas one,
+					// that are used to reconcile the Hawtio replicas.
+					return oldDeployment.Status.Replicas != newDeployment.Status.Replicas
+				},
+			},
+		),
+	)
 	if err != nil {
 		return errs.Wrap(err, "Failed to create watch for Deployment resource")
 	}
 
 	//watch secret
-	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}), enqueueRequestForOwner(mgr))
+	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}, enqueueRequestForOwner[*corev1.Secret](mgr)))
 	if err != nil {
 		return errs.Wrap(err, "Failed to create watch for Secret resource")
 	}
