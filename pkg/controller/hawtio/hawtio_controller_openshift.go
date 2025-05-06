@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	errs "github.com/pkg/errors"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -17,7 +17,7 @@ import (
 
 var conOsLog = logf.Log.WithName("controller_hawtio_openshift")
 
-func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *hawtiov1.Hawtio, name string, namespace string) (*corev1.Secret, error) {
+func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *hawtiov2.Hawtio, name string, namespace string) (*corev1.Secret, error) {
 	// This secret name should be the same as used in deployment.go
 	clientSecretName := hawtio.Name + "-tls-proxying"
 

@@ -12,7 +12,7 @@ import (
 
 	"github.com/RHsyseng/operator-utils/pkg/validation"
 
-	"github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	"github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 )
 
 func TestSampleCustomResources(t *testing.T) {
@@ -49,7 +49,7 @@ spec:
 // Requires openAPIV3Schema in CRD for function to work properly
 func TestCompleteCRD(t *testing.T) {
 	schema := getSchema(t)
-	missingEntries := schema.GetMissingEntries(&v1.Hawtio{})
+	missingEntries := schema.GetMissingEntries(v2.NewHawtio())
 	for _, missing := range missingEntries {
 		if strings.HasPrefix(missing.Path, "/spec/auth/clientCertExpirationDate") {
 			// operator-utils does not deal with Time type validation correctly
@@ -79,7 +79,7 @@ func getSchema(t *testing.T) validation.Schema {
 	crdFile := "../../../../deploy/crd/hawt.io_hawtios.yaml"
 	bytes, err := ioutil.ReadFile(crdFile)
 	assert.NoError(t, err, "Error reading CRD yaml %v", crdFile)
-	schema, err := validation.NewVersioned(bytes, "v1")
+	schema, err := validation.NewVersioned(bytes, "v2")
 	assert.NoError(t, err)
 	return schema
 }

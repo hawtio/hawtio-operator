@@ -5,13 +5,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestPropagateAnnotations(t *testing.T) {
-	hawtio := &hawtiov1.Hawtio{
+	hawtio := &hawtiov2.Hawtio{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
 				"annotation1":          "value1",
@@ -22,8 +22,8 @@ func TestPropagateAnnotations(t *testing.T) {
 				"group.io/annotation3": "value6",
 			},
 		},
-		Spec: hawtiov1.HawtioSpec{
-			MetadataPropagation: hawtiov1.HawtioMetadataPropagation{
+		Spec: hawtiov2.HawtioSpec{
+			MetadataPropagation: hawtiov2.HawtioMetadataPropagation{
 				Annotations: []string{
 					"annotation1",
 					"annotation2",
@@ -45,7 +45,7 @@ func TestPropagateAnnotations(t *testing.T) {
 }
 
 func TestPropagateLabels(t *testing.T) {
-	hawtio := &hawtiov1.Hawtio{
+	hawtio := &hawtiov2.Hawtio{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"label1":          "value1",
@@ -56,8 +56,8 @@ func TestPropagateLabels(t *testing.T) {
 				"group.io/label3": "value6",
 			},
 		},
-		Spec: hawtiov1.HawtioSpec{
-			MetadataPropagation: hawtiov1.HawtioMetadataPropagation{
+		Spec: hawtiov2.HawtioSpec{
+			MetadataPropagation: hawtiov2.HawtioMetadataPropagation{
 				Labels: []string{
 					"label1",
 					"label2",

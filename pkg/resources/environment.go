@@ -1,12 +1,13 @@
 package resources
 
 import (
+	"fmt"
 	"path"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 )
 
 const (
@@ -22,6 +23,8 @@ const (
 	NginxSubrequestOutputBufferSize = "NGINX_SUBREQUEST_OUTPUT_BUFFER_SIZE"
 	HawtioAuthTypeForm              = "form"
 	HawtioAuthTypeOAuth             = "oauth"
+	HawtioSSLKey                    = "HAWTIO_ONLINE_SSL_KEY"
+	HawtioSSLCert                   = "HAWTIO_ONLINE_SSL_CERTIFICATE"
 
 	/*
 	 * Gateway Env Vars
@@ -31,6 +34,10 @@ const (
 	GatewaySSLCertEnvVar   = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE"    // /etc/tls/private/serving/tls.crt
 	GatewaySSLCertCAEnvVar = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE_CA" // /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 	GatewayRbacEnvVar      = "HAWTIO_ONLINE_RBAC_ACL"
+
+	HawtioSSLKeyValue    = "/etc/tls/private/serving/tls.key"
+	HawtioSSLCertValue   = "/etc/tls/private/serving/tls.crt"
+	HawtioSSLCertCAValue = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 )
 
 func envVarForAuth(isOpenShift bool) corev1.EnvVar {
@@ -49,28 +56,42 @@ func envVarForAuth(isOpenShift bool) corev1.EnvVar {
 	return authTypeEnvVar
 }
 
-func envVarsForHawtio(deploymentType hawtiov1.HawtioDeploymentType, name string, isOpenShift bool) []corev1.EnvVar {
-	oauthClientId := name
-	if deploymentType == hawtiov1.ClusterHawtioDeploymentType {
-		// Pin to a known name for cluster-wide OAuthClient
-		oauthClientId = OAuthClientName
-	}
+func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string, isOpenShift bool, isSSL bool) []corev1.EnvVar {
 
 	envVars := []corev1.EnvVar{
 		{
 			Name:  HawtioTypeEnvVar,
 			Value: strings.ToLower(string(deploymentType)),
 		},
-		{
-			Name:  HawtioOAuthClientEnvVar,
-			Value: oauthClientId,
-		},
+	}
+
+	if isOpenShift && deploymentType == hawtiov2.ClusterHawtioDeploymentType {
+		// Pin to a known name for cluster-wide OAuthClient
+		envVars = append(envVars,
+			corev1.EnvVar{
+				Name:  HawtioOAuthClientEnvVar,
+				Value: OAuthClientName,
+			},
+		)
+	}
+
+	if isSSL {
+		envVars = append(envVars,
+			corev1.EnvVar{
+				Name:  HawtioSSLKey,
+				Value: HawtioSSLKeyValue,
+			},
+			corev1.EnvVar{
+				Name:  HawtioSSLCert,
+				Value: HawtioSSLCertValue,
+			},
+		)
 	}
 
 	authTypeEnvVar := envVarForAuth(isOpenShift)
 	envVars = append(envVars, authTypeEnvVar)
 
-	if deploymentType == hawtiov1.NamespaceHawtioDeploymentType {
+	if deploymentType == hawtiov2.NamespaceHawtioDeploymentType {
 		envVars = append(envVars, corev1.EnvVar{
 			Name: HawtioNamespaceEnvVar,
 			ValueFrom: &corev1.EnvVarSource{
@@ -99,7 +120,7 @@ func envVarsForHawtioOCP4(openShiftVersion string, openShiftConsoleURL string) [
 	return envVars
 }
 
-func envVarsForNginx(nginx hawtiov1.HawtioNginx) []corev1.EnvVar {
+func envVarsForNginx(nginx hawtiov2.HawtioNginx) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
 	if nginx.ClientBodyBufferSize != "" {
 		envVars = append(envVars, corev1.EnvVar{
@@ -122,24 +143,37 @@ func envVarsForNginx(nginx hawtiov1.HawtioNginx) []corev1.EnvVar {
 	return envVars
 }
 
-func envVarsForGateway(isOpenShift bool) []corev1.EnvVar {
+func envVarsForGateway(isOpenShift bool, isSSL bool) []corev1.EnvVar {
+
+	webSrvProtocol := "http"
+	webSvrPort := 8080
+	if isSSL {
+		webSrvProtocol = "https"
+		webSvrPort = 8443
+	}
+
 	envVars := []corev1.EnvVar{
 		{
 			Name:  GatewayWebSvrEnvVar,
-			Value: "https://localhost:8443", // Same port as defined in hawtio container
+			Value: fmt.Sprintf("%s://localhost:%d", webSrvProtocol, webSvrPort), // Same port as defined in hawtio container
 		},
-		{
-			Name:  GatewaySSLKeyEnvVar,
-			Value: "/etc/tls/private/serving/tls.key", // serving-certificate key
-		},
-		{
-			Name:  GatewaySSLCertEnvVar,
-			Value: "/etc/tls/private/serving/tls.crt", // serving-certificate certificate
-		},
-		{
-			Name:  GatewaySSLCertCAEnvVar,
-			Value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt", // serviceaccount certificate authority
-		},
+	}
+
+	if isSSL {
+		envVars = append(envVars,
+			corev1.EnvVar{
+				Name:  GatewaySSLKeyEnvVar,
+				Value: HawtioSSLKeyValue, // serving-certificate key
+			},
+			corev1.EnvVar{
+				Name:  GatewaySSLCertEnvVar,
+				Value: HawtioSSLCertValue, // serving-certificate certificate
+			},
+			corev1.EnvVar{
+				Name:  GatewaySSLCertCAEnvVar,
+				Value: HawtioSSLCertCAValue, // serviceaccount certificate authority
+			},
+		)
 	}
 
 	// Needs to be added to gateway in the same way as the hawtio image
@@ -149,17 +183,18 @@ func envVarsForGateway(isOpenShift bool) []corev1.EnvVar {
 	return envVars
 }
 
-func envVarsForRBAC(rbac hawtiov1.HawtioRBAC) []corev1.EnvVar {
+func envVarsForRBAC(rbac hawtiov2.HawtioRBAC) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
 
 	aclPath := ""
 	if rbac.ConfigMap != "" {
 		aclPath = path.Join(rbacConfigMapVolumeMountPath, RBACConfigMapKey)
+
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  GatewayRbacEnvVar,
+			Value: aclPath,
+		})
 	}
-	envVars = append(envVars, corev1.EnvVar{
-		Name:  GatewayRbacEnvVar,
-		Value: aclPath,
-	})
 
 	if rbac.DisableRBACRegistry != nil && *rbac.DisableRBACRegistry {
 		envVars = append(envVars, corev1.EnvVar{
