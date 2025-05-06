@@ -3,21 +3,31 @@ package kubernetes
 import (
 	"strconv"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 // NewIngress create a new Ingress resource
-func NewIngress(hawtio *hawtiov1.Hawtio, servingSecret *corev1.Secret) *networkingv1.Ingress {
+func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, servingSecret *corev1.Secret) *networkingv1.Ingress {
+	isSSL := util.IsSSL(hawtio, apiSpec)
 	name := hawtio.Name
+	servicePort := resources.PlainServicePort
+	if isSSL {
+		servicePort = resources.SSLServicePort
+	}
 
 	annotations := map[string]string{}
-	annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
-	annotations["nginx.ingress.kubernetes.io/force-ssl-redirect"] = "true"
+
+	if isSSL {
+		annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
+		annotations["nginx.ingress.kubernetes.io/force-ssl-redirect"] = "true"
+	}
 	annotations["nginx.ingress.kubernetes.io/rewrite-target"] = "/$1"
 
 	resources.PropagateAnnotations(hawtio, annotations)
@@ -55,7 +65,7 @@ func NewIngress(hawtio *hawtiov1.Hawtio, servingSecret *corev1.Secret) *networki
 									Service: &networkingv1.IngressServiceBackend{
 										Name: hawtio.Name,
 										Port: networkingv1.ServiceBackendPort{
-											Number: 443,
+											Number: int32(servicePort),
 										},
 									},
 								},

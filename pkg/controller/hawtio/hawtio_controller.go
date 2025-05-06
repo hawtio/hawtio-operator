@@ -43,7 +43,7 @@ import (
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	oauthclient "github.com/openshift/client-go/oauth/clientset/versioned"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
@@ -118,7 +118,7 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 }
 
 func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedEventHandler[T, reconcile.Request] {
-	return handler.TypedEnqueueRequestForOwner[T](mgr.GetScheme(), mgr.GetRESTMapper(), &hawtiov1.Hawtio{}, handler.OnlyControllerOwner())
+	return handler.TypedEnqueueRequestForOwner[T](mgr.GetScheme(), mgr.GetRESTMapper(), hawtiov2.NewHawtio(), handler.OnlyControllerOwner())
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -133,14 +133,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 
 	err = c.Watch(
 		source.Kind(
-			mgr.GetCache(), &hawtiov1.Hawtio{},
-			&handler.TypedEnqueueRequestForObject[*hawtiov1.Hawtio]{},
-			predicate.TypedFuncs[*hawtiov1.Hawtio]{
-				UpdateFunc: func(e event.TypedUpdateEvent[*hawtiov1.Hawtio]) bool {
+			mgr.GetCache(), hawtiov2.NewHawtio(),
+			&handler.TypedEnqueueRequestForObject[*hawtiov2.Hawtio]{},
+			predicate.TypedFuncs[*hawtiov2.Hawtio]{
+				UpdateFunc: func(e event.TypedUpdateEvent[*hawtiov2.Hawtio]) bool {
 					// Ignore updates to CR status in which case metadata.Generation does not change
 					return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 				},
-				DeleteFunc: func(e event.TypedDeleteEvent[*hawtiov1.Hawtio]) bool {
+				DeleteFunc: func(e event.TypedDeleteEvent[*hawtiov2.Hawtio]) bool {
 					// Evaluates to false if the object has been confirmed deleted
 					return !e.DeleteStateUnknown
 				},
@@ -232,7 +232,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	reqLogger.Info("Reconciling Hawtio")
 
 	// Fetch the Hawtio instance
-	hawtio := &hawtiov1.Hawtio{}
+	hawtio := hawtiov2.NewHawtio()
 	err := r.client.Get(ctx, request.NamespacedName, hawtio)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
@@ -271,7 +271,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Init phase
 
 	if len(hawtio.Spec.Type) == 0 {
-		hawtio.Spec.Type = hawtiov1.ClusterHawtioDeploymentType
+		hawtio.Spec.Type = hawtiov2.ClusterHawtioDeploymentType
 		err = r.client.Update(ctx, hawtio)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update type: %v", err)
@@ -280,14 +280,14 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Invariant checks
-	isClusterDeployment := hawtio.Spec.Type == hawtiov1.ClusterHawtioDeploymentType
-	isNamespaceDeployment := hawtio.Spec.Type == hawtiov1.NamespaceHawtioDeploymentType
+	isClusterDeployment := hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType
+	isNamespaceDeployment := hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType
 
 	if !isNamespaceDeployment && !isClusterDeployment {
 		err := fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
-		if hawtio.Status.Phase != hawtiov1.HawtioPhaseFailed {
+		if hawtio.Status.Phase != hawtiov2.HawtioPhaseFailed {
 			previous := hawtio.DeepCopy()
-			hawtio.Status.Phase = hawtiov1.HawtioPhaseFailed
+			hawtio.Status.Phase = hawtiov2.HawtioPhaseFailed
 			err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
 			if err != nil {
 				return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
@@ -296,9 +296,9 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov1.HawtioPhaseFailed {
+	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov2.HawtioPhaseFailed {
 		previous := hawtio.DeepCopy()
-		hawtio.Status.Phase = hawtiov1.HawtioPhaseInitialized
+		hawtio.Status.Phase = hawtiov2.HawtioPhaseInitialized
 		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
@@ -431,7 +431,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		}
 	}
 
-	if isClusterDeployment {
+	if r.apiSpec.IsOpenShift4 && isClusterDeployment {
 		// Add OAuth client
 		oauthClient := resources.NewOAuthClient(resources.OAuthClientName)
 		err = r.client.Create(ctx, oauthClient)
@@ -449,7 +449,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Add link to OpenShift console
 	consoleLinkName := request.Name + "-" + request.Namespace
-	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes && hawtio.Status.Phase == hawtiov1.HawtioPhaseInitialized {
+	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes && hawtio.Status.Phase == hawtiov2.HawtioPhaseInitialized {
 		// With checks above, route should not be null
 
 		consoleLink := &consolev1.ConsoleLink{}
@@ -483,9 +483,9 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Update status
-	if hawtio.Status.Phase != hawtiov1.HawtioPhaseDeployed {
+	if hawtio.Status.Phase != hawtiov2.HawtioPhaseDeployed {
 		previous := hawtio.DeepCopy()
-		hawtio.Status.Phase = hawtiov1.HawtioPhaseDeployed
+		hawtio.Status.Phase = hawtiov2.HawtioPhaseDeployed
 		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
@@ -684,15 +684,15 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov1.Hawtio) (bool, error) {
-	configMap, err := resources.NewConfigMap(hawtio)
+func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov2.Hawtio) (bool, error) {
+	configMap, err := resources.NewConfigMap(hawtio, r.apiSpec)
 	if err != nil {
 		return false, err
 	}
 	return r.reconcileResources(hawtio, []client.Object{configMap}, []client.ObjectList{&corev1.ConfigMapList{}})
 }
 
-func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymentConfig DeploymentConfiguration) (bool, error) {
+func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (bool, error) {
 	clientCertSecretVersion := ""
 	if deploymentConfig.clientCertSecret != nil {
 		clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
@@ -701,8 +701,10 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymen
 	var deployedResources []client.Object
 	var resourceListTypes []client.ObjectList
 
-	deployment, err := resources.NewDeployment(hawtio, r.apiSpec, deploymentConfig.openShiftConsoleURL,
-		deploymentConfig.configMap.GetResourceVersion(), clientCertSecretVersion, r.BuildVariables)
+	deployment, err := resources.NewDeployment(
+		hawtio, r.apiSpec, deploymentConfig.openShiftConsoleURL,
+		deploymentConfig.configMap.GetResourceVersion(), clientCertSecretVersion,
+		r.BuildVariables)
 	if err != nil {
 		return false, err
 	}
@@ -710,7 +712,7 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymen
 	deployedResources = append(deployedResources, deployment)
 	resourceListTypes = append(resourceListTypes, &appsv1.DeploymentList{})
 
-	service := resources.NewService(hawtio)
+	service := resources.NewService(hawtio, r.apiSpec)
 	deployedResources = append(deployedResources, service)
 	resourceListTypes = append(resourceListTypes, &corev1.ServiceList{})
 
@@ -719,13 +721,13 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymen
 		deployedResources = append(deployedResources, route)
 		resourceListTypes = append(resourceListTypes, &routev1.RouteList{})
 	} else {
-		ingress := kresources.NewIngress(hawtio, deploymentConfig.servingCertSecret)
+		ingress := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret)
 		deployedResources = append(deployedResources, ingress)
 		resourceListTypes = append(resourceListTypes, &networkingv1.IngressList{})
 	}
 
 	var serviceAccount *corev1.ServiceAccount
-	if hawtio.Spec.Type == hawtiov1.NamespaceHawtioDeploymentType {
+	if hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType {
 		// Add service account as OAuth client
 		serviceAccount, err = resources.NewServiceAccountAsOauthClient(hawtio.Name, hawtio.Spec.ExternalRoutes)
 		if err != nil {
@@ -738,7 +740,7 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov1.Hawtio, deploymen
 	return r.reconcileResources(hawtio, deployedResources, resourceListTypes)
 }
 
-func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov1.Hawtio,
+func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov2.Hawtio,
 	requestedResources []client.Object, listObjects []client.ObjectList) (bool, error) {
 	reqLogger := log.WithName(hawtio.Name)
 
@@ -808,7 +810,7 @@ func getComparator() compare.MapComparator {
 	return compare.MapComparator{Comparator: resourceComparator}
 }
 
-func getDeployedResources(hawtio *hawtiov1.Hawtio, client client.Client, listObjects []client.ObjectList) (map[reflect.Type][]client.Object, error) {
+func getDeployedResources(hawtio *hawtiov2.Hawtio, client client.Client, listObjects []client.ObjectList) (map[reflect.Type][]client.Object, error) {
 	reader := read.New(client).WithNamespace(hawtio.Namespace).WithOwnerObject(hawtio)
 	resourceMap, err := reader.ListAll(listObjects...)
 	if err != nil {
@@ -819,12 +821,12 @@ func getDeployedResources(hawtio *hawtiov1.Hawtio, client client.Client, listObj
 	return resourceMap, nil
 }
 
-func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov1.Hawtio) error {
+func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio) error {
 	if controllerutil.ContainsFinalizer(hawtio, "foregroundDeletion") {
 		return nil
 	}
 
-	if hawtio.Spec.Type == hawtiov1.ClusterHawtioDeploymentType {
+	if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
 		// Remove URI from OAuth client
 		oc := &oauthv1.OAuthClient{}
 		err := r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)

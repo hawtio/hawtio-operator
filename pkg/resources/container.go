@@ -8,31 +8,50 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
-const containerPortName = "https"
-const containerGatewayPortName = "express"
+const (
+	containerPortName        = "nginx"
+	containerGatewayPortName = "express"
+)
 
-func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageVersion string, imageRepository string) corev1.Container {
+type Connect struct {
+	Port     int32
+	Protocol corev1.URIScheme
+}
+
+var PlainConnect = Connect{
+	Port:     8080,
+	Protocol: "HTTP",
+}
+
+var SSLConnect = Connect{
+	Port:     8443,
+	Protocol: "HTTPS",
+}
+
+func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, imageVersion string, imageRepository string) corev1.Container {
 	/*
 	 * - name: hawtio-online-container
 	 *   image: quay.io/hawtio/online
 	 *   imagePullPolicy: Always
 	 *   ports:
-	 *   - name: https
+	 *   - name: nginx
 	 *     containerPort: 8443
 	 *   livenessProbe:
 	 *     httpGet:
 	 *       path: /online
-	 *       port: https
+	 *       port: nginx
 	 *       scheme: HTTPS
 	 *     periodSeconds: 10
 	 *     timeoutSeconds: 1
 	 *   readinessProbe:
 	 *     httpGet:
 	 *       path: /online
-	 *       port: https
+	 *       port: nginx
 	 *       scheme: HTTPS
 	 *     initialDelaySeconds: 5
 	 *     periodSeconds: 5
@@ -48,6 +67,13 @@ func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageV
 	 *     - name: hawtio-online-tls-serving
 	 *       mountPath: /etc/tls/private/serving
 	 */
+
+	envVars := newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL)
+	connect := PlainConnect
+	if util.IsSSL(hawtio, apiSpec) {
+		connect = SSLConnect
+	}
+
 	container := corev1.Container{
 		Name:            hawtio.Name + "-container",
 		Image:           getHawtioImageFor(imageVersion, imageRepository),
@@ -61,7 +87,7 @@ func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageV
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerPortName),
 					Path:   "/online",
-					Scheme: "HTTPS",
+					Scheme: connect.Protocol,
 				},
 			},
 		},
@@ -72,14 +98,14 @@ func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageV
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerPortName),
 					Path:   "/online",
-					Scheme: "HTTPS",
+					Scheme: connect.Protocol,
 				},
 			},
 		},
 		Ports: []corev1.ContainerPort{
 			{
 				Name:          containerPortName,
-				ContainerPort: 8443,
+				ContainerPort: connect.Port,
 				Protocol:      "TCP",
 			},
 		},
@@ -89,7 +115,7 @@ func newHawtioContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageV
 	return container
 }
 
-func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, imageVersion string, imageGatewayRepository string) corev1.Container {
+func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, imageVersion string, imageGatewayRepository string) corev1.Container {
 	/*
 	 * - name: hawtio-online-gateway-container
 	 *   image: quay.io/hawtio/online-gateway
@@ -112,6 +138,12 @@ func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, image
 	 *      periodSeconds: 30
 	 *      timeoutSeconds: 1
 	 */
+	connect := PlainConnect
+	if util.IsSSL(hawtio, apiSpec) {
+		connect = SSLConnect
+	}
+	envVars := newGatewayEnvVars(hawtio, apiSpec)
+
 	container := corev1.Container{
 		Name:            hawtio.Name + "-gateway-container",
 		Image:           getGatewayImageFor(imageVersion, imageGatewayRepository),
@@ -129,7 +161,7 @@ func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, image
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerGatewayPortName),
 					Path:   "/status",
-					Scheme: "HTTPS",
+					Scheme: connect.Protocol,
 				},
 			},
 			PeriodSeconds:  10,
@@ -140,7 +172,7 @@ func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, image
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerGatewayPortName),
 					Path:   "/status",
-					Scheme: "HTTPS",
+					Scheme: connect.Protocol,
 				},
 			},
 			InitialDelaySeconds: 5,
@@ -151,6 +183,37 @@ func newGatewayContainer(hawtio *hawtiov1.Hawtio, envVars []corev1.EnvVar, image
 	}
 
 	return container
+}
+
+func newHawtioEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
+	isSSL := util.IsSSL(hawtio, apiSpec)
+
+	envVarsForHawtio := envVarsForHawtio(hawtio.Spec.Type, hawtio.Name, apiSpec.IsOpenShift4, isSSL)
+	envVars = append(envVars, envVarsForHawtio...)
+
+	if apiSpec.IsOpenShift4 {
+		envVarsForOpenShift4 := envVarsForHawtioOCP4(apiSpec.Version, openShiftConsoleURL)
+		envVars = append(envVars, envVarsForOpenShift4...)
+	}
+
+	envVarsForNginx := envVarsForNginx(hawtio.Spec.Nginx)
+	envVars = append(envVars, envVarsForNginx...)
+
+	return envVars
+}
+
+func newGatewayEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
+	isSSL := util.IsSSL(hawtio, apiSpec)
+
+	envVarsForGateway := envVarsForGateway(apiSpec.IsOpenShift4, isSSL)
+	envVars = append(envVars, envVarsForGateway...)
+
+	envVarsForRBAC := envVarsForRBAC(hawtio.Spec.RBAC)
+	envVars = append(envVars, envVarsForRBAC...)
+
+	return envVars
 }
 
 func getHawtioImageFor(tag string, imageRepository string) string {

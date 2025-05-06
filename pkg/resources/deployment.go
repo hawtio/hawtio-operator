@@ -13,7 +13,7 @@ import (
 	labelUtils "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/pointer"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
@@ -33,7 +33,7 @@ const (
 	serverRootDirectory                       = "/usr/share/nginx/html"
 )
 
-func NewDeployment(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
+func NewDeployment(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (*appsv1.Deployment, error) {
 	podTemplateSpec, err := newPodTemplateSpec(hawtio, apiSpec, openShiftConsoleURL, configMapVersion, clientCertSecretVersion, buildVariables)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func NewDeployment(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec,
 	return newDeployment(hawtio, hawtio.Spec.Replicas, podTemplateSpec), nil
 }
 
-func newDeployment(hawtio *hawtiov1.Hawtio, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
+func newDeployment(hawtio *hawtiov2.Hawtio, replicas *int32, pts corev1.PodTemplateSpec) *appsv1.Deployment {
 	annotations := map[string]string{}
 	PropagateAnnotations(hawtio, annotations)
 
@@ -81,11 +81,11 @@ func newDeployment(hawtio *hawtiov1.Hawtio, replicas *int32, pts corev1.PodTempl
  *   the Hawtio-Online web server, inc. jolokia connection API and cluster URI checking
  *
  */
-func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
+func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables) (corev1.PodTemplateSpec, error) {
 	hawtioVersion := getOnlineVersion(buildVariables)
-	hawtioContainer := newHawtioContainer(hawtio, newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL), hawtioVersion, buildVariables.ImageRepository)
+	hawtioContainer := newHawtioContainer(hawtio, apiSpec, openShiftConsoleURL, hawtioVersion, buildVariables.ImageRepository)
 	gatewayVersion := getGatewayVersion(buildVariables)
-	gatewayContainer := newGatewayContainer(hawtio, newGatewayEnvVars(hawtio, apiSpec), gatewayVersion, buildVariables.GatewayImageRepository)
+	gatewayContainer := newGatewayContainer(hawtio, apiSpec, gatewayVersion, buildVariables.GatewayImageRepository)
 
 	annotations := map[string]string{
 		configVersionAnnotation: configMapVersion,
@@ -95,26 +95,42 @@ func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServer
 	}
 	PropagateAnnotations(hawtio, annotations)
 
-	volumeMounts, err := newVolumeMounts(apiSpec.IsOpenShift4, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables)
+	volumeMounts, err := newVolumeMounts(hawtio, apiSpec, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables)
 	if err != nil {
 		return corev1.PodTemplateSpec{}, err
 	}
 	if len(volumeMounts) > 0 {
 		/* Distribute the volume mounts between the containers */
-		hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volumeMounts[onlineConfigMapVolumeName])
-		hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volumeMounts[serviceSigningSecretVolumeName])
+		volume, ok := volumeMounts[onlineConfigMapVolumeName]
+		if ok {
+			hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volume)
+		}
+
+		volume, ok = volumeMounts[serviceSigningSecretVolumeName]
+		if ok {
+			hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volume)
+		}
 
 		if apiSpec.IsOpenShift4 {
-			hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volumeMounts[clientCertificateSecretVolumeName])
+			volume, ok := volumeMounts[clientCertificateSecretVolumeName]
+			if ok {
+				hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volume)
+			}
 		}
 
 		if hawtio.Spec.RBAC.ConfigMap != "" {
-			gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volumeMounts[rbacConfigMapVolumeName])
+			volume, ok := volumeMounts[rbacConfigMapVolumeName]
+			if ok {
+				gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
+			}
 		}
 
-		gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volumeMounts[serviceSigningSecretVolumeName])
+		volume, ok = volumeMounts[serviceSigningSecretVolumeName]
+		if ok {
+			gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
+		}
 	}
-	volumes := newVolumes(hawtio, apiSpec.IsOpenShift4)
+	volumes := newVolumes(hawtio, apiSpec)
 
 	labels := LabelsForHawtio(hawtio.Name)
 	additionalLabels, err := labelUtils.ConvertSelectorToLabelsMap(buildVariables.AdditionalLabels)
@@ -145,18 +161,20 @@ func newPodTemplateSpec(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServer
 	return pod, err
 }
 
-func newVolumes(hawtio *hawtiov1.Hawtio, isOpenShift4 bool) []corev1.Volume {
+func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.Volume {
 	var volumes []corev1.Volume
 
-	volume := newSecretVolume(hawtio.Name+"-tls-serving", serviceSigningSecretVolumeName)
-	volumes = append(volumes, volume)
-
-	if isOpenShift4 {
-		volume = newSecretVolume(hawtio.Name+"-tls-proxying", clientCertificateSecretVolumeName)
+	if util.IsSSL(hawtio, apiSpec) {
+		volume := newSecretVolume(hawtio.Name+"-tls-serving", serviceSigningSecretVolumeName)
 		volumes = append(volumes, volume)
 	}
 
-	volume = newConfigMapVolume(hawtio.Name, onlineConfigMapVolumeName)
+	if apiSpec.IsOpenShift4 {
+		volume := newSecretVolume(hawtio.Name+"-tls-proxying", clientCertificateSecretVolumeName)
+		volumes = append(volumes, volume)
+	}
+
+	volume := newConfigMapVolume(hawtio.Name, onlineConfigMapVolumeName)
 	volumes = append(volumes, volume)
 
 	if rbacConfigMapName := hawtio.Spec.RBAC.ConfigMap; rbacConfigMapName != "" {
@@ -167,36 +185,7 @@ func newVolumes(hawtio *hawtiov1.Hawtio, isOpenShift4 bool) []corev1.Volume {
 	return volumes
 }
 
-func newHawtioEnvVars(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string) []corev1.EnvVar {
-	var envVars []corev1.EnvVar
-
-	envVarsForHawtio := envVarsForHawtio(hawtio.Spec.Type, hawtio.Name, apiSpec.IsOpenShift4)
-	envVars = append(envVars, envVarsForHawtio...)
-
-	if apiSpec.IsOpenShift4 {
-		envVarsForOpenShift4 := envVarsForHawtioOCP4(apiSpec.Version, openShiftConsoleURL)
-		envVars = append(envVars, envVarsForOpenShift4...)
-	}
-
-	envVarsForNginx := envVarsForNginx(hawtio.Spec.Nginx)
-	envVars = append(envVars, envVarsForNginx...)
-
-	return envVars
-}
-
-func newGatewayEnvVars(hawtio *hawtiov1.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.EnvVar {
-	var envVars []corev1.EnvVar
-
-	envVarsForGateway := envVarsForGateway(apiSpec.IsOpenShift4)
-	envVars = append(envVars, envVarsForGateway...)
-
-	envVarsForRBAC := envVarsForRBAC(hawtio.Spec.RBAC)
-	envVars = append(envVars, envVarsForRBAC...)
-
-	return envVars
-}
-
-func newVolumeMounts(isOpenShift4 bool, hawtioVersion string, rbacConfigMapName string, buildVariables util.BuildVariables) (map[string]corev1.VolumeMount, error) {
+func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, hawtioVersion string, rbacConfigMapName string, buildVariables util.BuildVariables) (map[string]corev1.VolumeMount, error) {
 	var volumeMounts map[string]corev1.VolumeMount
 	var volumeMountPath string
 
@@ -216,14 +205,16 @@ func newVolumeMounts(isOpenShift4 bool, hawtioVersion string, rbacConfigMapName 
 	/*
 	 * The serving-certificate volume
 	 */
-	volumeMountPath, err := getServingCertificateMountPath(hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
-	if err != nil {
-		return nil, err
+	if util.IsSSL(hawtio, apiSpec) {
+		volumeMountPath, err := getServingCertificateMountPath(hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
+		if err != nil {
+			return nil, err
+		}
+		volumeMount = newVolumeMount(serviceSigningSecretVolumeName, volumeMountPath, "")
+		volumeMounts[serviceSigningSecretVolumeName] = volumeMount
 	}
-	volumeMount = newVolumeMount(serviceSigningSecretVolumeName, volumeMountPath, "")
-	volumeMounts[serviceSigningSecretVolumeName] = volumeMount
 
-	if isOpenShift4 {
+	if apiSpec.IsOpenShift4 {
 		/*
 		 * The proxying volume
 		 */

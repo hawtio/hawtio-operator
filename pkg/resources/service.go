@@ -5,10 +5,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	hawtiov1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v1"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
-func NewService(hawtio *hawtiov1.Hawtio) *corev1.Service {
+const (
+	PlainServicePort = 80
+	SSLServicePort   = 443
+)
+
+func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) *corev1.Service {
 	name := hawtio.Name
 
 	annotations := map[string]string{
@@ -21,6 +28,11 @@ func NewService(hawtio *hawtiov1.Hawtio) *corev1.Service {
 	}
 	PropagateLabels(hawtio, labels)
 
+	servicePort := PlainServicePort
+	if util.IsSSL(hawtio, apiSpec) {
+		servicePort = SSLServicePort
+	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: annotations,
@@ -32,7 +44,7 @@ func NewService(hawtio *hawtiov1.Hawtio) *corev1.Service {
 				{
 					Name:       name,
 					Protocol:   "TCP",
-					Port:       443,
+					Port:       int32(servicePort),
 					TargetPort: intstr.FromString(containerPortName),
 				},
 			},

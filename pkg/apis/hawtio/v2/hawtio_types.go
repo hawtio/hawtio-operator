@@ -1,4 +1,4 @@
-package v1
+package v2
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +27,7 @@ const (
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=hawtios,scope=Namespaced,shortName=hwt;hio;hawt,categories=hawtio
-// +kubebuilder:deprecatedversion:warning="v1.Hawtio is deprecated, please, use v2.Hawtio instead"
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`,description="Creation phase"
@@ -104,8 +104,15 @@ type HawtioRoute struct {
 	CaCert corev1.SecretKeySelector `json:"caCert,omitempty"`
 }
 
-// The authentication configuration
+// HawtioAuth The authentication configuration
 type HawtioAuth struct {
+	// Use SSL for internal communication
+	// +kubebuilder:default=true
+	// +kubebuilder:validation:Required
+	// +validation:Required
+	// +required
+	// +default=true
+	InternalSSL *bool `json:"internalSSL,omitempty"`
 	// The generated client certificate CN
 	ClientCertCommonName string `json:"clientCertCommonName,omitempty"`
 	// The generated client certificate expiration date
@@ -252,6 +259,17 @@ type HawtioConsoleLink struct {
 	// The image should be square and will be shown at 24x24 pixels.
 	// +optional
 	ImageRelativePath string `json:"imageRelativePath,omitempty"`
+}
+
+// NewHawtio initialise the defaults of a new Hawtio
+func NewHawtio() *Hawtio {
+	hawtio := &Hawtio{}
+
+	// Set SSL to true by default
+	b := true
+	hawtio.Spec.Auth.InternalSSL = &b
+
+	return hawtio
 }
 
 func init() {
