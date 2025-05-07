@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/go-logr/logr"
+
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/util"
@@ -33,7 +35,7 @@ var SSLConnect = Connect{
 	Protocol: "HTTPS",
 }
 
-func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, imageVersion string, imageRepository string) corev1.Container {
+func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, imageVersion string, imageRepository string, log logr.Logger) corev1.Container {
 	/*
 	 * - name: hawtio-online-container
 	 *   image: quay.io/hawtio/online
@@ -69,10 +71,14 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	 */
 
 	envVars := newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL)
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container Env Vars %s", util.JSONToString(envVars)))
+
 	connect := PlainConnect
 	if util.IsSSL(hawtio, apiSpec) {
 		connect = SSLConnect
 	}
+
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container protocols %s", util.JSONToString(connect)))
 
 	container := corev1.Container{
 		Name:            hawtio.Name + "-container",
@@ -115,7 +121,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	return container
 }
 
-func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, imageVersion string, imageGatewayRepository string) corev1.Container {
+func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, imageVersion string, imageGatewayRepository string, log logr.Logger) corev1.Container {
 	/*
 	 * - name: hawtio-online-gateway-container
 	 *   image: quay.io/hawtio/online-gateway
@@ -138,11 +144,14 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 	 *      periodSeconds: 30
 	 *      timeoutSeconds: 1
 	 */
+	envVars := newGatewayEnvVars(hawtio, apiSpec)
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container Env Vars %s", util.JSONToString(envVars)))
+
 	connect := PlainConnect
 	if util.IsSSL(hawtio, apiSpec) {
 		connect = SSLConnect
 	}
-	envVars := newGatewayEnvVars(hawtio, apiSpec)
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container protocols %s", util.JSONToString(connect)))
 
 	container := corev1.Container{
 		Name:            hawtio.Name + "-gateway-container",

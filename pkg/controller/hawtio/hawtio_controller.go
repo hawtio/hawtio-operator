@@ -232,6 +232,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	reqLogger.Info("Reconciling Hawtio")
 
 	// Fetch the Hawtio instance
+	reqLogger.V(util.DebugLogLevel).Info("Fetching the Hawtio custom resource")
+
 	hawtio := hawtiov2.NewHawtio()
 	err := r.client.Get(ctx, request.NamespacedName, hawtio)
 	if err != nil {
@@ -247,7 +249,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	deploymentConfig := DeploymentConfiguration{}
 
-	reqLogger.Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
+	reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
 
 	// Delete phase
 
@@ -260,6 +262,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
+	reqLogger.V(util.DebugLogLevel).Info("Adding a finalizer")
 	if !controllerutil.ContainsFinalizer(hawtio, hawtioFinalizer) {
 		controllerutil.AddFinalizer(hawtio, hawtioFinalizer)
 		err = r.client.Update(ctx, hawtio)
@@ -271,6 +274,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Init phase
 
 	if len(hawtio.Spec.Type) == 0 {
+		reqLogger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type not specified. Defaulting to Cluster")
 		hawtio.Spec.Type = hawtiov2.ClusterHawtioDeploymentType
 		err = r.client.Update(ctx, hawtio)
 		if err != nil {
@@ -284,6 +288,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	isNamespaceDeployment := hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType
 
 	if !isNamespaceDeployment && !isClusterDeployment {
+		reqLogger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type neither Cluster or Namespace")
+
 		err := fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
 		if hawtio.Status.Phase != hawtiov2.HawtioPhaseFailed {
 			previous := hawtio.DeepCopy()
@@ -297,6 +303,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov2.HawtioPhaseFailed {
+		reqLogger.V(util.DebugLogLevel).Info("Hawtio.Status.Phase is zero or failed")
+
 		previous := hawtio.DeepCopy()
 		hawtio.Status.Phase = hawtiov2.HawtioPhaseInitialized
 		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
@@ -307,6 +315,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if r.apiSpec.IsOpenShift4 {
+		reqLogger.V(util.DebugLogLevel).Info("Setting console URL on deployment")
+
 		// Retrieve OpenShift Web console public URL
 		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
 		if err != nil {
@@ -320,6 +330,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if r.apiSpec.IsOpenShift4 {
+		reqLogger.V(util.DebugLogLevel).Info("Creating OpenShift proxying certificate")
+
 		// Create -proxying certificate
 		// -serving certificate is automatically created
 		clientCertSecret, err := osCreateClientCertificate(ctx, r, hawtio, request.Name, request.Namespace)
@@ -329,6 +341,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		}
 		deploymentConfig.clientCertSecret = clientCertSecret
 	} else {
+		reqLogger.V(util.DebugLogLevel).Info("Creating Kubernetes serving certificate")
+
 		// Create -serving certificate
 		servingCertSecret, err := kubeCreateServingCertificate(ctx, r, hawtio, request.Name, request.Namespace)
 		if err != nil {
@@ -342,6 +356,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Custom Route certificates defined in Hawtio CR
 	//
 	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
+		reqLogger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route certificate secret to deployment")
 		deploymentConfig.tlsRouteSecret = &corev1.Secret{}
 		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, deploymentConfig.tlsRouteSecret)
 		if err != nil {
@@ -350,6 +365,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
+		reqLogger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA secret to deploment")
 		deploymentConfig.caCertRouteSecret = &corev1.Secret{}
 		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: caCertSecretName}, deploymentConfig.caCertRouteSecret)
 		if err != nil {
@@ -358,6 +374,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if cm := hawtio.Spec.RBAC.ConfigMap; cm != "" {
+		reqLogger.V(util.DebugLogLevel).Info("Checking Hawtio.Spec.RBAC config map is valid")
+
 		// Check that the ConfigMap exists
 		var rbacConfigMap corev1.ConfigMap
 		err := r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: cm}, &rbacConfigMap)
@@ -384,6 +402,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
+	reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Assigning config map %s to deployment", request.NamespacedName.Name))
 	deploymentConfig.configMap = &corev1.ConfigMap{}
 	err = r.client.Get(ctx, request.NamespacedName, deploymentConfig.configMap)
 	if err != nil {
@@ -400,6 +419,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	var ingress *networkingv1.Ingress
 	var route *routev1.Route
 	if r.apiSpec.Routes {
+		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Checking Route %s", request.NamespacedName.Name))
+
 		route = &routev1.Route{}
 		err = r.client.Get(ctx, request.NamespacedName, route)
 		if err != nil && kerrors.IsNotFound(err) {
@@ -415,6 +436,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			return reconcile.Result{}, err
 		}
 	} else {
+		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Checking Ingress %s", request.NamespacedName.Name))
+
 		ingress = &networkingv1.Ingress{}
 		err = r.client.Get(ctx, request.NamespacedName, ingress)
 		if err != nil && kerrors.IsNotFound(err) {
@@ -432,6 +455,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	if r.apiSpec.IsOpenShift4 && isClusterDeployment {
+		reqLogger.V(util.DebugLogLevel).Info("Creating OAuth client for OpenShift Cluster deployment")
+
 		// Add OAuth client
 		oauthClient := resources.NewOAuthClient(resources.OAuthClientName)
 		err = r.client.Create(ctx, oauthClient)
@@ -441,6 +466,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Read Hawtio configuration
+	reqLogger.V(util.DebugLogLevel).Info("Reading Hawtio configuration from deployment config map")
 	hawtconfig, err := resources.GetHawtioConfig(deploymentConfig.configMap)
 	if err != nil {
 		reqLogger.Error(err, "Failed to get hawtconfig")
@@ -450,8 +476,9 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Add link to OpenShift console
 	consoleLinkName := request.Name + "-" + request.Namespace
 	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes && hawtio.Status.Phase == hawtiov2.HawtioPhaseInitialized {
-		// With checks above, route should not be null
+		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding console link %s", consoleLinkName))
 
+		// With checks above, route should not be null
 		consoleLink := &consolev1.ConsoleLink{}
 		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 		if err != nil {
@@ -469,8 +496,10 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 		consoleLink = &consolev1.ConsoleLink{}
 		if isClusterDeployment {
+			reqLogger.V(util.DebugLogLevel).Info("Adding console link as Application Menu Link")
 			consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
 		} else if r.apiSpec.IsOpenShift43Plus {
+			reqLogger.V(util.DebugLogLevel).Info("Adding console link as Namespace Dashboard Link")
 			consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
 		}
 		if consoleLink.Spec.Location != "" {
@@ -484,6 +513,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Update status
 	if hawtio.Status.Phase != hawtiov2.HawtioPhaseDeployed {
+		reqLogger.V(util.DebugLogLevel).Info("Moving Hawtio.Status.Phase to deployed")
+
 		previous := hawtio.DeepCopy()
 		hawtio.Status.Phase = hawtiov2.HawtioPhaseDeployed
 		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
@@ -494,6 +525,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Update phase
+	reqLogger.V(util.DebugLogLevel).Info("Reconciling in Update phase")
 
 	hawtioCopy := hawtio.DeepCopy()
 
@@ -519,6 +551,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Reconcile Hawtio status image field from deployment container image
 	hawtioCopy.Status.Image = deployment.Spec.Template.Spec.Containers[0].Image
 
+	reqLogger.V(util.DebugLogLevel).Info("Adding Route/Ingress URL to Hawtio.Status.URL")
 	var ingressRouteURL string
 	if r.apiSpec.Routes {
 		// With checks above, route should not be null
@@ -548,6 +581,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Reconcile console link in OpenShift console
 	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes {
 		// With checks above, route should not be null
+		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Reconciling console link %s", consoleLinkName))
 
 		consoleLink := &consolev1.ConsoleLink{}
 		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
@@ -573,8 +607,10 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		} else {
 			consoleLinkCopy := consoleLink.DeepCopy()
 			if isClusterDeployment {
+				reqLogger.V(util.DebugLogLevel).Info("Updating console link as Application Menu Link")
 				openshift.UpdateApplicationMenuLink(consoleLinkCopy, route, hawtconfig)
 			} else if r.apiSpec.IsOpenShift43Plus {
+				reqLogger.V(util.DebugLogLevel).Info("Updating console link as Namespace Dashboard Link")
 				openshift.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
 			}
 			err = r.client.Patch(ctx, consoleLinkCopy, client.MergeFrom(consoleLink))
@@ -589,6 +625,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	cronJob := &batchv1.CronJob{}
 	cronJobName := request.Name + "-certificate-expiry-check"
 
+	reqLogger.V(util.DebugLogLevel).Info("Reconciling cronjob for certificate expiry checking")
 	if cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob); cronJobErr == nil {
 		update := false
 		if hawtio.Spec.Auth.ClientCertCheckSchedule != "" {
@@ -624,6 +661,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	 * permission to list cluster wide oauth clients
 	 */
 	if r.apiSpec.IsOpenShift4 {
+		reqLogger.V(util.DebugLogLevel).Info("Reconciling OAuth client on openshift cluster")
 		oc, err := r.oauthClient.OauthV1().OAuthClients().Get(ctx, resources.OAuthClientName, metav1.GetOptions{})
 		if err != nil {
 			if kerrors.IsNotFound(err) {
@@ -676,6 +714,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		}
 	}
 
+	reqLogger.V(util.DebugLogLevel).Info("Updating Hawtio custom resource")
 	err = r.client.Status().Patch(ctx, hawtioCopy, client.MergeFrom(hawtio))
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to patch status: %v", err)
@@ -685,7 +724,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 }
 
 func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov2.Hawtio) (bool, error) {
-	configMap, err := resources.NewConfigMap(hawtio, r.apiSpec)
+	reqLogger := log.WithName(fmt.Sprintf("%s-reconcileConfigMap", hawtio.Name))
+	configMap, err := resources.NewConfigMap(hawtio, r.apiSpec, reqLogger)
 	if err != nil {
 		return false, err
 	}
@@ -693,6 +733,7 @@ func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov2.Hawtio) (bool, err
 }
 
 func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (bool, error) {
+	reqLogger := log.WithName(fmt.Sprintf("%s-reconcileDeployment", hawtio.Name))
 	clientCertSecretVersion := ""
 	if deploymentConfig.clientCertSecret != nil {
 		clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
@@ -704,7 +745,7 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov2.Hawtio, deploymen
 	deployment, err := resources.NewDeployment(
 		hawtio, r.apiSpec, deploymentConfig.openShiftConsoleURL,
 		deploymentConfig.configMap.GetResourceVersion(), clientCertSecretVersion,
-		r.BuildVariables)
+		r.BuildVariables, reqLogger)
 	if err != nil {
 		return false, err
 	}
@@ -712,22 +753,24 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov2.Hawtio, deploymen
 	deployedResources = append(deployedResources, deployment)
 	resourceListTypes = append(resourceListTypes, &appsv1.DeploymentList{})
 
-	service := resources.NewService(hawtio, r.apiSpec)
+	service := resources.NewService(hawtio, r.apiSpec, reqLogger)
 	deployedResources = append(deployedResources, service)
 	resourceListTypes = append(resourceListTypes, &corev1.ServiceList{})
 
 	if r.apiSpec.Routes {
-		route := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret)
+		route := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
 		deployedResources = append(deployedResources, route)
 		resourceListTypes = append(resourceListTypes, &routev1.RouteList{})
 	} else {
-		ingress := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret)
+		ingress := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
 		deployedResources = append(deployedResources, ingress)
 		resourceListTypes = append(resourceListTypes, &networkingv1.IngressList{})
 	}
 
 	var serviceAccount *corev1.ServiceAccount
 	if hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType {
+		reqLogger.V(util.DebugLogLevel).Info("Adding OAuth client as service account for Namespace mode")
+
 		// Add service account as OAuth client
 		serviceAccount, err = resources.NewServiceAccountAsOauthClient(hawtio.Name, hawtio.Spec.ExternalRoutes)
 		if err != nil {
@@ -742,7 +785,7 @@ func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov2.Hawtio, deploymen
 
 func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov2.Hawtio,
 	requestedResources []client.Object, listObjects []client.ObjectList) (bool, error) {
-	reqLogger := log.WithName(hawtio.Name)
+	reqLogger := log.WithName(fmt.Sprintf("%s-reconcileResources", hawtio.Name))
 
 	for _, res := range requestedResources {
 		if res == nil || reflect.ValueOf(res).IsNil() {
@@ -763,6 +806,7 @@ func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov2.Hawtio,
 	comparator := getComparator()
 	deltas := comparator.Compare(deployed, requested)
 	for resourceType, delta := range deltas {
+		reqLogger.V(util.DebugLogLevel).Info("instances of ", resourceType, " has changes ", delta.HasChanges())
 		if !delta.HasChanges() {
 			continue
 		}

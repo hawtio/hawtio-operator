@@ -1,5 +1,10 @@
 package util
 
+// DebugLogLevel is an alias to use in log.V(...)
+// See Increasing Verbosity in
+// https://pkg.go.dev/github.com/go-logr/zapr#section-readme
+const DebugLogLevel = 1
+
 // Go build-time variables
 type BuildVariables struct {
 	// The hawtio-online operand image repository
