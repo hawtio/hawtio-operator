@@ -806,7 +806,7 @@ func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov2.Hawtio,
 	comparator := getComparator()
 	deltas := comparator.Compare(deployed, requested)
 	for resourceType, delta := range deltas {
-		reqLogger.V(util.DebugLogLevel).Info("instances of ", resourceType, " has changes ", delta.HasChanges())
+		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("instances of %s has changes %t", resourceType, delta.HasChanges()))
 		if !delta.HasChanges() {
 			continue
 		}
@@ -844,6 +844,34 @@ func getComparator() compare.MapComparator {
 		pairs = append(pairs, [2]interface{}{configMap1.Annotations, configMap2.Annotations})
 		pairs = append(pairs, [2]interface{}{configMap1.Data, configMap2.Data})
 		pairs = append(pairs, [2]interface{}{configMap1.BinaryData, configMap2.BinaryData})
+		equal := compare.EqualPairs(pairs)
+		if !equal {
+			log.Info("Resources are not equal", "deployed", deployed, "requested", requested)
+		}
+		return equal
+	})
+
+	// Not included by default in comparator
+	ingressType := reflect.TypeOf(networkingv1.Ingress{})
+	resourceComparator.SetComparator(ingressType, func(deployed client.Object, requested client.Object) bool {
+		ingress1 := deployed.(*networkingv1.Ingress)
+		ingress2 := requested.(*networkingv1.Ingress)
+
+		ingress1 = ingress1.DeepCopy()
+
+		//Removed generated fields from deployed version, that are not specified in requested item
+		emptyString := ""
+		if (ingress2.Spec.IngressClassName == &emptyString) {
+			ingress1.Spec.IngressClassName = &emptyString
+		}
+
+		var pairs [][2]interface{}
+		pairs = append(pairs, [2]interface{}{ingress1.Name, ingress2.Name})
+		pairs = append(pairs, [2]interface{}{ingress1.Namespace, ingress2.Namespace})
+		pairs = append(pairs, [2]interface{}{ingress1.Labels, ingress2.Labels})
+		pairs = append(pairs, [2]interface{}{ingress1.Annotations, ingress2.Annotations})
+		pairs = append(pairs, [2]interface{}{ingress1.Spec, ingress2.Spec})
+
 		equal := compare.EqualPairs(pairs)
 		if !equal {
 			log.Info("Resources are not equal", "deployed", deployed, "requested", requested)
