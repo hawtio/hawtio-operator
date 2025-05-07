@@ -3,10 +3,13 @@ package resources
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/go-logr/logr"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
@@ -35,7 +38,9 @@ func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov2.HawtioConfig, error
 	return config, nil
 }
 
-func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) (*corev1.ConfigMap, error) {
+func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, log logr.Logger) (*corev1.ConfigMap, error) {
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Reconciling config map %s", hawtio.Name))
+
 	config, err := configForHawtio(hawtio)
 	if err != nil {
 		return nil, err
@@ -44,6 +49,8 @@ func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) 
 	if !apiSpec.IsOpenShift4 {
 		config = strings.Replace(config, "OpenShift", "Kubernetes", -1)
 	}
+
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio config map: %s", config))
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

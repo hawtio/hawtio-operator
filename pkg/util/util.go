@@ -5,8 +5,12 @@ import (
 	"regexp"
 	"strings"
 
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
+
+var log = logf.Log.WithName("util")
 
 func jsonIfYaml(source []byte, filename string) ([]byte, error) {
 	if strings.HasSuffix(filename, ".yaml") || strings.HasSuffix(filename, ".yml") {

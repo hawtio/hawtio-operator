@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
-	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio"
+	"github.com/go-logr/zapr"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -15,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
@@ -23,8 +26,19 @@ import (
 
 	"github.com/hawtio/hawtio-operator/pkg/apis"
 	"github.com/hawtio/hawtio-operator/pkg/controller"
+	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
+
+// logLevelEnvVar is the constant for env variable OPERATOR_LOG_LEVEL
+// which specifies the level of the operator logging.
+// An empty value means the operator runs with a level of "Info".
+var logLevelEnvVar = "OPERATOR_LOG_LEVEL"
+
+// WatchNamespaceEnvVar is the constant for env variable WATCH_NAMESPACE
+// which specifies the Namespace to watch.
+// An empty value means the operator is running with cluster scope.
+var watchNamespaceEnvVar = "WATCH_NAMESPACE"
 
 // Go build-time variables
 var (
@@ -44,6 +58,8 @@ var log = logf.Log.WithName("cmd")
 func printVersion() {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
+
+	log.V(util.DebugLogLevel).Info("Debug logging has been enabled")
 }
 
 func printBuildVars(bv util.BuildVariables) {
@@ -63,11 +79,21 @@ func main() {
 	certCheckCmd.StringVar(&secretName, "cert-secret-name", "hawtio-online-tls-proxying", "The certificate secret's name")
 	certCheckCmd.Int64Var(&expirationPeriod, "cert-expiration-period", 24, "The minimum amount of hours left for"+
 		" the certificate till expiration. Certificate secret will be deleted if it's valid for less time that defined period ")
-	// The logger instantiated here can be changed to any logger
-	// implementing the logr.Logger interface. This logger will
-	// be propagated through the whole operator, generating
-	// uniform and structured logs.
-	logf.SetLogger(zap.New(zap.UseDevMode(false)))
+
+	// Implement the logger backend supporting given log-level
+	zapConfig := zap.NewProductionConfig()
+	zapConfig.Level = zap.NewAtomicLevelAt(getLogLevel())
+
+	zapLog, err := zapConfig.Build()
+	if err != nil {
+		panic(err)
+	}
+	defer zapLog.Sync()
+
+	// Converts zap log backend to zapr log implementation so that
+	// it can be applied to controller-runtime/log
+	logger := zapr.NewLogger(zapLog)
+	logf.SetLogger(logger)
 
 	printVersion()
 
@@ -224,14 +250,25 @@ func checkCertExpiry(namespace string, secretName string, period float64, cfg *r
 
 // getWatchNamespace returns the Namespace the operator should be watching for changes
 func getWatchNamespace() (string, error) {
-	// WatchNamespaceEnvVar is the constant for env variable WATCH_NAMESPACE
-	// which specifies the Namespace to watch.
-	// An empty value means the operator is running with cluster scope.
-	var watchNamespaceEnvVar = "WATCH_NAMESPACE"
-
 	ns, found := os.LookupEnv(watchNamespaceEnvVar)
 	if !found {
 		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
 	}
 	return ns, nil
+}
+
+func getLogLevel() zapcore.Level {
+	lvlEnv, found := os.LookupEnv(logLevelEnvVar)
+	if found {
+		switch lvl := strings.ToLower(lvlEnv); lvl {
+		case "debug":
+			return zapcore.DebugLevel
+		case "info":
+		default:
+			return zapcore.InfoLevel
+		}
+	}
+
+	fmt.Println("Defaulting to log level of info")
+	return zap.InfoLevel
 }

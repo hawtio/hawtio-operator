@@ -1,6 +1,9 @@
 package resources
 
 import (
+	"fmt"
+
+	"github.com/go-logr/logr"
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
@@ -19,7 +22,9 @@ func LabelsForHawtio(name string) map[string]string {
 }
 
 // PropagateAnnotations propagate annotations from hawtio CR
-func PropagateAnnotations(hawtio *hawtiov2.Hawtio, annotations map[string]string) {
+func PropagateAnnotations(hawtio *hawtiov2.Hawtio, annotations map[string]string, log logr.Logger) {
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Annotations %s", util.JSONToString(annotations)))
+
 	for k, v := range hawtio.GetAnnotations() {
 		// Only propagate specified annotations
 		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Annotations, k) {
@@ -33,7 +38,9 @@ func PropagateAnnotations(hawtio *hawtiov2.Hawtio, annotations map[string]string
 }
 
 // PropagateLabels propagate labels from hawtio CR
-func PropagateLabels(hawtio *hawtiov2.Hawtio, labels map[string]string) {
+func PropagateLabels(hawtio *hawtiov2.Hawtio, labels map[string]string, log logr.Logger) {
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Labels %s", util.JSONToString(labels)))
+
 	for k, v := range hawtio.GetLabels() {
 		// Only propagate specified labels
 		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Labels, k) {

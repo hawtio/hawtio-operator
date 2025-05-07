@@ -1,6 +1,7 @@
 package openshift
 
 import (
+	"fmt"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -10,19 +11,24 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
+	"github.com/go-logr/logr"
+
 	"github.com/hawtio/hawtio-operator/pkg/resources"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
-func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSecret *v1.Secret) *routev1.Route {
+func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSecret *v1.Secret, log logr.Logger) *routev1.Route {
+	log.V(util.DebugLogLevel).Info("Reconciling route")
+
 	name := hawtio.Name
 
 	annotations := map[string]string{}
-	resources.PropagateAnnotations(hawtio, annotations)
+	resources.PropagateAnnotations(hawtio, annotations, log)
 
 	labels := map[string]string{
 		resources.LabelAppKey: "hawtio",
 	}
-	resources.PropagateLabels(hawtio, labels)
+	resources.PropagateLabels(hawtio, labels, log)
 
 	route := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
@@ -58,6 +64,7 @@ func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSec
 
 	route.Spec.TLS = tlsConfig
 
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New Route: %s", util.JSONToString(route)))
 	return route
 }
 

@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"fmt"
 	"strconv"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
@@ -8,13 +9,17 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/go-logr/logr"
+
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 // NewIngress create a new Ingress resource
-func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, servingSecret *corev1.Secret) *networkingv1.Ingress {
+func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, servingSecret *corev1.Secret, log logr.Logger) *networkingv1.Ingress {
+	log.V(util.DebugLogLevel).Info("Reconciling ingress")
+
 	isSSL := util.IsSSL(hawtio, apiSpec)
 	name := hawtio.Name
 	servicePort := resources.PlainServicePort
@@ -30,12 +35,12 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 	}
 	annotations["nginx.ingress.kubernetes.io/rewrite-target"] = "/$1"
 
-	resources.PropagateAnnotations(hawtio, annotations)
+	resources.PropagateAnnotations(hawtio, annotations, log)
 
 	labels := map[string]string{
 		resources.LabelAppKey: "hawtio",
 	}
-	resources.PropagateLabels(hawtio, labels)
+	resources.PropagateLabels(hawtio, labels, log)
 
 	ingressTLS := networkingv1.IngressTLS{}
 	if servingSecret != nil {
@@ -77,6 +82,7 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 		},
 	}
 
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New Ingress: %s", util.JSONToString(ingress)))
 	return ingress
 }
 

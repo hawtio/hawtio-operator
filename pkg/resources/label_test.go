@@ -7,10 +7,17 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
 	"github.com/stretchr/testify/assert"
 )
 
+var log = logf.Log.WithName("test-annotation-propagation")
+
 func TestPropagateAnnotations(t *testing.T) {
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+
 	hawtio := &hawtiov2.Hawtio{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
@@ -35,7 +42,7 @@ func TestPropagateAnnotations(t *testing.T) {
 	annotations := map[string]string{
 		"annotation1": "value0",
 	}
-	PropagateAnnotations(hawtio, annotations)
+	PropagateAnnotations(hawtio, annotations, log)
 	assert.Len(t, annotations, 5)
 	assert.Equal(t, "value0", annotations["annotation1"])
 	assert.Equal(t, "value2", annotations["annotation2"])
@@ -69,7 +76,7 @@ func TestPropagateLabels(t *testing.T) {
 	labels := map[string]string{
 		"label1": "value0",
 	}
-	PropagateLabels(hawtio, labels)
+	PropagateLabels(hawtio, labels, log)
 	assert.Len(t, labels, 5)
 	assert.Equal(t, "value0", labels["label1"])
 	assert.Equal(t, "value2", labels["label2"])
