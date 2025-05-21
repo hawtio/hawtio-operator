@@ -1,6 +1,6 @@
 module github.com/hawtio/hawtio-operator
 
-go 1.23.8
+go 1.23.6
 
 require sigs.k8s.io/controller-runtime v0.20.4
 
