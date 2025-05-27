@@ -57,6 +57,22 @@ func envVarForAuth(isOpenShift bool) corev1.EnvVar {
 }
 
 func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string, isOpenShift bool, isSSL bool) []corev1.EnvVar {
+	/*
+	 * oauthClientId used in 2 configurations:
+	 * 1. In namespace mode, service account with same name as Hawtio CR has annotations
+	 *    for correct redirect. Redirect URI is generated from HAWTIO_OAUTH_CLIENT_ID
+	 *    env var so need to specify CR name as that env var's value
+	 *
+	 * 2. In cluster mode, a separate oauthClient resource is created (see oauthclient.go).
+	 *    This resource is given a default name (see OAuthClientName constant).
+	 */
+
+	// HAWTIO_OAUTH_CLIENT_ID given CR name by default
+	oauthClientID := name
+	if deploymentType == hawtiov2.ClusterHawtioDeploymentType {
+		// Update HAWTIO_OAUTH_CLIENT_ID to known name for cluster-wide OAuthClient
+		oauthClientID = OAuthClientName
+	}
 
 	envVars := []corev1.EnvVar{
 		{
@@ -65,12 +81,11 @@ func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string,
 		},
 	}
 
-	if isOpenShift && deploymentType == hawtiov2.ClusterHawtioDeploymentType {
-		// Pin to a known name for cluster-wide OAuthClient
+	if isOpenShift {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name:  HawtioOAuthClientEnvVar,
-				Value: OAuthClientName,
+				Value: oauthClientID,
 			},
 		)
 	}
