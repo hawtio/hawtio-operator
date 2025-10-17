@@ -11,14 +11,11 @@ import (
 	"fmt"
 	"math/big"
 	rand2 "math/rand"
-	"strconv"
 	"time"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
 
 func generateSelfSignedCertSecret(name string, namespace string, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
 	return generateCertificateSecret(name, namespace, nil, commonName, expirationDate)
@@ -133,67 +130,5 @@ func ValidateCertificate(caSecret corev1.Secret, validAtLeastForHours float64) (
 		return true, nil
 	}
 	//if is valid
-	return false, nil
-}
-
-func createCertValidationCronJob(name, namespace, schedule, serviceAccountName string, container corev1.Container, period int) *batchv1.CronJob {
-	if period == 0 {
-		period = 24
-	}
-	cronjob := &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: batchv1.CronJobSpec{
-			Schedule:          schedule,
-			ConcurrencyPolicy: batchv1.ForbidConcurrent,
-			JobTemplate: batchv1.JobTemplateSpec{
-				Spec: batchv1.JobSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							ServiceAccountName: serviceAccountName,
-							RestartPolicy:      "Never",
-							Containers: []corev1.Container{
-								{
-									Name:  container.Name,
-									Image: container.Image,
-									Command: []string{
-										"hawtio-operator",
-									},
-									Args: []string{
-										"cert-expiry-check",
-										"--cert-namespace",
-										namespace,
-										"--cert-expiration-period",
-										strconv.Itoa(period),
-									},
-									ImagePullPolicy: "Always",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	return cronjob
-}
-
-func updateExpirationPeriod(cronJob *batchv1.CronJob, newPeriod int) (bool, error) {
-	arguments := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Args
-	for i, arg := range arguments {
-		if arg == "--cert-expiration-period" {
-			period, err := strconv.Atoi(arguments[i+1])
-			if err != nil {
-				return false, err
-			}
-			if period == newPeriod {
-				return false, nil
-			}
-			cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Args[i+1] = strconv.Itoa(newPeriod)
-			return true, nil
-		}
-	}
 	return false, nil
 }

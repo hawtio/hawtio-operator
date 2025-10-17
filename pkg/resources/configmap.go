@@ -38,6 +38,17 @@ func GetHawtioConfig(configMap *corev1.ConfigMap) (*hawtiov2.HawtioConfig, error
 	return config, nil
 }
 
+func NewDefaultConfigMap(hawtio *hawtiov2.Hawtio) *corev1.ConfigMap {
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtio.Name,
+			Namespace: hawtio.Namespace,
+		},
+	}
+
+	return configMap
+}
+
 func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, log logr.Logger) (*corev1.ConfigMap, error) {
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Reconciling config map %s", hawtio.Name))
 
@@ -52,14 +63,9 @@ func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, 
 
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio config map: %s", config))
 
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      hawtio.Name,
-			Namespace: hawtio.Namespace,
-		},
-		Data: map[string]string{
-			hawtioConfigKey: config,
-		},
+	configMap := NewDefaultConfigMap(hawtio)
+	configMap.Data = map[string]string{
+		hawtioConfigKey: config,
 	}
 
 	return configMap, nil

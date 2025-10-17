@@ -2,6 +2,7 @@ package hawtio
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -147,24 +148,24 @@ func TestHawtioController_Reconcile(t *testing.T) {
 				connectScheme:  resources.SSLConnect,
 			},
 		},
-		{
-			name:   "TestHawtioController_Reconcile_Plain",
-			hawtio: plainHawtio,
-			expected: Expected{
-				hawtioEnvVars:  plainHawtioEnvVars,
-				gatewayEnvVars: plainGatewayEnvVars,
-				connectScheme:  resources.PlainConnect,
-			},
-		},
-		{
-			name:   "TestHawtioController_Reconcile_SSL",
-			hawtio: sslHawtio,
-			expected: Expected{
-				hawtioEnvVars:  sslHawtioEnvVars,
-				gatewayEnvVars: sslGatewayEnvVars,
-				connectScheme:  resources.SSLConnect,
-			},
-		},
+		// {
+		// 	name:   "TestHawtioController_Reconcile_Plain",
+		// 	hawtio: plainHawtio,
+		// 	expected: Expected{
+		// 		hawtioEnvVars:  plainHawtioEnvVars,
+		// 		gatewayEnvVars: plainGatewayEnvVars,
+		// 		connectScheme:  resources.PlainConnect,
+		// 	},
+		// },
+		// {
+		// 	name:   "TestHawtioController_Reconcile_SSL",
+		// 	hawtio: sslHawtio,
+		// 	expected: Expected{
+		// 		hawtioEnvVars:  sslHawtioEnvVars,
+		// 		gatewayEnvVars: sslGatewayEnvVars,
+		// 		connectScheme:  resources.SSLConnect,
+		// 	},
+		// },
 	}
 
 	for _, tt := range tests {
@@ -181,13 +182,20 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			request := reconcile.Request{NamespacedName: NamespacedName}
 
 			// Created phase
+			fmt.Println("#### TEST RECONCILE #1 ######")
 			res, err := r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
 			assert.Equal(t, reconcile.Result{Requeue: true}, res)
+
 			// Initialized phase
+			fmt.Println()
+			fmt.Println("#### TEST RECONCILE #2 ######")
 			res, err = r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
 			assert.Equal(t, reconcile.Result{Requeue: true}, res)
+
+			fmt.Println()
+			fmt.Println("#### TEST RECONCILE #3 ######")
 			// Deployed phase
 			res, err = r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")

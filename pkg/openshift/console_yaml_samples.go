@@ -4,10 +4,10 @@ import (
 	"context"
 	"io/fs"
 
-	"github.com/RHsyseng/operator-utils/pkg/utils/kubernetes"
-	"github.com/RHsyseng/operator-utils/pkg/utils/openshift"
-	"github.com/ghodss/yaml"
 	"github.com/hawtio/hawtio-operator/deploy"
+	"github.com/hawtio/hawtio-operator/pkg/util/kubernetes"
+	"github.com/hawtio/hawtio-operator/pkg/util/openshift"
+	"sigs.k8s.io/yaml"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
