@@ -1,16 +1,16 @@
 package openshift
 
-//go:generate go run ./.packr/packr.go
-
 import (
 	"context"
+	"io/fs"
 
 	"github.com/RHsyseng/operator-utils/pkg/utils/kubernetes"
 	"github.com/RHsyseng/operator-utils/pkg/utils/openshift"
 	"github.com/ghodss/yaml"
-	"github.com/gobuffalo/packr/v2"
+	"github.com/hawtio/hawtio-operator/deploy"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -27,22 +27,33 @@ func ConsoleYAMLSampleExists() error {
 
 func CreateConsoleYAMLSamples(ctx context.Context, c client.Client, productName string) {
 	log.Info("Loading CR YAML samples.")
-	box := packr.New("cryamlsamples", "../../deploy/crs")
-	if box.List() == nil {
-		log.Error(nil, "CR YAML folder is empty. It is not loaded.")
+
+	// Read the embedded directory. The path inside the embed.FS is relative,
+	// so we use "deploy/crs" to access the contents.
+	files, err := fs.ReadDir(deploy.CRS, "crs")
+	if err != nil || len(files) == 0 {
+		log.Error(err, "CR YAML folder is empty or could not be read. It is not loaded.")
 		return
 	}
-	for _, filename := range box.List() {
+
+	// Loop through the files using the standard 'fs.DirEntry' type
+	for _, file := range files {
+		filename := file.Name()
 		if filename == "kustomization.yaml" {
 			continue
 		}
-		yamlStr, err := box.FindString(filename)
+
+		// Read the file content using fs.ReadFile. The path must include the directory.
+		filePath := "crs/" + filename
+		yamlBytes, err := fs.ReadFile(deploy.CRS, filePath)
 		if err != nil {
 			log.Info("yaml", " name: ", filename, " not created: ", err.Error())
 			continue
 		}
+
+		// The rest of your logic remains exactly the same!
 		hawtio := hawtiov2.NewHawtio()
-		err = yaml.Unmarshal([]byte(yamlStr), &hawtio)
+		err = yaml.Unmarshal(yamlBytes, &hawtio)
 		if err != nil {
 			log.Info("yaml", " name: ", filename, " not created: ", err.Error())
 			continue
