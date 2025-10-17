@@ -149,7 +149,7 @@ ifeq (, $(shell command -v gotestfmt 2> /dev/null))
 endif
 	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1 | gotestfmt
 else
-	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1
+	CGO_ENABLED=0 go test -v -count=1 ./...
 endif
 
 # Only instigate re-generation of manifests in non-production builds
