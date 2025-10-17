@@ -2,16 +2,12 @@ package hawtio
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"time"
 
-	"github.com/RHsyseng/operator-utils/pkg/resource/compare"
-	"github.com/RHsyseng/operator-utils/pkg/resource/read"
-	"github.com/RHsyseng/operator-utils/pkg/resource/write"
 	errs "github.com/pkg/errors"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -210,6 +207,7 @@ type ReconcileHawtio struct {
 	configClient configclient.Interface
 	apiClient    kclient.Interface
 	apiSpec      *capabilities.ApiServerSpec
+	logger       logr.Logger
 }
 
 // DeploymentConfiguration acquires properties used in deployment
@@ -228,669 +226,281 @@ type DeploymentConfiguration struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling Hawtio")
+	r.logger = log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	r.logger.Info("Reconciling Hawtio")
 
-	// Fetch the Hawtio instance
-	reqLogger.V(util.DebugLogLevel).Info("Fetching the Hawtio custom resource")
+	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
 
-	hawtio := hawtiov2.NewHawtio()
-	err := r.client.Get(ctx, request.NamespacedName, hawtio)
+	// =====================================================================
+	// PHASE 1: SETUP & FETCH
+	// =====================================================================
+	// Fetch the Hawtio instance from the cluster.
+	r.logger.V(util.DebugLogLevel).Info("=== Fetching Hawtio Custom Resource ===")
+	hawtio, err := r.fetchHawtio(ctx, request.NamespacedName)
+	if (err != nil) {
+		return reconcile.Result{}, err
+	} else if hawtio == nil {
+		// Request object not found, could have been deleted after reconcile request.
+		// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+		// Return and don't requeue
+		return reconcile.Result{}, nil
+	}
+
+	// =====================================================================
+	// PHASE 2: DELETION AND FINALIZERS
+	// =====================================================================
+	// If install marked for deletion then go ahead and delete
+	delete, err := r.handleDeletion(ctx, hawtio)
+	if err != nil {
+		return reconcile.Result{}, err
+	} else if delete {
+		return reconcile.Result{}, nil
+	}
+
+	// Aid deletion by adding finalizer
+	r.logger.V(util.DebugLogLevel).Info("=== Add Finalizer ===")
+	err = r.addFinalizer(ctx, hawtio)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// =====================================================================
+	// PHASE 3: INITIALIZE STATUS
+	// =====================================================================
+	// If the status phase is empty, it's a new CR, so we initialize it.
+	r.logger.V(util.DebugLogLevel).Info("=== Verify Hawtio Install Mode ===")
+	specType, err := r.verifyHawtioSpecType(ctx, hawtio)
+	if err != nil {
+		return reconcile.Result{}, err
+	} else if !specType {
+		return reconcile.Result{Requeue: true}, err
+	}
+
+	// Check the status of the RBAC ConfigMap.
+	// If specified in the CR then it should be present.
+	r.logger.V(util.DebugLogLevel).Info("=== Verifying RBAC ConfigMap ===")
+	valid, err := r.verifyRBACConfigMap(ctx, hawtio, request.NamespacedName)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return reconcile.Result{}, nil
+			// Let's poll for the RBAC ConfigMap to be created
+			return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+		} else {
+			return reconcile.Result{}, err
 		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
-	deploymentConfig := DeploymentConfiguration{}
-
-	reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
-
-	// Delete phase
-
-	if hawtio.GetDeletionTimestamp() != nil {
-		err = r.deletion(ctx, hawtio)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("deletion failed: %v", err)
-		}
-		return reconcile.Result{}, nil
-	}
-
-	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
-	reqLogger.V(util.DebugLogLevel).Info("Adding a finalizer")
-	if !controllerutil.ContainsFinalizer(hawtio, hawtioFinalizer) {
-		controllerutil.AddFinalizer(hawtio, hawtioFinalizer)
-		err = r.client.Update(ctx, hawtio)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to update finalizer: %v", err)
-		}
-	}
-
-	// Init phase
-
-	if len(hawtio.Spec.Type) == 0 {
-		reqLogger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type not specified. Defaulting to Cluster")
-		hawtio.Spec.Type = hawtiov2.ClusterHawtioDeploymentType
-		err = r.client.Update(ctx, hawtio)
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to update type: %v", err)
-		}
-		return reconcile.Result{}, nil
-	}
-
-	// Invariant checks
-	isClusterDeployment := hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType
-	isNamespaceDeployment := hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType
-
-	if !isNamespaceDeployment && !isClusterDeployment {
-		reqLogger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type neither Cluster or Namespace")
-
-		err := fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
-		if hawtio.Status.Phase != hawtiov2.HawtioPhaseFailed {
-			previous := hawtio.DeepCopy()
-			hawtio.Status.Phase = hawtiov2.HawtioPhaseFailed
-			err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
-			}
-		}
-		return reconcile.Result{}, err
+	} else if !valid {
+		// Lets poll until the RBAC ConfigMap is valid
+		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 	}
 
 	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov2.HawtioPhaseFailed {
-		reqLogger.V(util.DebugLogLevel).Info("Hawtio.Status.Phase is zero or failed")
-
-		previous := hawtio.DeepCopy()
-		hawtio.Status.Phase = hawtiov2.HawtioPhaseInitialized
-		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
+		r.logger.V(util.DebugLogLevel).Info("Hawtio.Status.Phase is zero or failed. Setting to initialized.")
+		err := r.setHawtioPhase(ctx, hawtio, hawtiov2.HawtioPhaseInitialized)
 		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
+			return reconcile.Result{}, err
 		}
+
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	if r.apiSpec.IsOpenShift4 {
-		reqLogger.V(util.DebugLogLevel).Info("Setting console URL on deployment")
+	// =====================================================================
+	// PHASE 4: RECONCILE AND DEPLOY PHASE
+	// =====================================================================
 
-		// Retrieve OpenShift Web console public URL
-		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
-		if err != nil {
-			if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
-				reqLogger.Error(err, "Error getting OpenShift managed configuration")
-				return reconcile.Result{}, err
-			}
-		} else {
-			deploymentConfig.openShiftConsoleURL = cm.Data["consoleURL"]
-		}
-	}
-
-	if r.apiSpec.IsOpenShift4 {
-		reqLogger.V(util.DebugLogLevel).Info("Creating OpenShift proxying certificate")
-
-		// Create -proxying certificate
-		// -serving certificate is automatically created
-		clientCertSecret, err := osCreateClientCertificate(ctx, r, hawtio, request.Name, request.Namespace)
-		if err != nil {
-			reqLogger.Error(err, "Failed to create OpenShift proxying certificate")
-			return reconcile.Result{}, err
-		}
-		deploymentConfig.clientCertSecret = clientCertSecret
-	} else {
-		reqLogger.V(util.DebugLogLevel).Info("Creating Kubernetes serving certificate")
-
-		// Create -serving certificate
-		servingCertSecret, err := kubeCreateServingCertificate(ctx, r, hawtio, request.Name, request.Namespace)
-		if err != nil {
-			reqLogger.Error(err, "Failed to create serving certificate")
-			return reconcile.Result{}, err
-		}
-		deploymentConfig.servingCertSecret = servingCertSecret
-	}
-
-	//
-	// Custom Route certificates defined in Hawtio CR
-	//
-	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
-		reqLogger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route certificate secret to deployment")
-		deploymentConfig.tlsRouteSecret = &corev1.Secret{}
-		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: secretName}, deploymentConfig.tlsRouteSecret)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
-	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
-		reqLogger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA secret to deploment")
-		deploymentConfig.caCertRouteSecret = &corev1.Secret{}
-		err = r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: caCertSecretName}, deploymentConfig.caCertRouteSecret)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
-	if cm := hawtio.Spec.RBAC.ConfigMap; cm != "" {
-		reqLogger.V(util.DebugLogLevel).Info("Checking Hawtio.Spec.RBAC config map is valid")
-
-		// Check that the ConfigMap exists
-		var rbacConfigMap corev1.ConfigMap
-		err := r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: cm}, &rbacConfigMap)
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				reqLogger.Info("RBAC ConfigMap must be created", "ConfigMap", cm)
-				// Let's poll for the RBAC ConfigMap to be created
-				return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
-			} else {
-				reqLogger.Error(err, "Failed to get RBAC ConfigMap")
-				return reconcile.Result{}, err
-			}
-		}
-		if _, ok := rbacConfigMap.Data[resources.RBACConfigMapKey]; !ok {
-			reqLogger.Info("RBAC ConfigMap does not contain expected key: "+resources.RBACConfigMapKey, "ConfigMap", cm)
-			// Let's poll for the RBAC ConfigMap to contain the expected key
-			return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
-		}
-	}
-
-	_, err = r.reconcileConfigMap(hawtio)
+	// Intialize the deployment inputs required for the deployment resources
+	r.logger.V(util.DebugLogLevel).Info("=== Initializing Deployment Configuration ===")
+	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, request.NamespacedName)
 	if err != nil {
-		reqLogger.Error(err, "Error reconciling ConfigMap")
 		return reconcile.Result{}, err
 	}
 
-	reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Assigning config map %s to deployment", request.NamespacedName.Name))
-	deploymentConfig.configMap = &corev1.ConfigMap{}
-	err = r.client.Get(ctx, request.NamespacedName, deploymentConfig.configMap)
+	// Reconcile the configMap to ensure it is present for use with the deployment
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling ConfigMap ===")
+	configMap, opResult, err := r.reconcileConfigMap(ctx, hawtio)
+	r.logOperationResult("ConfigMap", opResult)
 	if err != nil {
-		reqLogger.Error(err, "Failed to get config map")
 		return reconcile.Result{}, err
 	}
 
-	_, err = r.reconcileDeployment(hawtio, deploymentConfig)
+	// Makes the configMap available to the deployment
+	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Assigning reconciled config map %s to deployment", request.NamespacedName.Name))
+	deploymentConfig.configMap = configMap
+
+	// Reconcile the deployment resource
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Deployment ===")
+	opResult, err = r.reconcileDeployment(ctx, hawtio, deploymentConfig)
+	r.logOperationResult("Deployment", opResult)
 	if err != nil {
-		reqLogger.Error(err, "Error reconciling deployment")
 		return reconcile.Result{}, err
 	}
 
-	var ingress *networkingv1.Ingress
-	var route *routev1.Route
-	if r.apiSpec.Routes {
-		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Checking Route %s", request.NamespacedName.Name))
-
-		route = &routev1.Route{}
-		err = r.client.Get(ctx, request.NamespacedName, route)
-		if err != nil && kerrors.IsNotFound(err) {
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to get route")
-			return reconcile.Result{}, err
-		}
-
-		if route == nil {
-			err := errors.New("Route could not be found")
-			reqLogger.Error(err, "Route failure")
-			return reconcile.Result{}, err
-		}
-	} else {
-		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Checking Ingress %s", request.NamespacedName.Name))
-
-		ingress = &networkingv1.Ingress{}
-		err = r.client.Get(ctx, request.NamespacedName, ingress)
-		if err != nil && kerrors.IsNotFound(err) {
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to get ingress")
-			return reconcile.Result{}, err
-		}
-
-		if ingress == nil {
-			err := errors.New("Ingress could not be found")
-			reqLogger.Error(err, "Ingress failure")
-			return reconcile.Result{}, err
-		}
-	}
-
-	if r.apiSpec.IsOpenShift4 && isClusterDeployment {
-		reqLogger.V(util.DebugLogLevel).Info("Creating OAuth client for OpenShift Cluster deployment")
-
-		// Add OAuth client
-		oauthClient := resources.NewOAuthClient(resources.OAuthClientName)
-		err = r.client.Create(ctx, oauthClient)
-		if err != nil && !kerrors.IsAlreadyExists(err) {
-			return reconcile.Result{}, err
-		}
-	}
-
-	// Read Hawtio configuration
-	reqLogger.V(util.DebugLogLevel).Info("Reading Hawtio configuration from deployment config map")
-	hawtconfig, err := resources.GetHawtioConfig(deploymentConfig.configMap)
+	// Reconcile the service resource
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Service ===")
+	opResult, err = r.reconcileService(ctx, hawtio)
+	r.logOperationResult("Service", opResult)
 	if err != nil {
-		reqLogger.Error(err, "Failed to get hawtconfig")
 		return reconcile.Result{}, err
 	}
 
-	// Add link to OpenShift console
-	consoleLinkName := request.Name + "-" + request.Namespace
-	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes && hawtio.Status.Phase == hawtiov2.HawtioPhaseInitialized {
-		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding console link %s", consoleLinkName))
+	// Declare this for use later in the OAuthClient and Hawtio.Status
+	var ingressRouteURL string
 
-		// With checks above, route should not be null
-		consoleLink := &consolev1.ConsoleLink{}
-		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
-		if err != nil {
-			if !kerrors.IsNotFound(err) {
-				reqLogger.Error(err, "Failed to get console link")
-				return reconcile.Result{}, err
-			}
-		} else {
-			err = r.client.Delete(ctx, consoleLink)
-			if err != nil {
-				reqLogger.Error(err, "Failed to delete console link")
-				return reconcile.Result{}, err
-			}
-		}
-
-		consoleLink = &consolev1.ConsoleLink{}
-		if isClusterDeployment {
-			reqLogger.V(util.DebugLogLevel).Info("Adding console link as Application Menu Link")
-			consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
-		} else if r.apiSpec.IsOpenShift43Plus {
-			reqLogger.V(util.DebugLogLevel).Info("Adding console link as Namespace Dashboard Link")
-			consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
-		}
-		if consoleLink.Spec.Location != "" {
-			err = r.client.Create(ctx, consoleLink)
-			if err != nil {
-				reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
-				return reconcile.Result{}, err
-			}
-		}
+	// Reconcile the route resource, if applicable
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Route ===")
+	route, opResult, err := r.reconcileRoute(ctx, hawtio, deploymentConfig)
+	r.logOperationResult("Route", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	} else if route == nil && opResult != controllerutil.OperationResultNone {
+		// This means the route was intentionally deleted to be regenerated.
+		// Stop this loop and wait for the automatic requeue that the delete
+		// event will trigger.
+		r.logger.Info("Route was deleted for regeneration, ending this reconciliation loop.")
+		return reconcile.Result{}, nil
+	} else if route != nil {
+		ingressRouteURL = oresources.GetRouteURL(route)
 	}
 
-	// Update status
+	// Reconcile the ingress resource, if applicable
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Ingress ===")
+	ingress, opResult, err := r.reconcileIngress(ctx, hawtio, deploymentConfig)
+	r.logOperationResult("Ingress", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	} else if ingress != nil {
+		ingressRouteURL = kresources.GetIngressURL(ingress)
+	}
+
+	// Reconcile the service account as OAuth Client resource, if applicable
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account as OAuth Client ===")
+	opResult, err = r.reconcileServiceAccountAsOauthClient(ctx, hawtio)
+	r.logOperationResult("ServiceAccountAsOauthClient", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Reconcile the OAuthClient resource, if applicable
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling OAuth Client ===")
+	opResult, err = r.reconcileOAuthClient(ctx, hawtio, ingressRouteURL)
+	r.logOperationResult("OAuthClient", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Reconcile the ConsoleLink resource, if applicable
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling ConsoleLink ===")
+	opResult, err = r.reconcileConsoleLink(ctx, hawtio, request.NamespacedName, deploymentConfig, route)
+	r.logOperationResult("ConsoleLink", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Reconcile the Certificate cronjob resource, if applicable
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling CronJob ===")
+	opResult, err = r.reconcileCronJob(ctx, hawtio, request.NamespacedName, deploymentConfig)
+	r.logOperationResult("ConsoleLink", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Reconciling resources is complete. Set to deployed if not already
 	if hawtio.Status.Phase != hawtiov2.HawtioPhaseDeployed {
-		reqLogger.V(util.DebugLogLevel).Info("Moving Hawtio.Status.Phase to deployed")
-
-		previous := hawtio.DeepCopy()
-		hawtio.Status.Phase = hawtiov2.HawtioPhaseDeployed
-		err = r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
+		r.logger.V(util.DebugLogLevel).Info("Moving Hawtio.Status.Phase to deployed")
+		err := r.setHawtioPhase(ctx, hawtio, hawtiov2.HawtioPhaseDeployed)
 		if err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to update phase: %v", err)
+			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	// Update phase
-	reqLogger.V(util.DebugLogLevel).Info("Reconciling in Update phase")
-
-	hawtioCopy := hawtio.DeepCopy()
+	// =====================================================================
+	// PHASE 5: UPDATE PHASE
+	// =====================================================================
+	r.logger.V(util.DebugLogLevel).Info("Update phase - refreshing Hawtio status")
 
 	deployment := &appsv1.Deployment{}
 	err = r.client.Get(ctx, request.NamespacedName, deployment)
 	if err != nil && kerrors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
-		reqLogger.Error(err, "Failed to get deployment")
+		r.logger.Error(err, "Failed to get deployment")
 		return reconcile.Result{}, err
 	}
 
-	// Reconcile replicas into Hawtio status
-	hawtioCopy.Status.Replicas = deployment.Status.Replicas
+	// Create a copy of the status to modify.
+	newStatus := hawtio.Status.DeepCopy()
 
+	// Reconcile status fields from the Deployment.
+	newStatus.Replicas = deployment.Status.Replicas
+	// Reconcile Hawtio status image field from deployment container image
+	newStatus.Image = deployment.Spec.Template.Spec.Containers[0].Image
 	// Reconcile scale sub-resource labelSelectorPath from deployment spec to CR status
-	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
-	if err != nil {
+	if selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector); err == nil {
+	   newStatus.Selector = selector.String()
+	} else {
 		return reconcile.Result{}, fmt.Errorf("failed to parse selector: %v", err)
 	}
-	hawtioCopy.Status.Selector = selector.String()
 
-	// Reconcile Hawtio status image field from deployment container image
-	hawtioCopy.Status.Image = deployment.Spec.Template.Spec.Containers[0].Image
+	r.logger.V(util.DebugLogLevel).Info("Adding Route/Ingress URL to Hawtio.Status.URL")
 
-	reqLogger.V(util.DebugLogLevel).Info("Adding Route/Ingress URL to Hawtio.Status.URL")
-	var ingressRouteURL string
-	if r.apiSpec.Routes {
-		// With checks above, route should not be null
-
+	if r.apiSpec.Routes && route != nil {
 		// Reconcile route URL into Hawtio status
-		ingressRouteURL = oresources.GetRouteURL(route)
-		hawtioCopy.Status.URL = ingressRouteURL
+		newStatus.URL = ingressRouteURL
+	} else if ingress != nil {
+		newStatus.URL = ingressRouteURL
+	}
 
-		// Reconcile route host from routeHostName field
-		if hostName := hawtio.Spec.RouteHostName; len(hostName) == 0 && !strings.EqualFold(route.Annotations[hostGeneratedAnnotation], "true") {
-			// Emptying route host is ignored so it's not possible to re-generate the host
-			// See https://github.com/openshift/origin/pull/9425
-			// In that case, let's delete the route
-			err := r.client.Delete(ctx, route)
-			if err != nil {
-				reqLogger.Error(err, "Failed to delete route to auto-generate hostname")
-				return reconcile.Result{}, err
-			}
-			// And requeue to create a new route in the next reconcile loop
-			return reconcile.Result{Requeue: true}, nil
-		}
+	// Determine the overall phase based on the deployment's readiness.
+	if deployment.Status.ReadyReplicas > 0 {
+		newStatus.Phase = hawtiov2.HawtioPhaseDeployed
 	} else {
-		ingressRouteURL = kresources.GetIngressURL(ingress)
-		hawtioCopy.Status.URL = ingressRouteURL
+		newStatus.Phase = hawtiov2.HawtioPhaseFailed
 	}
 
-	// Reconcile console link in OpenShift console
-	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes {
-		// With checks above, route should not be null
-		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("Reconciling console link %s", consoleLinkName))
-
-		consoleLink := &consolev1.ConsoleLink{}
-		err = r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				// If not found, create a console link
-				if isClusterDeployment {
-					consoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
-				} else if r.apiSpec.IsOpenShift43Plus {
-					consoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, request.Namespace, route, hawtconfig)
-				}
-				if consoleLink.Spec.Location != "" {
-					err = r.client.Create(ctx, consoleLink)
-					if err != nil {
-						reqLogger.Error(err, "Failed to create console link", "name", consoleLink.Name)
-						return reconcile.Result{}, err
-					}
-				}
-			} else {
-				reqLogger.Error(err, "Failed to get console link")
-				return reconcile.Result{}, err
-			}
-		} else {
-			consoleLinkCopy := consoleLink.DeepCopy()
-			if isClusterDeployment {
-				reqLogger.V(util.DebugLogLevel).Info("Updating console link as Application Menu Link")
-				openshift.UpdateApplicationMenuLink(consoleLinkCopy, route, hawtconfig)
-			} else if r.apiSpec.IsOpenShift43Plus {
-				reqLogger.V(util.DebugLogLevel).Info("Updating console link as Namespace Dashboard Link")
-				openshift.UpdateNamespaceDashboardLink(consoleLinkCopy, route, hawtconfig)
-			}
-			err = r.client.Patch(ctx, consoleLinkCopy, client.MergeFrom(consoleLink))
-			if err != nil {
-				reqLogger.Error(err, "Failed to update console link", "name", consoleLink.Name)
-				return reconcile.Result{}, err
-			}
+	// Only send an update to the API server if the status has actually changed.
+	// This prevents empty updates and reduces load on the API server.
+	if !reflect.DeepEqual(hawtio.Status, *newStatus) {
+		hawtio.Status = *newStatus
+		r.logger.Info("Status has changed, updating Hawtio CR")
+		if err := r.client.Status().Update(ctx, hawtio); err != nil {
+			r.logger.Error(err, "Failed to update Hawtio status")
+			return reconcile.Result{}, err
 		}
-	}
-
-	// Reconcile the client certificate cronJob
-	cronJob := &batchv1.CronJob{}
-	cronJobName := request.Name + "-certificate-expiry-check"
-
-	reqLogger.V(util.DebugLogLevel).Info("Reconciling cronjob for certificate expiry checking")
-	if cronJobErr := r.client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: cronJobName}, cronJob); cronJobErr == nil {
-		update := false
-		if hawtio.Spec.Auth.ClientCertCheckSchedule != "" {
-			if cronJob.Spec.Schedule != hawtio.Spec.Auth.ClientCertCheckSchedule {
-				cronJob.Spec.Schedule = hawtio.Spec.Auth.ClientCertCheckSchedule
-				update = true
-			}
-			updateExp, err := updateExpirationPeriod(cronJob, hawtio.Spec.Auth.ClientCertExpirationPeriod)
-			if err != nil {
-				log.Error(err, "CronJob haven't been updated")
-			}
-
-			if update || updateExp {
-				err = r.client.Update(ctx, cronJob)
-
-				if err != nil {
-					log.Error(err, "CronJob haven't been updated")
-				}
-			}
-
-			//if cronjob exists and ClientCertRotate is disabled, cronjob has to be deleted
-		} else {
-			err = r.client.Delete(ctx, cronJob)
-			if err != nil {
-				log.Error(err, "CronJob could not be deleted")
-			}
-		}
-	}
-
-	/*
-	 * Reconcile OAuth client
-	 * Do not use the default client whose cached informers require
-	 * permission to list cluster wide oauth clients
-	 */
-	if r.apiSpec.IsOpenShift4 {
-		reqLogger.V(util.DebugLogLevel).Info("Reconciling OAuth client on openshift cluster")
-		oc, err := r.oauthClient.OauthV1().OAuthClients().Get(ctx, resources.OAuthClientName, metav1.GetOptions{})
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				// OAuth client should not be found for namespace deployment type
-				// except when it changes from "cluster" to "namespace"
-				if isClusterDeployment {
-					return reconcile.Result{Requeue: true}, nil
-				}
-			} else if !(kerrors.IsForbidden(err) && isNamespaceDeployment) {
-				// We tolerate 403 for namespace deployment as the operator
-				// may not have permission to read cluster wide resources
-				// like OAuth clients
-				reqLogger.Error(err, "Failed to get OAuth client")
-				return reconcile.Result{}, err
-			}
-		}
-
-		// TODO: OAuth client reconciliation triggered by roll-out deployment should ideally
-		// wait until the deployment is successful before deleting resources
-		if isClusterDeployment && oc != nil {
-			// First remove old URL from OAuthClient
-			if resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL) {
-				err := r.client.Update(ctx, oc)
-				if err != nil {
-					reqLogger.Error(err, "Failed to reconcile OAuth client")
-					return reconcile.Result{}, err
-				}
-			}
-			// Add route URL to OAuthClient authorized redirect URIs
-			if ok, _ := resources.OauthClientContainsRedirectURI(oc, ingressRouteURL); !ok {
-				oc.RedirectURIs = append(oc.RedirectURIs, ingressRouteURL)
-				err := r.client.Update(ctx, oc)
-				if err != nil {
-					reqLogger.Error(err, "Failed to reconcile OAuth client")
-					return reconcile.Result{}, err
-				}
-			}
-		}
-
-		if isNamespaceDeployment && oc != nil {
-			// Clean-up OAuth client if any. This happens when the deployment type is changed
-			// from "cluster" to "namespace".
-			if resources.RemoveRedirectURIFromOauthClient(oc, ingressRouteURL) {
-				err := r.client.Update(ctx, oc)
-				if err != nil {
-					reqLogger.Error(err, "Failed to reconcile OAuth client")
-					return reconcile.Result{}, err
-				}
-			}
-		}
-	}
-
-	reqLogger.V(util.DebugLogLevel).Info("Updating Hawtio custom resource")
-	err = r.client.Status().Patch(ctx, hawtioCopy, client.MergeFrom(hawtio))
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to patch status: %v", err)
 	}
 
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileHawtio) reconcileConfigMap(hawtio *hawtiov2.Hawtio) (bool, error) {
-	reqLogger := log.WithName(fmt.Sprintf("%s-reconcileConfigMap", hawtio.Name))
-	configMap, err := resources.NewConfigMap(hawtio, r.apiSpec, reqLogger)
+func (r *ReconcileHawtio) fetchHawtio(ctx context.Context, namespacedName client.ObjectKey) (*hawtiov2.Hawtio, error) {
+	r.logger.V(util.DebugLogLevel).Info("Fetching the Hawtio custom resource")
+
+	hawtio := hawtiov2.NewHawtio()
+	err := r.client.Get(ctx, namespacedName, hawtio)
 	if err != nil {
-		return false, err
-	}
-	return r.reconcileResources(hawtio, []client.Object{configMap}, []client.ObjectList{&corev1.ConfigMapList{}})
-}
-
-func (r *ReconcileHawtio) reconcileDeployment(hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (bool, error) {
-	reqLogger := log.WithName(fmt.Sprintf("%s-reconcileDeployment", hawtio.Name))
-	clientCertSecretVersion := ""
-	if deploymentConfig.clientCertSecret != nil {
-		clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
-	}
-
-	var deployedResources []client.Object
-	var resourceListTypes []client.ObjectList
-
-	deployment, err := resources.NewDeployment(
-		hawtio, r.apiSpec, deploymentConfig.openShiftConsoleURL,
-		deploymentConfig.configMap.GetResourceVersion(), clientCertSecretVersion,
-		r.BuildVariables, reqLogger)
-	if err != nil {
-		return false, err
-	}
-
-	deployedResources = append(deployedResources, deployment)
-	resourceListTypes = append(resourceListTypes, &appsv1.DeploymentList{})
-
-	service := resources.NewService(hawtio, r.apiSpec, reqLogger)
-	deployedResources = append(deployedResources, service)
-	resourceListTypes = append(resourceListTypes, &corev1.ServiceList{})
-
-	if r.apiSpec.Routes {
-		route := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
-		deployedResources = append(deployedResources, route)
-		resourceListTypes = append(resourceListTypes, &routev1.RouteList{})
-	} else {
-		ingress := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
-		deployedResources = append(deployedResources, ingress)
-		resourceListTypes = append(resourceListTypes, &networkingv1.IngressList{})
-	}
-
-	var serviceAccount *corev1.ServiceAccount
-	if hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType {
-		reqLogger.V(util.DebugLogLevel).Info("Adding OAuth client as service account for Namespace mode")
-
-		// Add service account as OAuth client
-		serviceAccount, err = resources.NewServiceAccountAsOauthClient(hawtio.Name, hawtio.Spec.ExternalRoutes)
-		if err != nil {
-			return false, fmt.Errorf("error UpdateResources : %s", err)
+		if kerrors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			r.logger.V(util.DebugLogLevel).Info("No Hawtio CR found")
+			return nil, nil
 		}
-		deployedResources = append(deployedResources, serviceAccount)
-		resourceListTypes = append(resourceListTypes, &corev1.ServiceAccountList{})
-	}
-
-	return r.reconcileResources(hawtio, deployedResources, resourceListTypes)
-}
-
-func (r *ReconcileHawtio) reconcileResources(hawtio *hawtiov2.Hawtio,
-	requestedResources []client.Object, listObjects []client.ObjectList) (bool, error) {
-	reqLogger := log.WithName(fmt.Sprintf("%s-reconcileResources", hawtio.Name))
-
-	for _, res := range requestedResources {
-		if res == nil || reflect.ValueOf(res).IsNil() {
-			continue
-		}
-		res.SetNamespace(hawtio.Namespace)
-	}
-
-	deployed, err := getDeployedResources(hawtio, r.client, listObjects)
-	if err != nil {
-		return false, err
-	}
-
-	requested := compare.NewMapBuilder().Add(requestedResources...).ResourceMap()
-
-	var hasUpdates bool
-	writer := write.New(r.client).WithOwnerController(hawtio, r.scheme)
-	comparator := getComparator()
-	deltas := comparator.Compare(deployed, requested)
-	for resourceType, delta := range deltas {
-		reqLogger.V(util.DebugLogLevel).Info(fmt.Sprintf("instances of %s has changes %t", resourceType, delta.HasChanges()))
-		if !delta.HasChanges() {
-			continue
-		}
-
-		reqLogger.Info("", "instances of ", resourceType, "Will create ", len(delta.Added), "update ", len(delta.Updated), "and delete", len(delta.Removed))
-
-		added, err := writer.AddResources(delta.Added)
-		if err != nil {
-			return false, fmt.Errorf("error AddResources: %s", err)
-		}
-		updated, err := writer.UpdateResources(deployed[resourceType], delta.Updated)
-		if err != nil {
-			return false, fmt.Errorf("error UpdateResources : %s", err)
-		}
-		removed, err := writer.RemoveResources(delta.Removed)
-		if err != nil {
-			return false, fmt.Errorf("error RemoveResources: %s", err)
-		}
-		hasUpdates = hasUpdates || added || updated || removed
-	}
-	return hasUpdates, nil
-}
-
-func getComparator() compare.MapComparator {
-	resourceComparator := compare.DefaultComparator()
-
-	configMapType := reflect.TypeOf(corev1.ConfigMap{})
-	resourceComparator.SetComparator(configMapType, func(deployed client.Object, requested client.Object) bool {
-		configMap1 := deployed.(*corev1.ConfigMap)
-		configMap2 := requested.(*corev1.ConfigMap)
-		var pairs [][2]interface{}
-		pairs = append(pairs, [2]interface{}{configMap1.Name, configMap2.Name})
-		pairs = append(pairs, [2]interface{}{configMap1.Namespace, configMap2.Namespace})
-		pairs = append(pairs, [2]interface{}{configMap1.Labels, configMap2.Labels})
-		pairs = append(pairs, [2]interface{}{configMap1.Annotations, configMap2.Annotations})
-		pairs = append(pairs, [2]interface{}{configMap1.Data, configMap2.Data})
-		pairs = append(pairs, [2]interface{}{configMap1.BinaryData, configMap2.BinaryData})
-		equal := compare.EqualPairs(pairs)
-		if !equal {
-			log.Info("Resources are not equal", "deployed", deployed, "requested", requested)
-		}
-		return equal
-	})
-
-	// Not included by default in comparator
-	ingressType := reflect.TypeOf(networkingv1.Ingress{})
-	resourceComparator.SetComparator(ingressType, func(deployed client.Object, requested client.Object) bool {
-		ingress1 := deployed.(*networkingv1.Ingress)
-		ingress2 := requested.(*networkingv1.Ingress)
-
-		ingress1 = ingress1.DeepCopy()
-
-		//Removed generated fields from deployed version, that are not specified in requested item
-		emptyString := ""
-		if (ingress2.Spec.IngressClassName == &emptyString) {
-			ingress1.Spec.IngressClassName = &emptyString
-		}
-
-		var pairs [][2]interface{}
-		pairs = append(pairs, [2]interface{}{ingress1.Name, ingress2.Name})
-		pairs = append(pairs, [2]interface{}{ingress1.Namespace, ingress2.Namespace})
-		pairs = append(pairs, [2]interface{}{ingress1.Labels, ingress2.Labels})
-		pairs = append(pairs, [2]interface{}{ingress1.Annotations, ingress2.Annotations})
-		pairs = append(pairs, [2]interface{}{ingress1.Spec, ingress2.Spec})
-
-		equal := compare.EqualPairs(pairs)
-		if !equal {
-			log.Info("Resources are not equal", "deployed", deployed, "requested", requested)
-		}
-		return equal
-	})
-
-	return compare.MapComparator{Comparator: resourceComparator}
-}
-
-func getDeployedResources(hawtio *hawtiov2.Hawtio, client client.Client, listObjects []client.ObjectList) (map[reflect.Type][]client.Object, error) {
-	reader := read.New(client).WithNamespace(hawtio.Namespace).WithOwnerObject(hawtio)
-	resourceMap, err := reader.ListAll(listObjects...)
-	if err != nil {
-		log.Error(err, "Failed to list deployed objects")
+		// Error reading the object - requeue the request.
 		return nil, err
 	}
 
-	return resourceMap, nil
+	return hawtio, nil
+}
+
+func (r *ReconcileHawtio) handleDeletion(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
+	if hawtio.GetDeletionTimestamp() == nil {
+		return false, nil
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("=== Deleting Installation ===")
+	err := r.deletion(ctx, hawtio)
+	if err != nil {
+		return true, fmt.Errorf("deletion failed: %v", err)
+	}
+	return false, nil
 }
 
 func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio) error {
@@ -932,6 +542,585 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio)
 	}
 
 	return nil
+}
+
+func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Hawtio) error {
+	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
+	r.logger.V(util.DebugLogLevel).Info("Adding a finalizer")
+	if controllerutil.ContainsFinalizer(hawtio, hawtioFinalizer) {
+		return nil
+	}
+
+	controllerutil.AddFinalizer(hawtio, hawtioFinalizer)
+	err := r.client.Update(ctx, hawtio)
+	if err != nil {
+		return fmt.Errorf("failed to update finalizer: %v", err)
+	}
+
+	return nil
+}
+
+func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
+	if len(hawtio.Spec.Type) == 0 {
+		r.logger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type not specified. Defaulting to Cluster")
+		hawtio.Spec.Type = hawtiov2.ClusterHawtioDeploymentType
+		err := r.client.Update(ctx, hawtio)
+		if err != nil {
+			return false, fmt.Errorf("failed to update type: %v", err)
+		}
+
+		return false, nil
+	}
+
+	if hawtio.Spec.Type != hawtiov2.NamespaceHawtioDeploymentType && (hawtio.Spec.Type != hawtiov2.ClusterHawtioDeploymentType) {
+		r.logger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type neither Cluster or Namespace")
+
+		err := r.setHawtioPhase(ctx, hawtio, hawtiov2.HawtioPhaseFailed)
+		if err != nil {
+			return false, err
+		}
+
+		err = fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (r *ReconcileHawtio) verifyRBACConfigMap(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey) (bool, error) {
+	cm := hawtio.Spec.RBAC.ConfigMap
+	if cm == "" {
+		return true, nil // No RBAC configMap specified so default will be used
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Checking Hawtio.Spec.RBAC config map is valid")
+
+	// Check that the ConfigMap exists
+	var rbacConfigMap corev1.ConfigMap
+	err := r.client.Get(ctx, types.NamespacedName{Namespace: namespacedName.Namespace, Name: cm}, &rbacConfigMap)
+	if err != nil {
+		r.logger.Error(err, "Failed to get RBAC ConfigMap")
+		return false, err
+	}
+
+	if _, ok := rbacConfigMap.Data[resources.RBACConfigMapKey]; !ok {
+		r.logger.Info("RBAC ConfigMap does not contain expected key: " + resources.RBACConfigMapKey, "ConfigMap", cm)
+		// Let's poll for the RBAC ConfigMap to contain the expected key
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (r *ReconcileHawtio) setHawtioPhase(ctx context.Context, hawtio *hawtiov2.Hawtio, phase hawtiov2.HawtioPhase) error {
+	if hawtio.Status.Phase != phase {
+		previous := hawtio.DeepCopy()
+		hawtio.Status.Phase = phase
+		err := r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
+		if err != nil {
+			return fmt.Errorf("failed to update hawtio phase to %s: %v", phase, err)
+		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey) (DeploymentConfiguration, error) {
+	deploymentConfiguration := DeploymentConfiguration{}
+
+	if r.apiSpec.IsOpenShift4 {
+		//
+		// === Find the OCP Console Public URL ===
+		//
+		r.logger.V(util.DebugLogLevel).Info("Setting console URL on deployment")
+
+		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
+		if err != nil {
+			if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
+				r.logger.Error(err, "Error getting OpenShift managed configuration")
+				return deploymentConfiguration, err
+			}
+		} else {
+			deploymentConfiguration.openShiftConsoleURL = cm.Data["consoleURL"]
+		}
+
+		r.logger.V(util.DebugLogLevel).Info("Creating OpenShift proxying certificate")
+
+		//
+		// === Create -proxying certificate - only applicable for OCP ===
+		// === -serving certificate is automatically created on OCP ===
+		//
+		clientCertSecret, err := osCreateClientCertificate(ctx, r, hawtio, namespacedName.Name, namespacedName.Namespace)
+		if err != nil {
+			r.logger.Error(err, "Failed to create OpenShift proxying certificate")
+			return deploymentConfiguration, err
+		}
+		deploymentConfiguration.clientCertSecret = clientCertSecret
+	} else {
+		//
+		// === Create the Kubernetes serving certificate ===
+		//
+		r.logger.V(util.DebugLogLevel).Info("Creating Kubernetes serving certificate")
+
+		// Create -serving certificate
+		servingCertSecret, err := kubeCreateServingCertificate(ctx, r, hawtio, namespacedName.Name, namespacedName.Namespace)
+		if err != nil {
+			r.logger.Error(err, "Failed to create serving certificate")
+			return deploymentConfiguration, err
+		}
+		deploymentConfiguration.servingCertSecret = servingCertSecret
+	}
+
+	//
+	// === Custom Route certificate defined in Hawtio CR ===
+	//
+	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
+		r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route certificate secret to deployment")
+		deploymentConfiguration.tlsRouteSecret = &corev1.Secret{}
+		err := r.client.Get(ctx, client.ObjectKey{Namespace: namespacedName.Namespace, Name: secretName}, deploymentConfiguration.tlsRouteSecret)
+		if err != nil {
+			return deploymentConfiguration, err
+		}
+	}
+
+	//
+	// === Custom Route CA certificate defined in Hawtio CR ===
+	//
+	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
+		r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA secret to deploment")
+		deploymentConfiguration.caCertRouteSecret = &corev1.Secret{}
+		err := r.client.Get(ctx, client.ObjectKey{Namespace: namespacedName.Namespace, Name: caCertSecretName}, deploymentConfiguration.caCertRouteSecret)
+		if err != nil {
+			return deploymentConfiguration, err
+		}
+	}
+
+	return deploymentConfiguration, nil
+}
+
+func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.ConfigMap, controllerutil.OperationResult, error) {
+	configMap := resources.NewDefaultConfigMap(hawtio)
+
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, configMap, func() error {
+		// Set the owner reference for garbage collection.
+		if err := controllerutil.SetControllerReference(hawtio, configMap, r.scheme); err != nil {
+			return err
+		}
+
+		// Get the target state for the ConfigMap
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileConfigMap", hawtio.Name))
+		crConfigMap, err := resources.NewConfigMap(hawtio, r.apiSpec, reqLogger)
+		if (err != nil) {
+			reqLogger.Error(err, "Error reconciling ConfigMap")
+			return err
+		}
+
+		// Mutate the object's Data field to match the desired state.
+		configMap.Data = crConfigMap.Data
+
+		return nil
+	})
+
+	if (err != nil) {
+		return nil, opResult, err
+	}
+
+	return configMap, opResult, nil
+}
+
+func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
+	deployment := resources.NewDefaultDeployment(hawtio)
+
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, deployment, func() error {
+		// Set the owner reference for garbage collection.
+		if err := controllerutil.SetControllerReference(hawtio, deployment, r.scheme); err != nil {
+			return err
+		}
+
+		clientCertSecretVersion := ""
+		if deploymentConfig.clientCertSecret != nil {
+			clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
+		}
+
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileDeployment", hawtio.Name))
+		crDeployment, err := resources.NewDeployment(hawtio, r.apiSpec,
+													deploymentConfig.openShiftConsoleURL,
+													deploymentConfig.configMap.GetResourceVersion(),
+													clientCertSecretVersion,
+													r.BuildVariables, reqLogger)
+		if err != nil {
+			reqLogger.Error(err, "Error reconciling deployment")
+			return err
+		}
+
+		deployment.SetLabels(crDeployment.GetLabels())
+		deployment.SetAnnotations(crDeployment.GetAnnotations())
+		deployment.Spec = crDeployment.Spec
+		return nil
+	})
+
+	return opResult, err
+}
+
+func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
+	service := resources.NewDefaultService(hawtio)
+
+	return controllerutil.CreateOrUpdate(ctx, r.client, service, func() error {
+		// Set the owner reference for garbage collection.
+		if err := controllerutil.SetControllerReference(hawtio, service, r.scheme); err != nil {
+			return err
+		}
+
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
+		crService := resources.NewService(hawtio, r.apiSpec, reqLogger)
+
+		service.SetLabels(crService.GetLabels())
+		service.SetAnnotations(crService.GetAnnotations())
+		service.Spec = crService.Spec
+
+		return nil
+	})
+}
+
+func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*routev1.Route, controllerutil.OperationResult, error) {
+	if ! r.apiSpec.Routes {
+		return nil, controllerutil.OperationResultNone, nil
+	}
+
+	existingRoute := &routev1.Route{}
+	err := r.client.Get(ctx, types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}, existingRoute)
+
+	if err == nil {
+		// A route was found. Now, apply the special condition check.
+		isGenerated := strings.EqualFold(existingRoute.Annotations[hostGeneratedAnnotation], "true")
+
+		if hawtio.Spec.RouteHostName == "" && !isGenerated {
+			// The user cleared the hostname, and the current route is not auto-generated.
+			//
+			// Emptying route host is ignored so it's not possible to re-generate the host
+			// See https://github.com/openshift/origin/pull/9425
+			// We must delete the route to force a regeneration.
+
+			r.logger.Info("Deleting Route to trigger hostname regeneration.", "Route.Name", existingRoute.Name)
+			if err := r.client.Delete(ctx, existingRoute); err != nil {
+				r.logger.Error(err, "Failed to delete Route for regeneration")
+				return nil, controllerutil.OperationResultNone, err
+			}
+
+			// Deletion was successful. We must stop this reconciliation loop here.
+			// The next loop will find the Route is missing and will create a new one.
+			// Returning (nil, nil) signals success for this loop, allowing the next one to proceed cleanly.
+			return nil, controllerutil.OperationResultUpdated, nil
+		}
+	} else if !kerrors.IsNotFound(err) {
+		// A real error occurred trying to get the Route. Fail fast.
+		log.Error(err, "Failed to get existing Route for pre-check")
+		return nil, controllerutil.OperationResultNone, err
+	}
+
+	// err was not found so carry-on with creating a new route
+	route := oresources.NewDefaultRoute(hawtio)
+
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, route, func() error {
+		// Set the owner reference for garbage collection.
+		if err := controllerutil.SetControllerReference(hawtio, route, r.scheme); err != nil {
+			return err
+		}
+
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
+		crRoute := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
+
+		route.SetLabels(crRoute.GetLabels())
+		route.SetAnnotations(crRoute.GetAnnotations())
+		route.Spec = crRoute.Spec
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, opResult, err
+	}
+
+	return route, opResult, nil
+}
+
+func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*networkingv1.Ingress, controllerutil.OperationResult, error) {
+	if r.apiSpec.Routes {
+		return nil, controllerutil.OperationResultNone, nil
+	}
+
+	ingress := kresources.NewDefaultIngress(hawtio)
+
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, ingress, func() error {
+		// Set the owner reference for garbage collection.
+		if err := controllerutil.SetControllerReference(hawtio, ingress, r.scheme); err != nil {
+			return err
+		}
+
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
+		crIngress := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
+
+		ingress.SetLabels(crIngress.GetLabels())
+		ingress.SetAnnotations(crIngress.GetAnnotations())
+		ingress.Spec = crIngress.Spec
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, opResult, err
+	}
+
+	return ingress, opResult, nil
+}
+
+func (r *ReconcileHawtio) reconcileServiceAccountAsOauthClient(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
+	if hawtio.Spec.Type != hawtiov2.NamespaceHawtioDeploymentType {
+		return controllerutil.OperationResultNone, nil
+	}
+
+	serviceAccount := resources.NewDefaultServiceAccountAsOauthClient(hawtio)
+
+	return controllerutil.CreateOrUpdate(ctx, r.client, serviceAccount, func() error {
+		// Set the owner reference for garbage collection.
+		if err := controllerutil.SetControllerReference(hawtio, serviceAccount, r.scheme); err != nil {
+			return err
+		}
+
+		crServiceAccount, err := resources.NewServiceAccountAsOauthClient(hawtio)
+		if (err != nil) {
+			return err
+		}
+
+		serviceAccount.SetLabels(crServiceAccount.GetLabels())
+		serviceAccount.SetAnnotations(crServiceAccount.GetAnnotations())
+		return nil
+	})
+}
+
+func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawtiov2.Hawtio, newRouteURL string)  (controllerutil.OperationResult, error) {
+	if !r.apiSpec.IsOpenShift4 {
+		// Not applicable to cluster
+		return controllerutil.OperationResultNone, nil
+	}
+
+	shouldExist := hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType
+
+	// Should the OAuthClient exist at all?
+	if !shouldExist {
+		// The CR is not cluster-scoped, so we must ensure the OAuthClient is cleaned up.
+		// Note: We use the direct client here to handle potential permission issues.
+		existingOAuthClient := &oauthv1.OAuthClient{}
+		err := r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, existingOAuthClient)
+		if err != nil {
+			if kerrors.IsNotFound(err) {
+				return controllerutil.OperationResultNone, nil // Already gone, which is correct.
+			}
+			// If we get a Forbidden error, we assume we can't manage it anyway.
+			if kerrors.IsForbidden(err) {
+				r.logger.Info("Operator is not permitted to clean up cluster OAuthClient; skipping.")
+				return controllerutil.OperationResultNone, nil
+			}
+			return controllerutil.OperationResultNone, err
+		}
+
+		// Found an existing OAuthClient, let's remove our URI from it.
+		r.logger.Info("Hawtio is not cluster-scoped, removing RedirectURI from OAuthClient")
+		if resources.RemoveRedirectURIFromOauthClient(existingOAuthClient, newRouteURL) {
+			err := r.client.Update(ctx, existingOAuthClient)
+			return controllerutil.OperationResultUpdated, err
+		}
+
+		return controllerutil.OperationResultNone, nil
+	}
+
+	// Ensure the OAuthClient exists and is correctly configured.
+	oAuthClient := resources.NewDefaultOAuthClient(resources.OAuthClientName)
+
+	// We use CreateOrUpdate to ensure the base object exists.
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, oAuthClient, func() error {
+		crOAuthClient := resources.NewOAuthClient(resources.OAuthClientName)
+		oAuthClient.GrantMethod = crOAuthClient.GrantMethod
+		oAuthClient.RedirectURIs = crOAuthClient.RedirectURIs
+		return nil
+	})
+
+	if err != nil {
+		return controllerutil.OperationResultNone, err
+	}
+
+	// Read-Modify-Write for RedirectURIs
+	// We must re-fetch the object to ensure we have the latest version
+	// before modifying the list.
+	err = r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oAuthClient)
+	if err != nil {
+		return controllerutil.OperationResultNone, err
+	}
+
+	updateOAuthClient := false
+	oldRouteURL := hawtio.Status.URL
+	// Remove the old URL if it's different from the new one
+	if oldRouteURL != "" && oldRouteURL != newRouteURL {
+		r.logger.Info("Removing stale RedirectURI from OAuthClient", "URI", oldRouteURL)
+		if resources.RemoveRedirectURIFromOauthClient(oAuthClient, oldRouteURL) {
+			updateOAuthClient = true
+		}
+	}
+
+	// Add the current route URL if it's not already present.
+	if ok, _ := resources.OauthClientContainsRedirectURI(oAuthClient, newRouteURL); !ok && newRouteURL != "" {
+		r.logger.Info("Adding new RedirectURI to OAuthClient", "URI", newRouteURL)
+		oAuthClient.RedirectURIs = append(oAuthClient.RedirectURIs, newRouteURL)
+		updateOAuthClient = true
+	}
+
+	if updateOAuthClient {
+		err := r.client.Update(ctx, oAuthClient)
+		return controllerutil.OperationResultUpdated, err
+	}
+
+	return opResult, nil
+}
+
+func (r *ReconcileHawtio) removeConsoleLink(ctx context.Context, consoleLinkName string) (controllerutil.OperationResult, error) {
+	consoleLink := &consolev1.ConsoleLink{}
+	err := r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			// The link doesn't exist, which is the desired state. Nothing to do.
+			return controllerutil.OperationResultNone, nil
+		}
+		// A real error occurred trying to get the object.
+		return controllerutil.OperationResultNone, err
+	}
+
+	// If we get here, we found a stale ConsoleLink that needs to be deleted.
+	r.logger.Info("Deleting stale ConsoleLink", "ConsoleLink.Name", consoleLinkName)
+	if err := r.client.Delete(ctx, consoleLink); err != nil {
+		return controllerutil.OperationResultNone, err
+	}
+
+	return controllerutil.OperationResultUpdated, nil
+}
+
+func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration, route *routev1.Route) (controllerutil.OperationResult, error) {
+	consoleLinkName := namespacedName.Name + "-" + namespacedName.Namespace
+
+	// The only prerequisites are being on OCP and having a valid Route.
+	shouldExist := r.apiSpec.IsOpenShift4 && r.apiSpec.Routes && route != nil && route.Spec.Host != ""
+
+	// Prerequisite check
+	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Prerequisite Check")
+	if !shouldExist {
+		r.logger.V(util.DebugLogLevel).Info("Removing ConsoleLink as not required")
+		return r.removeConsoleLink(ctx, consoleLinkName)
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Retrieving HawtConfig")
+	hawtconfig, err := resources.GetHawtioConfig(deploymentConfig.configMap)
+	if err != nil {
+		r.logger.Error(err, "Failed to get hawtconfig")
+		return controllerutil.OperationResultNone, err
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Creating new ConsoleLink")
+	consoleLink := &consolev1.ConsoleLink{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: consoleLinkName,
+		},
+	}
+
+	return controllerutil.CreateOrUpdate(ctx, r.client, consoleLink, func() error {
+		var crConsoleLink *consolev1.ConsoleLink
+
+		if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
+			r.logger.V(util.DebugLogLevel).Info("Adding console link as Application Menu Link")
+			crConsoleLink = openshift.NewApplicationMenuLink(consoleLinkName, route, hawtconfig)
+		} else if r.apiSpec.IsOpenShift43Plus {
+			r.logger.V(util.DebugLogLevel).Info("Adding console link as Namespace Dashboard Link")
+			crConsoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, namespacedName.Namespace, route, hawtconfig)
+		}  else {
+			// If no link should exist, we can't model that with CreateOrUpdate.
+			// This case is handled below. For the mutate function, we do nothing.
+			return nil
+		}
+
+		consoleLink.Spec = crConsoleLink.Spec
+		consoleLink.SetLabels(crConsoleLink.GetLabels())
+		consoleLink.SetAnnotations(crConsoleLink.GetAnnotations())
+
+		return nil
+	})
+}
+
+func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
+	if deploymentConfig.clientCertSecret == nil {
+		// No certificate so cronjob not necessary
+		return controllerutil.OperationResultNone, nil
+	}
+
+	// Determine if the CronJob should exist.
+	shouldExist := hawtio.Spec.Auth.ClientCertCheckSchedule != ""
+	cronJobName := hawtio.Name + "-certificate-expiry-check"
+
+	if shouldExist {
+		// The CronJob SHOULD exist. ---
+		r.logger.Info("Ensuring CronJob exists and is up to date", "CronJob.Name", cronJobName)
+		cronJob := resources.NewDefaultCronJob(hawtio)
+
+		return controllerutil.CreateOrUpdate(ctx, r.client, cronJob, func() error {
+			// Set the owner reference for garbage collection.
+			if err := controllerutil.SetControllerReference(hawtio, cronJob, r.scheme); err != nil {
+				return err
+			}
+
+			pod, err := getOperatorPod(ctx, r.client, namespacedName.Namespace)
+			if err != nil {
+				return err
+			}
+
+			crCronJob, err := resources.NewCronJob(hawtio, pod, namespacedName.Namespace)
+			if err != nil {
+				return fmt.Errorf("failed to build desired cronjob: %w", err)
+			}
+
+			cronJob.Spec = crCronJob.Spec
+
+			return nil
+		})
+
+	} else {
+		// The CronJob SHOULD NOT exist. ---
+		// We must ensure it is deleted if it's found.
+		log.V(util.DebugLogLevel).Info("Ensuring CronJob does not exist", "CronJob.Name", cronJobName)
+
+		staleCronJob := &batchv1.CronJob{}
+		err := r.client.Get(ctx, types.NamespacedName{Name: cronJobName, Namespace: hawtio.Namespace}, staleCronJob)
+
+		if err != nil {
+			if kerrors.IsNotFound(err) {
+				// It doesn't exist, which is what we want. Success.
+				return controllerutil.OperationResultNone, nil
+			}
+			return controllerutil.OperationResultNone, err // A real error occurred.
+		}
+
+		// If we found it, it's a stale resource that needs to be deleted.
+		log.Info("Deleting stale CronJob", "CronJob.Name", cronJobName)
+		if err := r.client.Delete(ctx, staleCronJob); err != nil {
+			return controllerutil.OperationResultNone, err
+		}
+
+		return controllerutil.OperationResultUpdated, nil // Signifies a change (deletion) was made.
+	}
+}
+
+func (r *ReconcileHawtio) logOperationResult(resource string, result controllerutil.OperationResult) {
+	if result == controllerutil.OperationResultNone {
+		return // no need to log occasions where no action was taken
+	}
+
+	r.logger.Info("=== Resource "+ resource + " Reconciliation Completed ===", "Result", result)
 }
 
 func getOperatorPod(ctx context.Context, c client.Client, namespace string) (*corev1.Pod, error) {

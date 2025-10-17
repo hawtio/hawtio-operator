@@ -19,6 +19,15 @@ const (
 	SSLServicePort   = 443
 )
 
+func NewDefaultService(hawtio *hawtiov2.Hawtio) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtio.Name,
+			Namespace: hawtio.Namespace,
+		},
+	}
+}
+
 func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, log logr.Logger) *corev1.Service {
 	log.V(util.DebugLogLevel).Info("Reconciling service")
 
@@ -39,25 +48,21 @@ func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, lo
 		servicePort = SSLServicePort
 	}
 
-	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: annotations,
-			Labels:      labels,
-			Name:        name,
-		},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Name:       name,
-					Protocol:   "TCP",
-					Port:       int32(servicePort),
-					TargetPort: intstr.FromString(containerPortName),
-				},
+	service := NewDefaultService(hawtio)
+	service.SetLabels(labels)
+	service.SetAnnotations(annotations)
+	service.Spec = corev1.ServiceSpec{
+		Ports: []corev1.ServicePort{
+			{
+				Name:       name,
+				Protocol:   "TCP",
+				Port:       int32(servicePort),
+				TargetPort: intstr.FromString(containerPortName),
 			},
-			Selector:                 LabelsForHawtio(name),
-			SessionAffinity:          "None",
-			PublishNotReadyAddresses: true,
 		},
+		Selector:                 LabelsForHawtio(name),
+		SessionAffinity:          "None",
+		PublishNotReadyAddresses: true,
 	}
 
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New service %s", util.JSONToString(service)))

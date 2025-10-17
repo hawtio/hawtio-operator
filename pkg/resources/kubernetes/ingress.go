@@ -16,12 +16,20 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+func NewDefaultIngress(hawtio *hawtiov2.Hawtio) *networkingv1.Ingress {
+	return &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtio.Name,
+			Namespace: hawtio.Namespace,
+		},
+	}
+}
+
 // NewIngress create a new Ingress resource
 func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, servingSecret *corev1.Secret, log logr.Logger) *networkingv1.Ingress {
 	log.V(util.DebugLogLevel).Info("Reconciling ingress")
 
 	isSSL := util.IsSSL(hawtio, apiSpec)
-	name := hawtio.Name
 	servicePort := resources.PlainServicePort
 	if isSSL {
 		servicePort = resources.SSLServicePort
@@ -49,33 +57,29 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 
 	pathPrefix := networkingv1.PathTypePrefix
 
-	ingress := &networkingv1.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: annotations,
-			Labels:      labels,
-			Name:        name,
+	ingress := NewDefaultIngress(hawtio)
+	ingress.SetLabels(labels)
+	ingress.SetAnnotations(annotations)
+	ingress.Spec = networkingv1.IngressSpec{
+		TLS: []networkingv1.IngressTLS{
+			ingressTLS,
 		},
-		Spec: networkingv1.IngressSpec{
-			TLS: []networkingv1.IngressTLS{
-				ingressTLS,
-			},
-			Rules: []networkingv1.IngressRule{
-				{
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{{
-								Path:     "/(.*)",
-								PathType: &pathPrefix,
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: hawtio.Name,
-										Port: networkingv1.ServiceBackendPort{
-											Number: int32(servicePort),
-										},
+		Rules: []networkingv1.IngressRule{
+			{
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/(.*)",
+							PathType: &pathPrefix,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: hawtio.Name,
+									Port: networkingv1.ServiceBackendPort{
+										Number: int32(servicePort),
 									},
 								},
-							}},
-						},
+							},
+						}},
 					},
 				},
 			},

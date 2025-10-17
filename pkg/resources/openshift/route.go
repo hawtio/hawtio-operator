@@ -17,6 +17,15 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+func NewDefaultRoute(hawtio *hawtiov2.Hawtio) *routev1.Route {
+	return &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtio.Name,
+			Namespace: hawtio.Namespace,
+		},
+	}
+}
+
 func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSecret *v1.Secret, log logr.Logger) *routev1.Route {
 	log.V(util.DebugLogLevel).Info("Reconciling route")
 
@@ -30,18 +39,14 @@ func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSec
 	}
 	resources.PropagateLabels(hawtio, labels, log)
 
-	route := &routev1.Route{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: annotations,
-			Labels:      labels,
-			Name:        name,
-		},
-		Spec: routev1.RouteSpec{
-			Host: hawtio.Spec.RouteHostName,
-			To: routev1.RouteTargetReference{
-				Kind: "Service",
-				Name: name,
-			},
+	route := NewDefaultRoute(hawtio)
+	route.SetLabels(labels)
+	route.SetAnnotations(annotations)
+	route.Spec = routev1.RouteSpec{
+		Host: hawtio.Spec.RouteHostName,
+		To: routev1.RouteTargetReference{
+			Kind: "Service",
+			Name: name,
 		},
 	}
 

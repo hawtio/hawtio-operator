@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	consolev1 "github.com/openshift/api/console/v1"
+	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	fakeconfig "github.com/openshift/client-go/config/clientset/versioned/fake"
 	fakeoauth "github.com/openshift/client-go/oauth/clientset/versioned/fake"
@@ -51,6 +53,16 @@ func buildReconcileWithFakeClientWithMocks(objs []client.Object, t *testing.T) *
 	}
 
 	err = apis.AddToScheme(scheme)
+	if err != nil {
+		assert.Fail(t, "unable to build scheme")
+	}
+
+	err = consolev1.AddToScheme(scheme)
+	if err != nil {
+		assert.Fail(t, "unable to build scheme")
+	}
+
+	err = oauthv1.AddToScheme(scheme)
 	if err != nil {
 		assert.Fail(t, "unable to build scheme")
 	}
