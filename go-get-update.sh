@@ -1,31 +1,20 @@
 #!/bin/bash
 
 # TODO automate
-GO_VERSION=1.21.13
+GO_VERSION=1.24.6
 
 FAIL_LOG="go-get-upgrade.fail.log"
 if [ -f ${FAIL_LOG} ]; then
   rm ${FAIL_LOG}
 fi
 
-while read dep
+go list -mod=mod -u -m -json all | \
+jq -r 'select(.Main != true and .Update != null) | [.Path, .Version, .Update.Version, .Deprecated] | @tsv' | \
+while IFS=$'\t' read -r path curr new deprecated
 do
-  path=$(echo "${dep}" | jq -r .Path)
   if [ -z "${path}" ]; then
     echo "  Error: Cannot process ${dep}"
     echo
-    continue
-  fi
-
-  main=$(echo "${dep}" | jq -r .Main)
-  if [ "${main}" == "true" ]; then
-    # Do not update ourselves
-    echo
-    continue
-  fi
-
-  update=$(echo "${dep}" | jq -r '.Update | select( . != null )')
-  if [ -z "${update}" ]; then
     continue
   fi
 
@@ -38,9 +27,6 @@ do
   fi
 
   echo "Dependency to be updated: ${path}"
-  curr=$(echo "${dep}" | jq -r '.Version | select( . != null )')
-  new=$(echo "${dep}" | jq -r '.Update.Version | select( . != null )')
-
   echo "Updating ${path}: ${curr} ---> ${new}"
 
   # Stops the version of go installed from being automatically updated
@@ -55,4 +41,4 @@ do
 
   echo
 
-done < <(cat gomod-list.json | jq -c '.[]')
+done
