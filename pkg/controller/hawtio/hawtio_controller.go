@@ -52,7 +52,7 @@ import (
 var log = logf.Log.WithName("controller_hawtio")
 
 const (
-	hawtioFinalizer         = "finalizer.hawtio.hawt.io"
+	hawtioFinalizer         = "hawt.io/finalizer"
 	hostGeneratedAnnotation = "openshift.io/host.generated"
 )
 
@@ -1004,10 +1004,16 @@ func (r *ReconcileHawtio) removeConsoleLink(ctx context.Context, consoleLinkName
 }
 
 func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration, route *routev1.Route) (controllerutil.OperationResult, error) {
+	// If not OpenShift 4, ConsoleLink is irrelevant. Do nothing.
+	if !r.apiSpec.IsOpenShift4 {
+		log.V(util.DebugLogLevel).Info("Not an OpenShift 4 cluster, skipping ConsoleLink reconciliation.")
+		return controllerutil.OperationResultNone, nil
+	}
+
 	consoleLinkName := namespacedName.Name + "-" + namespacedName.Namespace
 
 	// The only prerequisites are being on OCP and having a valid Route.
-	shouldExist := r.apiSpec.IsOpenShift4 && r.apiSpec.Routes && route != nil && route.Spec.Host != ""
+	shouldExist := r.apiSpec.Routes && route != nil && route.Spec.Host != ""
 
 	// Prerequisite check
 	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Prerequisite Check")

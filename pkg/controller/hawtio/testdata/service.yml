@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: hawtio-online-tls-serving
+  creationTimestamp: "2025-10-21T09:24:03Z"
+  labels:
+    app: hawtio
+  name: hawtio-online
+  namespace: default
+  ownerReferences:
+  - apiVersion: hawt.io/v2
+    blockOwnerDeletion: true
+    controller: true
+    kind: Hawtio
+    name: hawtio-online
+    uid: 571ef44b-0c2e-4264-8abf-ca79afd479ce
+  resourceVersion: "48759651"
+  uid: 37b94329-3e55-4f96-af13-b251d551ef60
+spec:
+  clusterIP: 10.217.5.2
+  clusterIPs:
+  - 10.217.5.2
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: hawtio-online
+    port: 443
+    protocol: TCP
+    targetPort: nginx
+  publishNotReadyAddresses: true
+  selector:
+    app: hawtio
+    deployment: hawtio-online
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
