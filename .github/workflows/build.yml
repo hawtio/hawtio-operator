@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        go: ["1.21"]
+        go: ["1.24.6"]
     steps:
       - name: Install Go
         uses: actions/setup-go@v5
@@ -35,7 +35,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Build
-        run: make build
+        run: CI_BUILD=true make build
       - name: Build image
         run: |
           make image
