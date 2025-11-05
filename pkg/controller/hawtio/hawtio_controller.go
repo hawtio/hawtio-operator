@@ -500,7 +500,9 @@ func (r *ReconcileHawtio) handleDeletion(ctx context.Context, hawtio *hawtiov2.H
 	if err != nil {
 		return true, fmt.Errorf("deletion failed: %v", err)
 	}
-	return false, nil
+	// Deletion was successful (or is in progress),
+	// return true to tell Reconcile() to stop.
+	return true, nil
 }
 
 func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio) error {
