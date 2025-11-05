@@ -34,6 +34,15 @@ const (
 	serverRootDirectory                       = "/usr/share/nginx/html"
 )
 
+func NewDefaultDeployment(hawtio *hawtiov2.Hawtio) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtio.Name,
+			Namespace: hawtio.Namespace,
+		},
+	}
+}
+
 func NewDeployment(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables, log logr.Logger) (*appsv1.Deployment, error) {
 	log.V(util.DebugLogLevel).Info("Reconciling deployment")
 
@@ -47,35 +56,32 @@ func NewDeployment(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec,
 func newDeployment(hawtio *hawtiov2.Hawtio, replicas *int32, pts corev1.PodTemplateSpec, log logr.Logger) *appsv1.Deployment {
 	log.V(util.DebugLogLevel).Info("New deployment")
 
+	// Deployment replicas field is defaulted to '1', so we have to equal that defaults, otherwise
+	// the comparison algorithm assumes the requested resource is different, which leads to an infinite
+	// reconciliation loop
+	r := pointer.Int32PtrDerefOr(replicas, 1)
+
+	deployment := NewDefaultDeployment(hawtio)
+
 	annotations := map[string]string{}
 	PropagateAnnotations(hawtio, annotations, log)
 
 	labels := LabelsForHawtio(hawtio.Name)
 	PropagateLabels(hawtio, labels, log)
 
-	// Deployment replicas field is defaulted to '1', so we have to equal that defaults, otherwise
-	// the comparison algorithm assumes the requested resource is different, which leads to an infinite
-	// reconciliation loop
-	r := pointer.Int32PtrDerefOr(replicas, 1)
-
-	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        hawtio.Name,
-			Namespace:   hawtio.Namespace,
-			Annotations: annotations,
-			Labels:      labels,
+	deployment.SetAnnotations(annotations)
+	deployment.SetLabels(labels)
+	deployment.Spec = appsv1.DeploymentSpec{
+		Replicas: &r,
+		Selector: &metav1.LabelSelector{
+			MatchLabels: deployment.Labels,
 		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &r,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: pts,
-			Strategy: appsv1.DeploymentStrategy{
-				Type: appsv1.RollingUpdateDeploymentStrategyType,
-			},
+		Template: pts,
+		Strategy: appsv1.DeploymentStrategy{
+			Type: appsv1.RollingUpdateDeploymentStrategyType,
 		},
 	}
+	return deployment
 }
 
 /**

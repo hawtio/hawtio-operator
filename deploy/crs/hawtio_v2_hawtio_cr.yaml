@@ -21,3 +21,14 @@ spec:
     requests:
       cpu: 200m
       memory: 32Mi
+
+  logging:
+    onlineLogLevel: "info"
+    gatewayLogLevel: "info"
+    maskIPAddresses: "true"
+
+  healthChecks:
+    onlineReadinessPeriod: 10
+    onlineLivenessPeriod: 5
+    gatewayReadinessPeriod: 30
+    gatewayLivenessPeriod: 120

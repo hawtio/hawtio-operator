@@ -82,6 +82,10 @@ var plainHawtioEnvVars = []corev1.EnvVar{
 		Name:  resources.HawtioAuthEnvVar,
 		Value: "form",
 	},
+	{
+		Name:  resources.HawtioOnlineLogLvlEnvVar,
+		Value: resources.HawtioOnlineLogLvlValue,
+	},
 }
 
 var sslHawtioEnvVars = append(plainHawtioEnvVars,
@@ -103,6 +107,14 @@ var plainGatewayEnvVars = []corev1.EnvVar{
 	{
 		Name:  resources.HawtioAuthEnvVar,
 		Value: "form",
+	},
+	{
+		Name:  resources.GatewayLogLvlEnvVar,
+		Value: resources.GatewayLogLvlValue,
+	},
+	{
+		Name:  resources.GatewayMaskIPEnvVar,
+		Value: resources.GatewayMaskIPValue,
 	},
 }
 
@@ -184,10 +196,12 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			res, err := r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
 			assert.Equal(t, reconcile.Result{Requeue: true}, res)
+
 			// Initialized phase
 			res, err = r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
 			assert.Equal(t, reconcile.Result{Requeue: true}, res)
+
 			// Deployed phase
 			res, err = r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
@@ -245,7 +259,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 
 					assert.Equal(t, config, &hawtiov2.HawtioConfig{
 						About: hawtiov2.HawtioAbout{
-							AdditionalInfo: "The Hawtio console eases the discovery and management of 'hawtio-enabled' applications deployed on Kubernetes.",
+							AdditionalInfo: "The Hawtio console eases the discovery and management of hawtio-enabled applications deployed on Kubernetes.",
 							Title:          "Hawtio Console",
 						},
 						Branding: hawtiov2.HawtioBranding{

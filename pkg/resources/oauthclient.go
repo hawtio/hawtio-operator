@@ -8,13 +8,19 @@ import (
 
 const OAuthClientName = "hawtio"
 
-func NewOAuthClient(name string) *oauthv1.OAuthClient {
+func NewDefaultOAuthClient(name string) *oauthv1.OAuthClient {
 	return &oauthv1.OAuthClient{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		GrantMethod: oauthv1.GrantHandlerAuto,
 	}
+}
+
+func NewOAuthClient(name string) *oauthv1.OAuthClient {
+	oAuthClient := NewDefaultOAuthClient(name)
+	oAuthClient.GrantMethod = oauthv1.GrantHandlerAuto
+
+	return oAuthClient
 }
 
 func OauthClientContainsRedirectURI(oc *oauthv1.OAuthClient, uri string) (bool, int) {

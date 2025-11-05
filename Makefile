@@ -26,7 +26,7 @@ VERSION := $(subst -SNAPSHOT,-$(DATETIMESTAMP),$(VERSION))
 #
 # Versions of tools and binaries
 #
-CONTROLLER_GEN_VERSION := v0.17.3
+CONTROLLER_GEN_VERSION := v0.19.0
 KUSTOMIZE_VERSION := v4.5.4
 OPERATOR_SDK_VERSION := v1.28.0
 OPM_VERSION := v1.24.0
@@ -149,7 +149,7 @@ ifeq (, $(shell command -v gotestfmt 2> /dev/null))
 endif
 	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1 | gotestfmt
 else
-	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1
+	CGO_ENABLED=0 go test -v -count=1 ./...
 endif
 
 # Only instigate re-generation of manifests in non-production builds
