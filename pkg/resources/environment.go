@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 const (
@@ -29,15 +31,21 @@ const (
 	/*
 	 * Gateway Env Vars
 	 */
-	GatewayWebSvrEnvVar    = "HAWTIO_ONLINE_GATEWAY_WEB_SERVER"         // https://localhost:8443
-	GatewaySSLKeyEnvVar    = "HAWTIO_ONLINE_GATEWAY_SSL_KEY"            // /etc/tls/private/serving/tls.key
-	GatewaySSLCertEnvVar   = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE"    // /etc/tls/private/serving/tls.crt
-	GatewaySSLCertCAEnvVar = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE_CA" // /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-	GatewayRbacEnvVar      = "HAWTIO_ONLINE_RBAC_ACL"
+	GatewayWebSvrEnvVar      = "HAWTIO_ONLINE_GATEWAY_WEB_SERVER"         // https://localhost:8443
+	GatewaySSLKeyEnvVar      = "HAWTIO_ONLINE_GATEWAY_SSL_KEY"            // /etc/tls/private/serving/tls.key
+	GatewaySSLCertEnvVar     = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE"    // /etc/tls/private/serving/tls.crt
+	GatewaySSLCertCAEnvVar   = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE_CA" // /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+	GatewayLogLvlEnvVar      = "HAWTIO_ONLINE_GATEWAY_LOG_LEVEL"          // info
+	GatewayRbacEnvVar        = "HAWTIO_ONLINE_RBAC_ACL"
+	GatewayMaskIPEnvVar      = "HAWTIO_ONLINE_MASK_IP_ADDRESSES" // true
+	HawtioOnlineLogLvlEnvVar = "HAWTIO_ONLINE_LOG_LEVEL"         // info
 
-	HawtioSSLKeyValue    = "/etc/tls/private/serving/tls.key"
-	HawtioSSLCertValue   = "/etc/tls/private/serving/tls.crt"
-	HawtioSSLCertCAValue = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	HawtioSSLKeyValue       = "/etc/tls/private/serving/tls.key"
+	HawtioSSLCertValue      = "/etc/tls/private/serving/tls.crt"
+	HawtioSSLCertCAValue    = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+	HawtioOnlineLogLvlValue = "info"
+	GatewayLogLvlValue      = "info"
+	GatewayMaskIPValue      = "true"
 )
 
 func envVarForAuth(isOpenShift bool) corev1.EnvVar {
@@ -56,7 +64,7 @@ func envVarForAuth(isOpenShift bool) corev1.EnvVar {
 	return authTypeEnvVar
 }
 
-func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string, isOpenShift bool, isSSL bool) []corev1.EnvVar {
+func envVarsForHawtio(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.EnvVar {
 	/*
 	 * oauthClientId used in 2 configurations:
 	 * 1. In namespace mode, service account with same name as Hawtio CR has annotations
@@ -68,8 +76,8 @@ func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string,
 	 */
 
 	// HAWTIO_OAUTH_CLIENT_ID given CR name by default
-	oauthClientID := name
-	if deploymentType == hawtiov2.ClusterHawtioDeploymentType {
+	oauthClientID := hawtio.Name
+	if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
 		// Update HAWTIO_OAUTH_CLIENT_ID to known name for cluster-wide OAuthClient
 		oauthClientID = OAuthClientName
 	}
@@ -77,11 +85,11 @@ func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string,
 	envVars := []corev1.EnvVar{
 		{
 			Name:  HawtioTypeEnvVar,
-			Value: strings.ToLower(string(deploymentType)),
+			Value: strings.ToLower(string(hawtio.Spec.Type)),
 		},
 	}
 
-	if isOpenShift {
+	if apiSpec.IsOpenShift4 {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name:  HawtioOAuthClientEnvVar,
@@ -90,6 +98,7 @@ func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string,
 		)
 	}
 
+	isSSL := util.IsSSL(hawtio, apiSpec)
 	if isSSL {
 		envVars = append(envVars,
 			corev1.EnvVar{
@@ -103,10 +112,10 @@ func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string,
 		)
 	}
 
-	authTypeEnvVar := envVarForAuth(isOpenShift)
+	authTypeEnvVar := envVarForAuth(apiSpec.IsOpenShift4)
 	envVars = append(envVars, authTypeEnvVar)
 
-	if deploymentType == hawtiov2.NamespaceHawtioDeploymentType {
+	if hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType {
 		envVars = append(envVars, corev1.EnvVar{
 			Name: HawtioNamespaceEnvVar,
 			ValueFrom: &corev1.EnvVarSource{
@@ -117,6 +126,18 @@ func envVarsForHawtio(deploymentType hawtiov2.HawtioDeploymentType, name string,
 			},
 		})
 	}
+
+	onlineLogLvl := HawtioOnlineLogLvlValue
+	if hawtio.Spec.Logging.OnlineLogLevel != "" {
+		onlineLogLvl = hawtio.Spec.Logging.OnlineLogLevel
+	}
+
+	envVars = append(envVars,
+		corev1.EnvVar{
+			Name:  HawtioOnlineLogLvlEnvVar,
+			Value: onlineLogLvl,
+		},
+	)
 
 	return envVars
 }
@@ -158,10 +179,12 @@ func envVarsForNginx(nginx hawtiov2.HawtioNginx) []corev1.EnvVar {
 	return envVars
 }
 
-func envVarsForGateway(isOpenShift bool, isSSL bool) []corev1.EnvVar {
+func envVarsForGateway(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.EnvVar {
 
 	webSrvProtocol := "http"
 	webSvrPort := 8080
+	isSSL := util.IsSSL(hawtio, apiSpec)
+
 	if isSSL {
 		webSrvProtocol = "https"
 		webSvrPort = 8443
@@ -191,8 +214,29 @@ func envVarsForGateway(isOpenShift bool, isSSL bool) []corev1.EnvVar {
 		)
 	}
 
+	gatewayLogLvl := GatewayLogLvlValue
+	if hawtio.Spec.Logging.GatewayLogLevel != "" {
+		gatewayLogLvl = hawtio.Spec.Logging.GatewayLogLevel
+	}
+
+	gatewayMaskIP := GatewayMaskIPValue
+	if hawtio.Spec.Logging.MaskIPAddresses != "" {
+		gatewayMaskIP = hawtio.Spec.Logging.MaskIPAddresses
+	}
+
+	envVars = append(envVars,
+		corev1.EnvVar{
+			Name:  GatewayLogLvlEnvVar,
+			Value: gatewayLogLvl,
+		},
+		corev1.EnvVar{
+			Name:  GatewayMaskIPEnvVar,
+			Value: gatewayMaskIP,
+		},
+	)
+
 	// Needs to be added to gateway in the same way as the hawtio image
-	authTypeEnvVar := envVarForAuth(isOpenShift)
+	authTypeEnvVar := envVarForAuth(apiSpec.IsOpenShift4)
 	envVars = append(envVars, authTypeEnvVar)
 
 	return envVars

@@ -16,6 +16,15 @@ import (
 )
 
 const (
+	// OnlineReadinessPeriodValue is the default for Online's Readiness period value
+	OnlineReadinessPeriodValue = 5
+	// OnlineLivenessPeriodValue is the default for Online's Liveness period value
+	OnlineLivenessPeriodValue = 10
+	// GatewayReadinessPeriodValue is the default for Gateway's Readiness period value
+	GatewayReadinessPeriodValue = 30
+	// GatewayLivenessPeriodValue is the default for Gateway's Liveness period value
+	GatewayLivenessPeriodValue = 120
+
 	containerPortName        = "nginx"
 	containerGatewayPortName = "express"
 )
@@ -80,6 +89,16 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container protocols %s", util.JSONToString(connect)))
 
+	var readinessPeriodValue int32 = OnlineReadinessPeriodValue
+	if hawtio.Spec.HealthChecks.OnlineReadinessPeriod != nil {
+		readinessPeriodValue = *hawtio.Spec.HealthChecks.OnlineReadinessPeriod
+	}
+
+	var livenessPeriodValue int32 = OnlineLivenessPeriodValue
+	if hawtio.Spec.HealthChecks.OnlineLivenessPeriod != nil {
+		livenessPeriodValue = *hawtio.Spec.HealthChecks.OnlineLivenessPeriod
+	}
+
 	container := corev1.Container{
 		Name:            hawtio.Name + "-container",
 		Image:           getHawtioImageFor(imageVersion, imageRepository),
@@ -88,7 +107,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 		ReadinessProbe: &corev1.Probe{
 			InitialDelaySeconds: 5,
 			TimeoutSeconds:      1,
-			PeriodSeconds:       5,
+			PeriodSeconds:       readinessPeriodValue,
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerPortName),
@@ -99,7 +118,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 		},
 		LivenessProbe: &corev1.Probe{
 			TimeoutSeconds: 1,
-			PeriodSeconds:  10,
+			PeriodSeconds:  livenessPeriodValue,
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Port:   intstr.FromString(containerPortName),
@@ -153,6 +172,16 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 	}
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container protocols %s", util.JSONToString(connect)))
 
+	var readinessPeriodValue int32 = GatewayReadinessPeriodValue
+	if hawtio.Spec.HealthChecks.GatewayReadinessPeriod != nil {
+		readinessPeriodValue = *hawtio.Spec.HealthChecks.GatewayReadinessPeriod
+	}
+
+	var livenessPeriodValue int32 = GatewayLivenessPeriodValue
+	if hawtio.Spec.HealthChecks.GatewayLivenessPeriod != nil {
+		livenessPeriodValue = *hawtio.Spec.HealthChecks.GatewayLivenessPeriod
+	}
+
 	container := corev1.Container{
 		Name:            hawtio.Name + "-gateway-container",
 		Image:           getGatewayImageFor(imageVersion, imageGatewayRepository),
@@ -173,7 +202,7 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 					Scheme: connect.Protocol,
 				},
 			},
-			PeriodSeconds:  10,
+			PeriodSeconds:  livenessPeriodValue,
 			TimeoutSeconds: 1,
 		},
 		ReadinessProbe: &corev1.Probe{
@@ -185,7 +214,7 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 				},
 			},
 			InitialDelaySeconds: 5,
-			PeriodSeconds:       5,
+			PeriodSeconds:       readinessPeriodValue,
 			TimeoutSeconds:      1,
 		},
 		Resources: hawtio.Spec.Resources,
@@ -196,9 +225,8 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 
 func newHawtioEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
-	isSSL := util.IsSSL(hawtio, apiSpec)
 
-	envVarsForHawtio := envVarsForHawtio(hawtio.Spec.Type, hawtio.Name, apiSpec.IsOpenShift4, isSSL)
+	envVarsForHawtio := envVarsForHawtio(hawtio, apiSpec)
 	envVars = append(envVars, envVarsForHawtio...)
 
 	if apiSpec.IsOpenShift4 {
@@ -214,9 +242,8 @@ func newHawtioEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSp
 
 func newGatewayEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.EnvVar {
 	var envVars []corev1.EnvVar
-	isSSL := util.IsSSL(hawtio, apiSpec)
 
-	envVarsForGateway := envVarsForGateway(apiSpec.IsOpenShift4, isSSL)
+	envVarsForGateway := envVarsForGateway(hawtio, apiSpec)
 	envVars = append(envVars, envVarsForGateway...)
 
 	envVarsForRBAC := envVarsForRBAC(hawtio.Spec.RBAC)

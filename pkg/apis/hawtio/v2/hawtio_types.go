@@ -86,6 +86,10 @@ type HawtioSpec struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	// The Hawtio console configuration
 	Config HawtioConfig `json:"config,omitempty"`
+	// The Hawtio logging configuration
+	Logging HawtioLogging `json:"logging,omitempty"`
+	// The Hawtio health checking configuration
+	HealthChecks HawtioHealthCheckPeriods `json:"healthChecks,omitempty"`
 }
 
 // The configuration for which metadata on Hawtio custom resources to propagate to
@@ -259,6 +263,27 @@ type HawtioConsoleLink struct {
 	// The image should be square and will be shown at 24x24 pixels.
 	// +optional
 	ImageRelativePath string `json:"imageRelativePath,omitempty"`
+}
+
+type HawtioHealthCheckPeriods struct {
+	// Configure the period, in seconds, between online container readiness probe checks
+	OnlineReadinessPeriod *int32 `json:"onlineReadinessPeriod,omitempty"`
+	// Configure the period, in seconds, between online container liveness probe checks
+	OnlineLivenessPeriod *int32 `json:"onlineLivenessPeriod,omitempty"`
+	// Configure the period, in seconds, between gateway container readiness probe checks
+	GatewayReadinessPeriod *int32 `json:"gatewayReadinessPeriod,omitempty"`
+	// Configure the period, in seconds, between gateway container liveness probe checks
+	GatewayLivenessPeriod *int32 `json:"gatewayLivenessPeriod,omitempty"`
+}
+
+// Configure the logging options for the servers
+type HawtioLogging struct {
+	// Configure online log level {emerg|alert|crit|error|warn|notice|info}
+	OnlineLogLevel string `json:"onlineLogLevel,omitempty"`
+	// Configure gateway log level {info|debug}
+	GatewayLogLevel string `json:"gatewayLogLevel,omitempty"`
+	// Turn on/off the masking of IP addresses in logging {true|false}
+	MaskIPAddresses string `json:"maskIPAddresses,omitempty"`
 }
 
 // NewHawtio initialise the defaults of a new Hawtio

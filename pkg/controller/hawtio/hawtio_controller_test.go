@@ -82,6 +82,10 @@ var plainHawtioEnvVars = []corev1.EnvVar{
 		Name:  resources.HawtioAuthEnvVar,
 		Value: "form",
 	},
+	{
+		Name:  resources.HawtioOnlineLogLvlEnvVar,
+		Value: resources.HawtioOnlineLogLvlValue,
+	},
 }
 
 var sslHawtioEnvVars = append(plainHawtioEnvVars,
@@ -103,6 +107,14 @@ var plainGatewayEnvVars = []corev1.EnvVar{
 	{
 		Name:  resources.HawtioAuthEnvVar,
 		Value: "form",
+	},
+	{
+		Name:  resources.GatewayLogLvlEnvVar,
+		Value: resources.GatewayLogLvlValue,
+	},
+	{
+		Name:  resources.GatewayMaskIPEnvVar,
+		Value: resources.GatewayMaskIPValue,
 	},
 }
 

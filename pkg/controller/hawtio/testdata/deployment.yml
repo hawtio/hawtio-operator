@@ -58,6 +58,8 @@ spec:
             fieldRef:
               apiVersion: v1
               fieldPath: metadata.namespace
+        - name: HAWTIO_ONLINE_LOG_LEVEL
+          value: "info"
         image: quay.io/hawtio/online:latest
         imagePullPolicy: Always
         livenessProbe:
@@ -102,6 +104,10 @@ spec:
           value: /etc/tls/private/serving/tls.crt
         - name: HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE_CA
           value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        - name: HAWTIO_ONLINE_GATEWAY_LOG_LEVEL
+          value: "info"
+        - name: HAWTIO_ONLINE_MASK_IP_ADDRESSES
+          value: "true"
         - name: HAWTIO_ONLINE_AUTH
           value: form
         image: quay.io/hawtio/online-gateway:latest
@@ -112,7 +118,7 @@ spec:
             path: /status
             port: express
             scheme: HTTPS
-          periodSeconds: 10
+          periodSeconds: 120
           successThreshold: 1
           timeoutSeconds: 1
         name: hawtio-online-gateway-container
@@ -127,7 +133,7 @@ spec:
             port: express
             scheme: HTTPS
           initialDelaySeconds: 5
-          periodSeconds: 5
+          periodSeconds: 30
           successThreshold: 1
           timeoutSeconds: 1
         resources: {}
