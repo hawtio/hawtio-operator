@@ -537,10 +537,18 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio)
 		return fmt.Errorf("failed to delete console link: %v", err)
 	}
 
-	controllerutil.RemoveFinalizer(hawtio, hawtioFinalizer)
-	err = r.client.Update(ctx, hawtio)
-	if err != nil {
-		return fmt.Errorf("failed to remove finalizer: %v", err)
+	// Check if the finalizer is still present before trying to remove it
+	if controllerutil.ContainsFinalizer(hawtio, hawtioFinalizer) {
+		previous := hawtio.DeepCopy()
+		controllerutil.RemoveFinalizer(hawtio, hawtioFinalizer)
+
+		// Use patch rather than update to ensure only the
+		// explicit changes are merged in rather than potentially
+		// overwriting with a stale hawtio CR
+		err := r.client.Patch(ctx, hawtio, client.MergeFrom(previous))
+		if err != nil {
+			return fmt.Errorf("failed to remove finalizer: %v", err)
+		}
 	}
 
 	return nil
@@ -553,8 +561,13 @@ func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Haw
 		return nil
 	}
 
+	previous := hawtio.DeepCopy()
 	controllerutil.AddFinalizer(hawtio, hawtioFinalizer)
-	err := r.client.Update(ctx, hawtio)
+
+	// Use patch rather than update to ensure only the
+	// explicit changes are merged in rather than potentially
+	// overwriting with a stale hawtio CR
+	err := r.client.Patch(ctx, hawtio, client.MergeFrom(previous))
 	if err != nil {
 		return fmt.Errorf("failed to update finalizer: %v", err)
 	}
@@ -565,8 +578,14 @@ func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Haw
 func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
 	if len(hawtio.Spec.Type) == 0 {
 		r.logger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type not specified. Defaulting to Cluster")
+
+		previous := hawtio.DeepCopy()
 		hawtio.Spec.Type = hawtiov2.ClusterHawtioDeploymentType
-		err := r.client.Update(ctx, hawtio)
+
+		// Use patch rather than update to ensure only the
+		// explicit changes are merged in rather than potentially
+		// overwriting with a stale hawtio CR
+		err := r.client.Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return false, fmt.Errorf("failed to update type: %v", err)
 		}
