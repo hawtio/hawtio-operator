@@ -2,7 +2,7 @@ module github.com/hawtio/hawtio-operator
 
 go 1.24.6
 
-require sigs.k8s.io/controller-runtime v0.22.3
+require sigs.k8s.io/controller-runtime v0.22.4
 
 require (
 	k8s.io/api v0.34.1
