@@ -9,7 +9,7 @@ HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 HAWTIO_ONLINE_GATEWAY_VERSION ?= 2.3.0
 HAWTIO_ONLINE_GATEWAY_IMAGE_NAME ?= quay.io/${ORG}/online-gateway
 DEBUG ?= false
-LAST_RELEASED_IMAGE_NAME := hawtio-operator
+LAST_RELEASED_IMAGE_NAME := red-hat-hawtio-operator
 LAST_RELEASED_VERSION ?= 1.2.1
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 
@@ -29,7 +29,7 @@ VERSION := $(subst -SNAPSHOT,-$(DATETIMESTAMP),$(VERSION))
 CONTROLLER_GEN_VERSION := v0.19.0
 KUSTOMIZE_VERSION := v4.5.4
 OPERATOR_SDK_VERSION := v1.28.0
-OPM_VERSION := v1.24.0
+OPM_VERSION := v1.60.0
 
 CRD_OPTIONS ?= crd:crdVersions=v1
 
@@ -217,9 +217,9 @@ endif
 # Generate bundle manifests and metadata
 DEFAULT_CHANNEL ?= $(shell echo "stable-v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
 CHANNELS ?= $(DEFAULT_CHANNEL),latest
-PACKAGE := hawtio-operator
+PACKAGE := red-hat-hawtio-operator
 MANIFESTS := bundle
-CSV_VERSION := $(OPERATOR_VERSION)
+CSV_VERSION ?= $(OPERATOR_VERSION)
 CSV_NAME := $(PACKAGE).v$(CSV_VERSION)
 CSV_DISPLAY_NAME := Hawtio Operator
 CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
@@ -231,7 +231,7 @@ CSV_SKIP_RANGE := >=1.0.0 <1.0.2
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
 
 # Test Bundle Index
-BUNDLE_INDEX := quay.io/operatorhubio/catalog:latest
+BUNDLE_INDEX := registry.redhat.io/redhat/redhat-operator-index:v4.21
 INDEX_DIR := index
 OPM := opm
 
@@ -329,13 +329,14 @@ bundle-build: bundle container-builder
 #* PARAMETERS:
 #** IMAGE:                     Set the custom image name (will be suffixed with '-bundle')
 #** VERSION:                   Set the custom version for the bundle image
+#** CSV_VERSION:               Set the CSV version if different from the OPERATOR_VERSION / TAG
 #
 #---
-bundle-index: opm yq
+bundle-index: opm yq container-builder
 	BUNDLE_INDEX=$(BUNDLE_INDEX) INDEX_DIR=$(INDEX_DIR) PACKAGE=$(PACKAGE) YQ=$(YQ) \
 	OPM=$(OPM) BUNDLE_IMAGE=$(BUNDLE_IMAGE_NAME):$(VERSION) CSV_NAME=$(CSV_NAME) \
 	CSV_SKIPS="$(CSV_SKIP_RANGE)" CSV_REPLACES=$(CSV_REPLACES) CHANNELS="$(CHANNELS)" \
-	./script/build_bundle_index.sh
+	CONTAINER_BUILDER=$(CONTAINER_BUILDER) ./script/build_bundle_index.sh
 
 #
 # Checks if the cluster user has the necessary privileges to be a cluster-admin

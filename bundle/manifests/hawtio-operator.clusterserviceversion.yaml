@@ -68,6 +68,17 @@ metadata:
               "clientCertExpirationPeriod": 24,
               "internalSSL": true
             },
+            "healthChecks": {
+              "gatewayLivenessPeriod": 120,
+              "gatewayReadinessPeriod": 30,
+              "onlineLivenessPeriod": 5,
+              "onlineReadinessPeriod": 10
+            },
+            "logging": {
+              "gatewayLogLevel": "info",
+              "maskIPAddresses": "true",
+              "onlineLogLevel": "info"
+            },
             "replicas": 1,
             "resources": {
               "limits": {
