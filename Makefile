@@ -16,6 +16,14 @@ BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 # Is this build part of an automated CI pipeline
 CI_BUILD ?= false
 
+# If CI_BUILD is set to true then only want fast testing
+# so skip integration tests marked with the integration tag.
+ifeq ($(CI_BUILD),true)
+TEST_FLAGS :=
+else
+TEST_FLAGS := -tags=integration
+endif
+
 # Drop suffix for use with bundle and CSV
 OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
 
@@ -147,9 +155,9 @@ ifeq ($(CI_BUILD), false)
 ifeq (, $(shell command -v gotestfmt 2> /dev/null))
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 endif
-	CGO_ENABLED=0 go test -count=1 ./... -json 2>&1 | gotestfmt
+	CGO_ENABLED=0 go test $(TEST_FLAGS) -count=1 ./... -json 2>&1 | gotestfmt
 else
-	CGO_ENABLED=0 go test -v -count=1 ./...
+	CGO_ENABLED=0 go test $(TEST_FLAGS) -v -count=1 ./...
 endif
 
 # Only instigate re-generation of manifests in non-production builds
