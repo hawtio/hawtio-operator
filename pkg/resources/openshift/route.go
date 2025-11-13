@@ -17,6 +17,8 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+const RouteHostGeneratedAnnotation = "openshift.io/host.generated"
+
 func NewDefaultRoute(hawtio *hawtiov2.Hawtio) *routev1.Route {
 	return &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
@@ -33,6 +35,11 @@ func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSec
 
 	annotations := map[string]string{}
 	resources.PropagateAnnotations(hawtio, annotations, log)
+	// If the user does not specify a host, OpenShift will generate one.
+	// We *must* annotate the route to indicate this.
+	if hawtio.Spec.RouteHostName == "" {
+		annotations[RouteHostGeneratedAnnotation] = "true"
+	}
 
 	labels := map[string]string{
 		resources.LabelAppKey: "hawtio",
