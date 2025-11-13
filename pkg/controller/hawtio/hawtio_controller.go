@@ -53,7 +53,6 @@ var log = logf.Log.WithName("controller_hawtio")
 
 const (
 	hawtioFinalizer         = "hawt.io/finalizer"
-	hostGeneratedAnnotation = "openshift.io/host.generated"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -813,7 +812,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 
 	if err == nil {
 		// A route was found. Now, apply the special condition check.
-		isGenerated := strings.EqualFold(existingRoute.Annotations[hostGeneratedAnnotation], "true")
+		isGenerated := strings.EqualFold(existingRoute.Annotations[oresources.RouteHostGeneratedAnnotation], "true")
 
 		if hawtio.Spec.RouteHostName == "" && !isGenerated {
 			// The user cleared the hostname, and the current route is not auto-generated.
