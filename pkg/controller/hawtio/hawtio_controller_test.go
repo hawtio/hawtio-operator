@@ -205,7 +205,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			// Deployed phase
 			res, err = r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
-			assert.Equal(t, reconcile.Result{}, res)
+			assert.Equal(t, reconcile.Result{Requeue: true}, res)
 
 			t.Run("hawtio-online", func(t *testing.T) {
 				t.Run("check if the Hawtio has been created", func(t *testing.T) {
