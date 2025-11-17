@@ -1,0 +1,17 @@
+apiVersion: v1
+data:
+  hawtconfig.json: '{"about":{"additionalInfo":"The Hawtio console eases the discovery and management of hawtio-enabled applications deployed on OpenShift.","title":"Hawtio Console"},"branding":{"appLogoUrl":"img/hawtio-logo.svg","appName":"Hawtio Console"},"online":{"consoleLink":{"imageRelativePath":"/online/img/favicon.ico","section":"Hawtio","text":"Hawtio Console"}}}'
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2025-10-21T09:24:03Z"
+  name: hawtio-online
+  namespace: default
+  ownerReferences:
+  - apiVersion: hawt.io/v2
+    blockOwnerDeletion: true
+    controller: true
+    kind: Hawtio
+    name: hawtio-online
+    uid: 571ef44b-0c2e-4264-8abf-ca79afd479ce
+  resourceVersion: "48759559"
+  uid: a2dd4f93-1b35-4966-90fc-9f3efb76bc3f

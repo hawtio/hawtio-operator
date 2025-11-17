@@ -1,0 +1,189 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  creationTimestamp: "2025-10-21T09:24:03Z"
+  generation: 1
+  labels:
+    app: hawtio
+    deployment: hawtio-online
+  name: hawtio-online
+  namespace: default
+  ownerReferences:
+  - apiVersion: hawt.io/v2
+    blockOwnerDeletion: true
+    controller: true
+    kind: Hawtio
+    name: hawtio-online
+    uid: 571ef44b-0c2e-4264-8abf-ca79afd479ce
+  resourceVersion: "48766129"
+  uid: eba88dd0-5b17-4a2e-b46c-80b119dd2bc2
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: hawtio
+      deployment: hawtio-online
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        hawtio.hawt.io/certversion: "48759543"
+        hawtio.hawt.io/configversion: "48759559"
+      creationTimestamp: null
+      labels:
+        app: hawtio
+        com.company: Red_Hat
+        deployment: hawtio-online
+    spec:
+      containers:
+      - env:
+        - name: HAWTIO_ONLINE_MODE
+          value: namespace
+        - name: HAWTIO_OAUTH_CLIENT_ID
+          value: "hawtio-online"
+        - name: HAWTIO_ONLINE_SSL_KEY
+          value: /etc/tls/private/serving/tls.key
+        - name: HAWTIO_ONLINE_SSL_CERTIFICATE
+          value: /etc/tls/private/serving/tls.crt
+        - name: HAWTIO_ONLINE_AUTH
+          value: oauth
+        - name: HAWTIO_ONLINE_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: HAWTIO_ONLINE_LOG_LEVEL
+          value: "info"
+        - name: OPENSHIFT_CLUSTER_VERSION
+          value: 4.19.0
+        - name: OPENSHIFT_WEB_CONSOLE_URL
+          value: https://console-openshift-console.apps-crc.testing
+        image: quay.io/hawtio/online:2.3.0
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /online
+            port: nginx
+            scheme: HTTPS
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: hawtio-online-container
+        ports:
+        - containerPort: 8443
+          name: nginx
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /online
+            port: nginx
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /usr/share/nginx/html/online/hawtconfig.json
+          name: hawtio-online
+          subPath: hawtconfig.json
+        - mountPath: /etc/tls/private/serving
+          name: hawtio-online-tls-serving
+        - mountPath: /etc/tls/private/proxying
+          name: hawtio-online-tls-proxying
+      - env:
+        - name: HAWTIO_ONLINE_GATEWAY_WEB_SERVER
+          value: https://localhost:8443
+        - name: HAWTIO_ONLINE_GATEWAY_SSL_KEY
+          value: /etc/tls/private/serving/tls.key
+        - name: HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE
+          value: /etc/tls/private/serving/tls.crt
+        - name: HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE_CA
+          value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        - name: HAWTIO_ONLINE_GATEWAY_LOG_LEVEL
+          value: "info"
+        - name: HAWTIO_ONLINE_MASK_IP_ADDRESSES
+          value: "true"
+        - name: HAWTIO_ONLINE_AUTH
+          value: oauth
+        image: quay.io/hawtio/online-gateway:2.3.0
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /status
+            port: express
+            scheme: HTTPS
+          periodSeconds: 120
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: hawtio-online-gateway-container
+        ports:
+        - containerPort: 3000
+          name: express
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /status
+            port: express
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 30
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/tls/private/serving
+          name: hawtio-online-tls-serving
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: hawtio-online-tls-serving
+        secret:
+          defaultMode: 420
+          secretName: hawtio-online-tls-serving
+      - name: "hawtio-online-tls-proxying"
+        secret:
+          defaultMode: 420
+          secretName: hawtio-online-tls-proxying
+      - configMap:
+          defaultMode: 420
+          name: hawtio-online
+        name: hawtio-online
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2025-10-21T09:25:01Z"
+    lastUpdateTime: "2025-10-21T09:25:01Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2025-10-21T09:24:03Z"
+    lastUpdateTime: "2025-10-21T09:25:01Z"
+    message: ReplicaSet "hawtio-online-856d685d87" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  observedGeneration: 1
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1

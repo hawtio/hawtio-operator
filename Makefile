@@ -20,8 +20,10 @@ CI_BUILD ?= false
 # so skip integration tests marked with the integration tag.
 ifeq ($(CI_BUILD),true)
 TEST_FLAGS :=
+TEST_ENV_VARS :=
 else
 TEST_FLAGS := -tags=integration
+TEST_ENV_VARS := GINKGO_ARGS="-ginkgo.v"
 endif
 
 # Drop suffix for use with bundle and CSV
@@ -155,9 +157,9 @@ ifeq ($(CI_BUILD), false)
 ifeq (, $(shell command -v gotestfmt 2> /dev/null))
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 endif
-	CGO_ENABLED=0 go test $(TEST_FLAGS) -count=1 ./... -json 2>&1 | gotestfmt
+	CGO_ENABLED=0 $(TEST_ENV_VARS) go test $(TEST_FLAGS) -count=1 -json ./... 2>&1 | gotestfmt
 else
-	CGO_ENABLED=0 go test $(TEST_FLAGS) -v -count=1 ./...
+	CGO_ENABLED=0 $(TEST_ENV_VARS) go test $(TEST_FLAGS) -v -count=1 ./...
 endif
 
 # Only instigate re-generation of manifests in non-production builds
