@@ -73,6 +73,6 @@ func CreateConsoleYAMLSamples(ctx context.Context, c client.Client, productName 
 			}
 			continue
 		}
-		log.Info("yaml", " name: ", filename, " Created.")
+		log.Info("yaml created", "name", filename)
 	}
 }
