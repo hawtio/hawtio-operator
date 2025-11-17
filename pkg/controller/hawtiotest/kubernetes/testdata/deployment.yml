@@ -60,7 +60,7 @@ spec:
               fieldPath: metadata.namespace
         - name: HAWTIO_ONLINE_LOG_LEVEL
           value: "info"
-        image: quay.io/hawtio/online:latest
+        image: quay.io/hawtio/online:2.3.0
         imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3
@@ -110,7 +110,7 @@ spec:
           value: "true"
         - name: HAWTIO_ONLINE_AUTH
           value: form
-        image: quay.io/hawtio/online-gateway:latest
+        image: quay.io/hawtio/online-gateway:2.3.0
         imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3

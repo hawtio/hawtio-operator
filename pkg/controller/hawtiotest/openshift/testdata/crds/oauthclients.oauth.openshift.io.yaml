@@ -1,0 +1,95 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: oauthclients.oauth.openshift.io
+spec:
+  conversion:
+    strategy: None
+  group: oauth.openshift.io
+  names:
+    kind: OAuthClient
+    listKind: OAuthClientList
+    plural: oauthclients
+    singular: oauthclient
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: OAuthClient describes an OAuth client
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          grantMethod:
+            description: GrantMethod determines how tokens are granted for this client.
+              On success, the token is POSTed to the redirectURI exactly as specified.
+              If unset, the default behavior is GrantMethodAuto, which displays a confirmation
+              page to the user.
+            enum:
+            - auto
+            - prompt
+            - ""
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          redirectURIs:
+            description: RedirectURIs is the list of valid redirect
+            items:
+              type: string
+            type: array
+          respondWithChallenges:
+            description: RespondWithChallenges indicates whether the client wants
+              authentication challenges if unauthorized.
+            type: boolean
+          scopeRestrictions:
+            description: ScopeRestrictions describes which scopes this client can
+              request.  Each restriction is checked against the scopes requested by
+              the user.  If any restriction matches, the user's scopes are narrowed
+              to the intersection of the user's scopes and the restriction.  If no
+              restriction matches, the user's scopes are unchanged.  To further filter
+              scops, see serviceaccount.scopes.authorization.openshift.io in the associated
+              service account.
+            items:
+              description: ScopeRestriction describe one restriction on scopes.  Exactly
+                one option is required.
+              properties:
+                clusterRole:
+                  description: ClusterRole describes a set of restrictions for cluster-scoped
+                    roles.
+                  properties:
+                    allowEscalation:
+                      description: AllowEscalation indicates whether you can request
+                        a role that requires escalation validation (for example, the
+                        cluster-admin role).
+                      type: boolean
+                    roleNames:
+                      description: RoleNames is the list of cluster roles that you
+                        can request.  * means all.
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - roleNames
+                  type: object
+                literals:
+                  description: Literals is the list of required scopes.
+                  items:
+                    type: string
+                  type: array
+              type: object
+            type: array
+          secret:
+            description: Secret is the unique secret associated with a client
+            type: string
+        type: object
+    served: true
+    storage: true
+    subresources: {}
