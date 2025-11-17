@@ -53,6 +53,7 @@ var log = logf.Log.WithName("controller_hawtio")
 
 const (
 	hawtioFinalizer         = "hawt.io/finalizer"
+	HawtioUnderTestEnvVar   = "HAWTIO_UNDER_TEST"
 )
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -121,8 +122,18 @@ func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedE
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
+	// Need to skip name registry validation if
+	// the controller is being run through test suites
+	skipValidation := false
+	if os.Getenv(HawtioUnderTestEnvVar) == "true" {
+		skipValidation = true
+  }
+
 	// Create a new controller
-	c, err := controller.New("hawtio-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("hawtio-controller", mgr, controller.Options{
+		Reconciler: r,
+		SkipNameValidation: &skipValidation,
+	})
 	if err != nil {
 		return errs.Wrap(err, "Failed to create new controller")
 	}
@@ -643,6 +654,8 @@ func (r *ReconcileHawtio) verifyRBACConfigMap(ctx context.Context, hawtio *hawti
 }
 
 func (r *ReconcileHawtio) setHawtioPhase(ctx context.Context, hawtio *hawtiov2.Hawtio, phase hawtiov2.HawtioPhase) error {
+	r.logger.V(util.DebugLogLevel).Info("Setting Hawtio CR Phase:", "Phase", phase)
+
 	if hawtio.Status.Phase != phase {
 		previous := hawtio.DeepCopy()
 		hawtio.Status.Phase = phase
