@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.17.3
+    controller-gen.kubebuilder.io/version: v0.19.0
   creationTimestamp: null
   name: hawtios.hawt.io
 spec:
@@ -250,7 +250,7 @@ spec:
                       Claims lists the names of resources, defined in spec.resourceClaims,
                       that are used by this container.
 
-                      This is an alpha field and requires enabling the
+                      This field depends on the
                       DynamicResourceAllocation feature gate.
 
                       This field is immutable. It can only be set for containers.
@@ -637,7 +637,7 @@ spec:
                       Claims lists the names of resources, defined in spec.resourceClaims,
                       that are used by this container.
 
-                      This is an alpha field and requires enabling the
+                      This field depends on the
                       DynamicResourceAllocation feature gate.
 
                       This field is immutable. It can only be set for containers.
@@ -967,6 +967,44 @@ spec:
                 items:
                   type: string
                 type: array
+              healthChecks:
+                description: The Hawtio health checking configuration
+                properties:
+                  gatewayLivenessPeriod:
+                    description: Configure the period, in seconds, between gateway
+                      container liveness probe checks
+                    format: int32
+                    type: integer
+                  gatewayReadinessPeriod:
+                    description: Configure the period, in seconds, between gateway
+                      container readiness probe checks
+                    format: int32
+                    type: integer
+                  onlineLivenessPeriod:
+                    description: Configure the period, in seconds, between online
+                      container liveness probe checks
+                    format: int32
+                    type: integer
+                  onlineReadinessPeriod:
+                    description: Configure the period, in seconds, between online
+                      container readiness probe checks
+                    format: int32
+                    type: integer
+                type: object
+              logging:
+                description: The Hawtio logging configuration
+                properties:
+                  gatewayLogLevel:
+                    description: Configure gateway log level {info|debug}
+                    type: string
+                  maskIPAddresses:
+                    description: Turn on/off the masking of IP addresses in logging
+                      {true|false}
+                    type: string
+                  onlineLogLevel:
+                    description: Configure online log level {emerg|alert|crit|error|warn|notice|info}
+                    type: string
+                type: object
               metadataPropagation:
                 description: |-
                   The configuration for which metadata on Hawtio custom resources to propagate to
@@ -1026,7 +1064,7 @@ spec:
                       Claims lists the names of resources, defined in spec.resourceClaims,
                       that are used by this container.
 
-                      This is an alpha field and requires enabling the
+                      This field depends on the
                       DynamicResourceAllocation feature gate.
 
                       This field is immutable. It can only be set for containers.
