@@ -106,8 +106,10 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 		return errs.Wrap(err, "Cluster API capability discovery failed")
 	}
 
-	if err := openshift.ConsoleYAMLSampleExists(); err == nil {
-		openshift.CreateConsoleYAMLSamples(context.TODO(), mgr.GetClient(), r.ProductName)
+	if r.apiSpec.IsOpenShift4 {
+		if err := openshift.ConsoleYAMLSampleExists(); err == nil {
+			openshift.CreateConsoleYAMLSamples(context.TODO(), mgr.GetClient(), r.ProductName)
+		}
 	}
 
 	return add(mgr, r, r.apiSpec.Routes)
@@ -511,31 +513,33 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio)
 		return nil
 	}
 
-	if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
-		// Remove URI from OAuth client
-		oc := &oauthv1.OAuthClient{}
-		err := r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
-		if err != nil && !kerrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get OAuth client: %v", err)
-		}
-		updated := resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL)
-		if updated {
-			err := r.client.Update(ctx, oc)
-			if err != nil {
-				return fmt.Errorf("failed to remove redirect URI from OAuth client: %v", err)
+	if r.apiSpec.IsOpenShift4 {
+		if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
+			// Remove URI from OAuth client
+			oc := &oauthv1.OAuthClient{}
+			err := r.client.Get(ctx, types.NamespacedName{Name: resources.OAuthClientName}, oc)
+			if err != nil && !kerrors.IsNotFound(err) {
+				return fmt.Errorf("failed to get OAuth client: %v", err)
+			}
+			updated := resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL)
+			if updated {
+				err := r.client.Update(ctx, oc)
+				if err != nil {
+					return fmt.Errorf("failed to remove redirect URI from OAuth client: %v", err)
+				}
 			}
 		}
-	}
 
-	// Remove OpenShift console link
-	consoleLink := &consolev1.ConsoleLink{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: hawtio.ObjectMeta.Name + "-" + hawtio.ObjectMeta.Namespace,
-		},
-	}
-	err := r.client.Delete(ctx, consoleLink)
-	if err != nil && !kerrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
-		return fmt.Errorf("failed to delete console link: %v", err)
+		// Remove OpenShift console link
+		consoleLink := &consolev1.ConsoleLink{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: hawtio.ObjectMeta.Name + "-" + hawtio.ObjectMeta.Namespace,
+			},
+		}
+		err := r.client.Delete(ctx, consoleLink)
+		if err != nil && !kerrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+			return fmt.Errorf("failed to delete console link: %v", err)
+		}
 	}
 
 	// Check if the finalizer is still present before trying to remove it
@@ -809,7 +813,8 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 }
 
 func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*routev1.Route, controllerutil.OperationResult, error) {
-	if ! r.apiSpec.Routes {
+	// Only create a route if confirmed as Openshift and supports routes
+	if ! r.apiSpec.IsOpenShift4 || ! r.apiSpec.Routes {
 		return nil, controllerutil.OperationResultNone, nil
 	}
 
@@ -871,7 +876,8 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 }
 
 func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*networkingv1.Ingress, controllerutil.OperationResult, error) {
-	if r.apiSpec.Routes {
+	// Only create an ingress if confirmed as not a route version of Openshift
+	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes {
 		return nil, controllerutil.OperationResultNone, nil
 	}
 
