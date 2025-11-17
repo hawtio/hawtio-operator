@@ -258,9 +258,11 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Aid deletion by adding finalizer
 	r.logger.V(util.DebugLogLevel).Info("=== Add Finalizer ===")
-	err = r.addFinalizer(ctx, hawtio)
+	updated, err := r.addFinalizer(ctx, hawtio)
 	if err != nil {
 		return reconcile.Result{}, err
+	} else if updated {
+		return reconcile.Result{Requeue: true}, err
 	}
 
 	// =====================================================================
@@ -553,12 +555,14 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio)
 	return nil
 }
 
-func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Hawtio) error {
+func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
 	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
-	r.logger.V(util.DebugLogLevel).Info("Adding a finalizer")
 	if controllerutil.ContainsFinalizer(hawtio, hawtioFinalizer) {
-		return nil
+		r.logger.V(util.DebugLogLevel).Info("Finalizer already present")
+		return false, nil // nothing to do
 	}
+
+	r.logger.V(util.DebugLogLevel).Info("Adding a finalizer")
 
 	previous := hawtio.DeepCopy()
 	controllerutil.AddFinalizer(hawtio, hawtioFinalizer)
@@ -568,10 +572,12 @@ func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Haw
 	// overwriting with a stale hawtio CR
 	err := r.client.Patch(ctx, hawtio, client.MergeFrom(previous))
 	if err != nil {
-		return fmt.Errorf("failed to update finalizer: %v", err)
+		r.logger.V(util.DebugLogLevel).Info("Error finalizer")
+		return false, fmt.Errorf("failed to update finalizer: %v", err)
 	}
 
-	return nil
+	r.logger.V(util.DebugLogLevel).Info("Completed finalizer")
+	return true, nil
 }
 
 func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
