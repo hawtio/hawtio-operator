@@ -282,7 +282,9 @@ type HawtioLogging struct {
 	OnlineLogLevel string `json:"onlineLogLevel,omitempty"`
 	// Configure gateway log level {info|debug}
 	GatewayLogLevel string `json:"gatewayLogLevel,omitempty"`
-	// Turn on/off the masking of IP addresses in logging {true|false}
+	// Turn on/off the masking of IP addresses in logging {true|false} (off by default)
+	// Warning: this can cause issues if ip address are part of MBean Idenfifiers so
+	// use with caution.
 	MaskIPAddresses string `json:"maskIPAddresses,omitempty"`
 }
 

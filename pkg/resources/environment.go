@@ -45,7 +45,7 @@ const (
 	HawtioSSLCertCAValue    = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 	HawtioOnlineLogLvlValue = "info"
 	GatewayLogLvlValue      = "info"
-	GatewayMaskIPValue      = "true"
+	GatewayMaskIPValue      = "false"
 )
 
 func envVarForAuth(isOpenShift bool) corev1.EnvVar {

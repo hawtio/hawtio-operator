@@ -169,7 +169,7 @@ func TestNewDeploymentMaskIP(t *testing.T) {
 				Spec: hawtiov2.HawtioSpec{},
 			},
 			Expected{
-				maskIP: "true",
+				maskIP: "false",
 			},
 		},
 		{
