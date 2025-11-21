@@ -76,7 +76,7 @@ metadata:
             },
             "logging": {
               "gatewayLogLevel": "info",
-              "maskIPAddresses": "true",
+              "maskIPAddresses": "false",
               "onlineLogLevel": "info"
             },
             "replicas": 1,
@@ -99,7 +99,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: quay.io/hawtio/operator:1.3.0
-    createdAt: "2025-11-18T15:58:50Z"
+    createdAt: "2025-11-21T14:10:36Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <1.0.2'

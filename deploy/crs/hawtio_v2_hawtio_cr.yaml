@@ -25,7 +25,7 @@ spec:
   logging:
     onlineLogLevel: "info"
     gatewayLogLevel: "info"
-    maskIPAddresses: "true"
+    maskIPAddresses: "false"
 
   healthChecks:
     onlineReadinessPeriod: 10
