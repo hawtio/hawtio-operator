@@ -998,8 +998,10 @@ spec:
                     description: Configure gateway log level {info|debug}
                     type: string
                   maskIPAddresses:
-                    description: Turn on/off the masking of IP addresses in logging
-                      {true|false}
+                    description: |-
+                      Turn on/off the masking of IP addresses in logging {true|false} (off by default)
+                      Warning: this can cause issues if ip address are part of MBean Idenfifiers so
+                      use with caution.
                     type: string
                   onlineLogLevel:
                     description: Configure online log level {emerg|alert|crit|error|warn|notice|info}
