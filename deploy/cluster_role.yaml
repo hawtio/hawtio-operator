@@ -44,3 +44,11 @@ rules:
   - signing-key
   verbs:
   - get
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
