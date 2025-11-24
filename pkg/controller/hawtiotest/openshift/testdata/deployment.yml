@@ -115,7 +115,7 @@ spec:
         - name: HAWTIO_ONLINE_GATEWAY_LOG_LEVEL
           value: "info"
         - name: HAWTIO_ONLINE_MASK_IP_ADDRESSES
-          value: "true"
+          value: "false"
         - name: HAWTIO_ONLINE_AUTH
           value: oauth
         image: quay.io/hawtio/online-gateway:2.3.0
