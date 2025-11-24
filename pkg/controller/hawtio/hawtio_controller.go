@@ -283,10 +283,10 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// =====================================================================
 	// If the status phase is empty, it's a new CR, so we initialize it.
 	r.logger.V(util.DebugLogLevel).Info("=== Verify Hawtio Install Mode ===")
-	specType, err := r.verifyHawtioSpecType(ctx, hawtio)
+	updated, err = r.verifyHawtioSpecType(ctx, hawtio)
 	if err != nil {
 		return reconcile.Result{}, err
-	} else if !specType {
+	} else if updated {
 		return reconcile.Result{Requeue: true}, err
 	}
 
@@ -610,7 +610,7 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 			return false, fmt.Errorf("failed to update type: %v", err)
 		}
 
-		return false, nil
+		return true, nil // CR was updated with no error
 	}
 
 	if hawtio.Spec.Type != hawtiov2.NamespaceHawtioDeploymentType && (hawtio.Spec.Type != hawtiov2.ClusterHawtioDeploymentType) {
@@ -621,11 +621,10 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 			return false, err
 		}
 
-		err = fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
-		return false, nil
+		return true, fmt.Errorf("unsupported type: %s", hawtio.Spec.Type) // CR was updated and report unsupported type error
 	}
 
-	return true, nil
+	return false, nil // CR was not update and spec type checked out
 }
 
 func (r *ReconcileHawtio) verifyRBACConfigMap(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey) (bool, error) {
