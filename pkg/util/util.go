@@ -90,3 +90,16 @@ func Match(pattern, str string) bool {
 	}
 	return match
 }
+
+// MergeMap copies all key/value pairs from 'required' into 'existing'.
+// It adds new keys and updates existing ones, but DOES NOT remove keys
+// that are in 'existing' but not in 'required'.
+func MergeMap(existing, required map[string]string) map[string]string {
+	if existing == nil {
+		return required
+	}
+	for k, v := range required {
+		existing[k] = v
+	}
+	return existing
+}

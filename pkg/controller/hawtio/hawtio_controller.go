@@ -795,9 +795,35 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			return err
 		}
 
-		deployment.SetLabels(crDeployment.GetLabels())
-		deployment.SetAnnotations(crDeployment.GetAnnotations())
-		deployment.Spec = crDeployment.Spec
+		// Apply cluster defaults to the deployment
+		// - Create a copy then do a dry-run create
+		// - Apply the resulting default-populated properties to the spec
+		dryRun := crDeployment.DeepCopy()
+		dryRun.Name = ""
+		dryRun.GenerateName = "hawtio-dry-run-"
+		dryRun.Namespace = hawtio.Namespace
+		dryRun.ResourceVersion = "" // Ensure it looks new
+
+		// The API server will apply all defaults (PullPolicy, DNSPolicy, etc.)
+		// and return the fully populated struct in 'dryRunObj'.
+		err = r.client.Create(ctx, dryRun, client.DryRunAll)
+		if err != nil {
+			return fmt.Errorf("failed to calculate defaults via dry-run: %w", err)
+		}
+
+		// Now 'desiredSpec' has , for example,
+		// "ClusterFirst" instead of "" matching Live state.
+		desiredSpec := dryRun.Spec
+
+		// Merge Labels (Preserve system labels)
+		deployment.Labels = util.MergeMap(deployment.Labels, crDeployment.Labels)
+
+		// Merge Annotations (Preserve system annotations like 'revision')
+		deployment.Annotations = util.MergeMap(deployment.Annotations, crDeployment.Annotations)
+
+		// Apply Spec (Your Dry-Run logic handles the spec defaults)
+		deployment.Spec = desiredSpec
+
 		return nil
 	})
 
@@ -985,7 +1011,13 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, oAuthClient, func() error {
 		crOAuthClient := resources.NewOAuthClient(resources.OAuthClientName)
 		oAuthClient.GrantMethod = crOAuthClient.GrantMethod
-		oAuthClient.RedirectURIs = crOAuthClient.RedirectURIs
+
+		// Only set RedirectURIs if the list is nil (creation time).
+		// Never overwrite it if it exists, because we manage specific entries below.
+		if oAuthClient.RedirectURIs == nil {
+			oAuthClient.RedirectURIs = crOAuthClient.RedirectURIs
+		}
+
 		return nil
 	})
 
@@ -1013,6 +1045,10 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 
 	// Add the current route URL if it's not already present.
 	if ok, _ := resources.OauthClientContainsRedirectURI(oAuthClient, newRouteURL); !ok && newRouteURL != "" {
+		r.logger.V(util.DebugLogLevel).Info("OAuthClient URI mismatch detected",
+			"Wanted", newRouteURL,
+			"ExistingURIs", oAuthClient.RedirectURIs)
+
 		r.logger.Info("Adding new RedirectURI to OAuthClient", "URI", newRouteURL)
 		oAuthClient.RedirectURIs = append(oAuthClient.RedirectURIs, newRouteURL)
 		updateOAuthClient = true
