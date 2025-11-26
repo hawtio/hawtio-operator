@@ -803,7 +803,9 @@ func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, desi
 
 	// Generate a unique, valid name.
 	// Ends with a number, satisfying the [a-z0-9] regex constraint.
-	obj.SetName(fmt.Sprintf("hawtio-dry-run-%d", time.Now().UnixNano()))
+	// Use a very short name (t + 7 digits) to prevent DNS length errors in Routes.
+	// Example: t4829102
+	obj.SetName(fmt.Sprintf("t%d", time.Now().UnixNano()%10000000))
 
 	obj.SetResourceVersion("")
 	obj.SetUID("")
