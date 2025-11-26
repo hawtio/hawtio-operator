@@ -185,9 +185,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 				UpdateFunc: func(e event.TypedUpdateEvent[*appsv1.Deployment]) bool {
 					oldDeployment := e.ObjectOld
 					newDeployment := e.ObjectNew
-					// Ignore updates to the Deployment other than the replicas one,
-					// that are used to reconcile the Hawtio replicas.
-					return oldDeployment.Status.Replicas != newDeployment.Status.Replicas
+					// Filter events to reduce noise, but ensuring we wake up for:
+					// 1. Scaling events (Status.Replicas changes).
+					// 2. Startup completion (Status.ReadyReplicas changes). This is critical
+					//    to transition the CR Status from 'Initialized' to 'Deployed'.
+					// 3. Configuration changes (Generation changes).
+					return oldDeployment.Status.Replicas != newDeployment.Status.Replicas ||
+						oldDeployment.Status.ReadyReplicas != newDeployment.Status.ReadyReplicas ||
+						oldDeployment.Generation != newDeployment.Generation
 				},
 			},
 		),
@@ -477,7 +482,11 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// This prevents empty updates and reduces load on the API server.
 	if !reflect.DeepEqual(hawtio.Status, *newStatus) {
 		hawtio.Status = *newStatus
-		r.logger.Info("Status has changed, updating Hawtio CR")
+		r.logger.Info("Status has changed, updating Hawtio CR",
+			"Phase", newStatus.Phase,
+			"URL", newStatus.URL,
+			"Replicas", newStatus.Replicas,
+			"Image", newStatus.Image)
 		if err := r.client.Status().Update(ctx, hawtio); err != nil {
 			r.logger.Error(err, "Failed to update Hawtio status")
 			return reconcile.Result{}, err
