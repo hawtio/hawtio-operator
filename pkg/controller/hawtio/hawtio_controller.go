@@ -440,6 +440,12 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
+	// Refresh the hawtio CR to minimize conflict window
+	// Gets the absolute latest ResourceVersion from the server.
+	if err := r.client.Get(ctx, request.NamespacedName, hawtio); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Create a copy of the status to modify.
 	newStatus := hawtio.Status.DeepCopy()
 
