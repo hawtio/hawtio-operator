@@ -993,6 +993,13 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 			return err
 		}
 
+		// The hydration generated a host based on the temporary name
+		// (e.g. "hawtio-dry-run-123...").
+		// We must discard this garbage host.
+		if crRoute.Spec.Host == "" {
+			hydratedRoute.Spec.Host = ""
+		}
+
 		route.Labels = util.MergeMap(route.Labels, crRoute.Labels)
 		route.Annotations = util.MergeMap(route.Annotations, crRoute.Annotations)
 		route.Spec = hydratedRoute.Spec
