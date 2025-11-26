@@ -416,16 +416,6 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	// Reconciling resources is complete. Set to deployed if not already
-	if hawtio.Status.Phase != hawtiov2.HawtioPhaseDeployed {
-		r.logger.V(util.DebugLogLevel).Info("Moving Hawtio.Status.Phase to deployed")
-		err := r.setHawtioPhase(ctx, hawtio, hawtiov2.HawtioPhaseDeployed)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{Requeue: true}, nil
-	}
-
 	// =====================================================================
 	// PHASE 5: UPDATE PHASE
 	// =====================================================================
@@ -473,7 +463,14 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	if deployment.Status.ReadyReplicas > 0 {
 		newStatus.Phase = hawtiov2.HawtioPhaseDeployed
 	} else {
-		newStatus.Phase = hawtiov2.HawtioPhaseFailed
+		// The Deployment isn't ready yet. Let's check if it has timed out.
+		if r.isDeploymentFailed(deployment) {
+			newStatus.Phase = hawtiov2.HawtioPhaseFailed
+		} else {
+			// It's not ready, but it hasn't failed yet. It's likely pulling images
+			// or waiting for the container to start. Keep it as Initialized.
+			newStatus.Phase = hawtiov2.HawtioPhaseInitialized
+		}
 	}
 
 	// Only send an update to the API server if the status has actually changed.
@@ -1382,6 +1379,17 @@ func (r *ReconcileHawtio) logOperationResult(resource string, result controlleru
 	}
 
 	r.logger.Info("=== Resource "+ resource + " Reconciliation Completed ===", "Result", result)
+}
+
+// isDeploymentFailed checks if the Deployment has exceeded its progress deadline.
+func (r *ReconcileHawtio) isDeploymentFailed(deployment *appsv1.Deployment) bool {
+	for _, cond := range deployment.Status.Conditions {
+		// Check for the specific Type and Reason that indicate failure
+		if cond.Type == appsv1.DeploymentProgressing && cond.Reason == "ProgressDeadlineExceeded" {
+			return true
+		}
+	}
+	return false
 }
 
 func getOperatorPod(ctx context.Context, c client.Client, namespace string) (*corev1.Pod, error) {
