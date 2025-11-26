@@ -830,6 +830,7 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 
 		clientCertSecretVersion := ""
 		if deploymentConfig.clientCertSecret != nil {
+			r.logger.V(util.DebugLogLevel).Info("Assigning to deployment client certificate secret", "Resource Version", deploymentConfig.clientCertSecret.GetResourceVersion())
 			clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
 		}
 

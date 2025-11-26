@@ -67,8 +67,8 @@ func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *
 		if err != nil {
 			return nil, err
 		}
-		_, err = r.coreClient.Secrets(namespace).Create(ctx, clientCertSecret, metav1.CreateOptions{})
-		conOsLog.Info("Client certificate created successfully", "secret", clientSecretName)
+		clientCertSecret, err = r.coreClient.Secrets(namespace).Create(ctx, clientCertSecret, metav1.CreateOptions{})
+		conOsLog.Info("Client certificate created successfully", "secret", clientSecretName, "Resource Version", clientCertSecret.GetResourceVersion())
 		if err != nil {
 			return nil, errs.Wrap(err, "Creating the client certificate secret failed")
 		}
