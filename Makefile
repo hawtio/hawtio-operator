@@ -241,7 +241,7 @@ CSV_SKIP_RANGE := >=1.0.0 <1.0.2
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
 
 # Test Bundle Index
-BUNDLE_INDEX := registry.redhat.io/redhat/redhat-operator-index:v4.21
+BUNDLE_INDEX ?= registry.redhat.io/redhat/redhat-operator-index:v4.21
 INDEX_DIR := index
 OPM := opm
 
