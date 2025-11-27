@@ -185,9 +185,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 				UpdateFunc: func(e event.TypedUpdateEvent[*appsv1.Deployment]) bool {
 					oldDeployment := e.ObjectOld
 					newDeployment := e.ObjectNew
-					// Ignore updates to the Deployment other than the replicas one,
-					// that are used to reconcile the Hawtio replicas.
-					return oldDeployment.Status.Replicas != newDeployment.Status.Replicas
+					// Filter events to reduce noise, but ensuring we wake up for:
+					// 1. Scaling events (Status.Replicas changes).
+					// 2. Startup completion (Status.ReadyReplicas changes). This is critical
+					//    to transition the CR Status from 'Initialized' to 'Deployed'.
+					// 3. Configuration changes (Generation changes).
+					return oldDeployment.Status.Replicas != newDeployment.Status.Replicas ||
+						oldDeployment.Status.ReadyReplicas != newDeployment.Status.ReadyReplicas ||
+						oldDeployment.Generation != newDeployment.Generation
 				},
 			},
 		),
@@ -283,10 +288,10 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// =====================================================================
 	// If the status phase is empty, it's a new CR, so we initialize it.
 	r.logger.V(util.DebugLogLevel).Info("=== Verify Hawtio Install Mode ===")
-	specType, err := r.verifyHawtioSpecType(ctx, hawtio)
+	updated, err = r.verifyHawtioSpecType(ctx, hawtio)
 	if err != nil {
 		return reconcile.Result{}, err
-	} else if !specType {
+	} else if updated {
 		return reconcile.Result{Requeue: true}, err
 	}
 
@@ -416,16 +421,6 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, err
 	}
 
-	// Reconciling resources is complete. Set to deployed if not already
-	if hawtio.Status.Phase != hawtiov2.HawtioPhaseDeployed {
-		r.logger.V(util.DebugLogLevel).Info("Moving Hawtio.Status.Phase to deployed")
-		err := r.setHawtioPhase(ctx, hawtio, hawtiov2.HawtioPhaseDeployed)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{Requeue: true}, nil
-	}
-
 	// =====================================================================
 	// PHASE 5: UPDATE PHASE
 	// =====================================================================
@@ -437,6 +432,12 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
 		r.logger.Error(err, "Failed to get deployment")
+		return reconcile.Result{}, err
+	}
+
+	// Refresh the hawtio CR to minimize conflict window
+	// Gets the absolute latest ResourceVersion from the server.
+	if err := r.client.Get(ctx, request.NamespacedName, hawtio); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -467,14 +468,25 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	if deployment.Status.ReadyReplicas > 0 {
 		newStatus.Phase = hawtiov2.HawtioPhaseDeployed
 	} else {
-		newStatus.Phase = hawtiov2.HawtioPhaseFailed
+		// The Deployment isn't ready yet. Let's check if it has timed out.
+		if r.isDeploymentFailed(deployment) {
+			newStatus.Phase = hawtiov2.HawtioPhaseFailed
+		} else {
+			// It's not ready, but it hasn't failed yet. It's likely pulling images
+			// or waiting for the container to start. Keep it as Initialized.
+			newStatus.Phase = hawtiov2.HawtioPhaseInitialized
+		}
 	}
 
 	// Only send an update to the API server if the status has actually changed.
 	// This prevents empty updates and reduces load on the API server.
 	if !reflect.DeepEqual(hawtio.Status, *newStatus) {
 		hawtio.Status = *newStatus
-		r.logger.Info("Status has changed, updating Hawtio CR")
+		r.logger.Info("Status has changed, updating Hawtio CR",
+			"Phase", newStatus.Phase,
+			"URL", newStatus.URL,
+			"Replicas", newStatus.Replicas,
+			"Image", newStatus.Image)
 		if err := r.client.Status().Update(ctx, hawtio); err != nil {
 			r.logger.Error(err, "Failed to update Hawtio status")
 			return reconcile.Result{}, err
@@ -610,7 +622,7 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 			return false, fmt.Errorf("failed to update type: %v", err)
 		}
 
-		return false, nil
+		return true, nil // CR was updated with no error
 	}
 
 	if hawtio.Spec.Type != hawtiov2.NamespaceHawtioDeploymentType && (hawtio.Spec.Type != hawtiov2.ClusterHawtioDeploymentType) {
@@ -621,11 +633,10 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 			return false, err
 		}
 
-		err = fmt.Errorf("unsupported type: %s", hawtio.Spec.Type)
-		return false, nil
+		return true, fmt.Errorf("unsupported type: %s", hawtio.Spec.Type) // CR was updated and report unsupported type error
 	}
 
-	return true, nil
+	return false, nil // CR was not update and spec type checked out
 }
 
 func (r *ReconcileHawtio) verifyRBACConfigMap(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey) (bool, error) {
@@ -745,6 +756,8 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 	configMap := resources.NewDefaultConfigMap(hawtio)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, configMap, func() error {
+		liveObj := configMap.DeepCopy()
+
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, configMap, r.scheme); err != nil {
 			return err
@@ -758,8 +771,18 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 			return err
 		}
 
+		// Merge Metadata (Crucial for stability)
+		// We merge so we don't wipe out system labels/annotations
+		configMap.Labels = util.MergeMap(configMap.Labels, crConfigMap.Labels)
+		configMap.Annotations = util.MergeMap(configMap.Annotations, crConfigMap.Annotations)
+
 		// Mutate the object's Data field to match the desired state.
+		// No hydration needed because K8s doesn't default this field.
 		configMap.Data = crConfigMap.Data
+		configMap.BinaryData = crConfigMap.BinaryData
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("ConfigMap", liveObj, configMap)
 
 		return nil
 	})
@@ -768,13 +791,52 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 		return nil, opResult, err
 	}
 
+	util.ReportResourceChange("ConfigMap", configMap, opResult)
 	return configMap, opResult, nil
+}
+
+// hydrateDefaults performs a server-side Dry-Run Create to populate the
+// 'desired' object with all the default values (Spec, Status, etc.) that
+// the specific cluster applies.
+// It returns the "hydrated" object.
+func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, desired T) (T, error) {
+	// DeepCopy to avoid mutating the input object in case the caller reuses it
+	// We cast the result back to T (which works because T is a pointer to a struct)
+	obj := desired.DeepCopyObject().(T)
+
+	// OpenShift OAuthClient validation rejects it.
+	obj.SetGenerateName("")
+
+	// Generate a unique, valid name.
+	// Ends with a number, satisfying the [a-z0-9] regex constraint.
+	// Use a very short name (t + 7 digits) to prevent DNS length errors in Routes.
+	// Example: t4829102
+	obj.SetName(fmt.Sprintf("t%d", time.Now().UnixNano()%10000000))
+
+	obj.SetResourceVersion("")
+	obj.SetUID("")
+	obj.SetSelfLink("")
+	obj.SetCreationTimestamp(metav1.Time{})
+	// Clear OwnerReferences just in case, though DryRun usually ignores them
+	obj.SetOwnerReferences(nil)
+
+	// Perform Dry-Run Create
+	// The API server will populate defaults and return the object
+	if err := c.Create(ctx, obj, client.DryRunAll); err != nil {
+		// We return the 'zero' value of T and the error
+		var zero T
+		return zero, fmt.Errorf("failed to hydrate defaults via dry-run: %w", err)
+	}
+
+  return obj, nil
 }
 
 func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
 	deployment := resources.NewDefaultDeployment(hawtio)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, deployment, func() error {
+		liveObj := deployment.DeepCopy()
+
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, deployment, r.scheme); err != nil {
 			return err
@@ -782,6 +844,7 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 
 		clientCertSecretVersion := ""
 		if deploymentConfig.clientCertSecret != nil {
+			r.logger.V(util.DebugLogLevel).Info("Assigning to deployment client certificate secret", "Resource Version", deploymentConfig.clientCertSecret.GetResourceVersion())
 			clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
 		}
 
@@ -796,19 +859,42 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			return err
 		}
 
-		deployment.SetLabels(crDeployment.GetLabels())
-		deployment.SetAnnotations(crDeployment.GetAnnotations())
-		deployment.Spec = crDeployment.Spec
+		hydratedDeployment, err := hydrateDefaults(ctx, r.client, crDeployment)
+		if err != nil {
+			return err
+		}
+
+		// Now 'desiredSpec' has , for example,
+		// "ClusterFirst" instead of "" matching Live state.
+		desiredSpec := hydratedDeployment.Spec
+
+		// Merge Labels (Preserve system labels)
+		deployment.Labels = util.MergeMap(deployment.Labels, crDeployment.Labels)
+
+		// Merge Annotations (Preserve system annotations like 'revision')
+		deployment.Annotations = util.MergeMap(deployment.Annotations, crDeployment.Annotations)
+
+		// Apply Spec (Your Dry-Run logic handles the spec defaults)
+		deployment.Spec = desiredSpec
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("Deployment", liveObj, deployment)
+
 		return nil
 	})
 
+	util.ReportResourceChange("Deployment", deployment, opResult)
 	return opResult, err
 }
 
 func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
 	service := resources.NewDefaultService(hawtio)
 
-	return controllerutil.CreateOrUpdate(ctx, r.client, service, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, service, func() error {
+		liveObj := service.DeepCopy()
+		oldClusterIP := service.Spec.ClusterIP
+		oldClusterIPs := service.Spec.ClusterIPs
+
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, service, r.scheme); err != nil {
 			return err
@@ -817,12 +903,43 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
 		crService := resources.NewService(hawtio, r.apiSpec, reqLogger)
 
-		service.SetLabels(crService.GetLabels())
-		service.SetAnnotations(crService.GetAnnotations())
-		service.Spec = crService.Spec
+		hydratedService, err := hydrateDefaults(ctx, r.client, crService)
+		if err != nil {
+			return err
+		}
+
+		// Dry-Run allocates an IP, but don't want to force that specific IP
+		// during creation (race condition) but a dynamic allocation.
+		hydratedService.Spec.ClusterIP = ""
+		hydratedService.Spec.ClusterIPs = nil
+		for i := range hydratedService.Spec.Ports {
+			hydratedService.Spec.Ports[i].NodePort = 0
+		}
+
+		service.Labels = util.MergeMap(service.Labels, crService.Labels)
+		service.Annotations = util.MergeMap(service.Annotations, crService.Annotations)
+		service.Spec = hydratedService.Spec
+
+		// Ensure ClusterIP is not changed to a new random one from hydration of default.
+		// If the service already exists, must preserve its IP.
+    // If it doesn't exist (len == 0), leave it empty so K8s allocates a fresh one.
+		if len(oldClusterIP) > 0 {
+			service.Spec.ClusterIP = oldClusterIP
+			service.Spec.ClusterIPs = oldClusterIPs
+		}
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("Service", liveObj, service)
 
 		return nil
 	})
+
+	if err != nil {
+		return opResult, err
+	}
+
+	util.ReportResourceChange("Service", service, opResult)
+	return opResult, nil
 }
 
 func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*routev1.Route, controllerutil.OperationResult, error) {
@@ -866,6 +983,9 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 	route := oresources.NewDefaultRoute(hawtio)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, route, func() error {
+		liveObj := route.DeepCopy()
+		oldHost := route.Spec.Host
+
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, route, r.scheme); err != nil {
 			return err
@@ -874,9 +994,29 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
 		crRoute := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
 
-		route.SetLabels(crRoute.GetLabels())
-		route.SetAnnotations(crRoute.GetAnnotations())
-		route.Spec = crRoute.Spec
+		hydratedRoute, err := hydrateDefaults(ctx, r.client, crRoute)
+		if err != nil {
+			return err
+		}
+
+		// The hydration generated a host based on the temporary name
+		// (e.g. "hawtio-dry-run-123...").
+		// We must discard this garbage host.
+		if crRoute.Spec.Host == "" {
+			hydratedRoute.Spec.Host = ""
+		}
+
+		route.Labels = util.MergeMap(route.Labels, crRoute.Labels)
+		route.Annotations = util.MergeMap(route.Annotations, crRoute.Annotations)
+		route.Spec = hydratedRoute.Spec
+
+		// Restore Host if not forcing one
+		if crRoute.Spec.Host == "" && oldHost != "" {
+			route.Spec.Host = oldHost
+		}
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("Route", liveObj, route)
 
 		return nil
 	})
@@ -885,6 +1025,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		return nil, opResult, err
 	}
 
+	util.ReportResourceChange("Route", route, opResult)
 	return route, opResult, nil
 }
 
@@ -897,6 +1038,8 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 	ingress := kresources.NewDefaultIngress(hawtio)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, ingress, func() error {
+		liveObj := ingress.DeepCopy()
+
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, ingress, r.scheme); err != nil {
 			return err
@@ -905,9 +1048,17 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
 		crIngress := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
 
-		ingress.SetLabels(crIngress.GetLabels())
-		ingress.SetAnnotations(crIngress.GetAnnotations())
-		ingress.Spec = crIngress.Spec
+		hydratedIngress, err := hydrateDefaults(ctx, r.client, crIngress)
+		if err != nil {
+			return err
+		}
+
+		ingress.Labels = util.MergeMap(ingress.Labels, crIngress.Labels)
+		ingress.Annotations = util.MergeMap(ingress.Annotations, crIngress.Annotations)
+		ingress.Spec = hydratedIngress.Spec
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("Ingress", liveObj, ingress)
 
 		return nil
 	})
@@ -916,6 +1067,7 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 		return nil, opResult, err
 	}
 
+	util.ReportResourceChange("Ingress", ingress, opResult)
 	return ingress, opResult, nil
 }
 
@@ -926,7 +1078,9 @@ func (r *ReconcileHawtio) reconcileServiceAccountAsOauthClient(ctx context.Conte
 
 	serviceAccount := resources.NewDefaultServiceAccountAsOauthClient(hawtio)
 
-	return controllerutil.CreateOrUpdate(ctx, r.client, serviceAccount, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, serviceAccount, func() error {
+		liveObj := serviceAccount.DeepCopy()
+
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, serviceAccount, r.scheme); err != nil {
 			return err
@@ -939,8 +1093,19 @@ func (r *ReconcileHawtio) reconcileServiceAccountAsOauthClient(ctx context.Conte
 
 		serviceAccount.SetLabels(crServiceAccount.GetLabels())
 		serviceAccount.SetAnnotations(crServiceAccount.GetAnnotations())
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("ServiceAccount", liveObj, serviceAccount)
+
 		return nil
 	})
+
+	if err != nil {
+		return opResult, err
+	}
+
+	util.ReportResourceChange("ServiceAccount", serviceAccount, opResult)
+	return opResult, nil
 }
 
 func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawtiov2.Hawtio, newRouteURL string)  (controllerutil.OperationResult, error) {
@@ -984,9 +1149,26 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 
 	// We use CreateOrUpdate to ensure the base object exists.
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, oAuthClient, func() error {
+		liveObj := oAuthClient.DeepCopy()
+
 		crOAuthClient := resources.NewOAuthClient(resources.OAuthClientName)
-		oAuthClient.GrantMethod = crOAuthClient.GrantMethod
-		oAuthClient.RedirectURIs = crOAuthClient.RedirectURIs
+
+		hydratedOAuth, err := hydrateDefaults(ctx, r.client, crOAuthClient)
+		if err != nil {
+			return err
+		}
+
+		oAuthClient.GrantMethod = hydratedOAuth.GrantMethod
+
+		// Only set RedirectURIs if the list is nil (creation time).
+		// Never overwrite it if it exists, because we manage specific entries below.
+		if oAuthClient.RedirectURIs == nil {
+			oAuthClient.RedirectURIs = hydratedOAuth.RedirectURIs
+		}
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("OAuthClient", liveObj, oAuthClient)
+
 		return nil
 	})
 
@@ -1014,6 +1196,10 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 
 	// Add the current route URL if it's not already present.
 	if ok, _ := resources.OauthClientContainsRedirectURI(oAuthClient, newRouteURL); !ok && newRouteURL != "" {
+		r.logger.V(util.DebugLogLevel).Info("OAuthClient URI mismatch detected",
+			"Wanted", newRouteURL,
+			"ExistingURIs", oAuthClient.RedirectURIs)
+
 		r.logger.Info("Adding new RedirectURI to OAuthClient", "URI", newRouteURL)
 		oAuthClient.RedirectURIs = append(oAuthClient.RedirectURIs, newRouteURL)
 		updateOAuthClient = true
@@ -1024,6 +1210,7 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 		return controllerutil.OperationResultUpdated, err
 	}
 
+	util.ReportResourceChange("OAuthClient", oAuthClient, opResult)
 	return opResult, nil
 }
 
@@ -1081,7 +1268,9 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 		},
 	}
 
-	return controllerutil.CreateOrUpdate(ctx, r.client, consoleLink, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, consoleLink, func() error {
+		liveObj := consoleLink.DeepCopy()
+
 		var crConsoleLink *consolev1.ConsoleLink
 
 		if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
@@ -1096,12 +1285,27 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 			return nil
 		}
 
-		consoleLink.Spec = crConsoleLink.Spec
-		consoleLink.SetLabels(crConsoleLink.GetLabels())
-		consoleLink.SetAnnotations(crConsoleLink.GetAnnotations())
+		hydratedLink, err := hydrateDefaults(ctx, r.client, crConsoleLink)
+		if err != nil {
+			return err
+		}
+
+		consoleLink.Labels = util.MergeMap(consoleLink.Labels, crConsoleLink.Labels)
+		consoleLink.Annotations = util.MergeMap(consoleLink.Annotations, crConsoleLink.Annotations)
+		consoleLink.Spec = hydratedLink.Spec
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("ConsoleLink", liveObj, consoleLink)
 
 		return nil
 	})
+
+	if err != nil {
+		return opResult, err
+	}
+
+	util.ReportResourceChange("ConsoleLink", consoleLink, opResult)
+	return opResult, nil
 }
 
 func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
@@ -1120,6 +1324,8 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 		cronJob := resources.NewDefaultCronJob(hawtio)
 
 		return controllerutil.CreateOrUpdate(ctx, r.client, cronJob, func() error {
+			liveObj := cronJob.DeepCopy()
+
 			// Set the owner reference for garbage collection.
 			if err := controllerutil.SetControllerReference(hawtio, cronJob, r.scheme); err != nil {
 				return err
@@ -1135,7 +1341,17 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 				return fmt.Errorf("failed to build desired cronjob: %w", err)
 			}
 
-			cronJob.Spec = crCronJob.Spec
+			hydratedCronJob, err := hydrateDefaults(ctx, r.client, crCronJob)
+			if err != nil {
+				return err
+			}
+
+			cronJob.Labels = util.MergeMap(cronJob.Labels, crCronJob.Labels)
+			cronJob.Annotations = util.MergeMap(cronJob.Annotations, crCronJob.Annotations)
+			cronJob.Spec = hydratedCronJob.Spec
+
+			// Report any known differences to the log (only if in debug log level)
+			util.ReportDiff("CronJob", liveObj, cronJob)
 
 			return nil
 		})
@@ -1172,6 +1388,17 @@ func (r *ReconcileHawtio) logOperationResult(resource string, result controlleru
 	}
 
 	r.logger.Info("=== Resource "+ resource + " Reconciliation Completed ===", "Result", result)
+}
+
+// isDeploymentFailed checks if the Deployment has exceeded its progress deadline.
+func (r *ReconcileHawtio) isDeploymentFailed(deployment *appsv1.Deployment) bool {
+	for _, cond := range deployment.Status.Conditions {
+		// Check for the specific Type and Reason that indicate failure
+		if cond.Type == appsv1.DeploymentProgressing && cond.Reason == "ProgressDeadlineExceeded" {
+			return true
+		}
+	}
+	return false
 }
 
 func getOperatorPod(ctx context.Context, c client.Client, namespace string) (*corev1.Pod, error) {

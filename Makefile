@@ -241,7 +241,7 @@ CSV_SKIP_RANGE := >=1.0.0 <1.0.2
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
 
 # Test Bundle Index
-BUNDLE_INDEX := quay.io/operatorhubio/catalog:latest
+BUNDLE_INDEX ?= quay.io/operatorhubio/catalog:latest
 INDEX_DIR := index
 OPM := opm
 

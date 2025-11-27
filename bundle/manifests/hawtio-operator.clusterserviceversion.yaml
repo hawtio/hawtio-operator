@@ -188,6 +188,14 @@ spec:
           - secrets
           verbs:
           - get
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: hawtio-operator
       deployments:
       - name: hawtio-operator
