@@ -139,6 +139,12 @@ type HawtioNginx struct {
 	// The size of the buffer used for storing the response body of a subrequest.
 	// Defaults to `10m`.
 	SubrequestOutputBufferSize string `json:"subrequestOutputBufferSize,omitempty"`
+	// Defines the maximum number of concurrent requests to the master cluster,
+	// allowed to exceed the rate limit immediately. Must be sized to handle the
+	// "thundering herd" of API calls when Hawtio initializes in Cluster Mode
+	// (e.g., loading 1000+ pods across all namespaces).
+	// Defaults to `5000`.
+	MasterBurstSize string `json:"masterBurstSize,omitempty"`
 }
 
 // The RBAC configuration

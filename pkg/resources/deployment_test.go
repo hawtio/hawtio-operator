@@ -35,6 +35,7 @@ type Expected struct {
 	onlineLogLevel  string
 	gatewayLogLevel string
 	maskIP          string
+	masterBurstSize string
 }
 
 func findEnvVar(envs []corev1.EnvVar, name string) (string, bool) {
@@ -218,6 +219,97 @@ func TestNewDeploymentMaskIP(t *testing.T) {
 			gatewayIPMask, found := findEnvVar(gatewayEnv, GatewayMaskIPEnvVar)
 			assert.True(t, found)
 			assert.Equal(t, tc.expected.maskIP, gatewayIPMask)
+		})
+	}
+}
+
+func TestNewDeploymentMasterBurstSize(t *testing.T) {
+	apiSpec := &capabilities.ApiServerSpec{
+		IsOpenShift4: true,
+	}
+	openShiftConsoleURL := ""
+	configMapVersion := ""
+	clientCertSecretVersion := ""
+	buildVariables := util.BuildVariables{
+		ImageRepository:        "quay.io/hawtio/online",
+		GatewayImageRepository: "quay.io/hawtio/online-gateway",
+		ImageVersion:           "2.3.0",
+		GatewayImageVersion:    "2.3.0",
+	}
+	log := logr.Discard()
+
+	testCases := []struct {
+		name     string
+		hawtio   *hawtiov2.Hawtio
+		expected Expected
+	}{
+		{
+			"Default Hawtio",
+			&hawtiov2.Hawtio{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "hawtio-online",
+					Namespace: "hawtio",
+				},
+				Spec: hawtiov2.HawtioSpec{},
+			},
+			Expected{
+				// Should not be found - nginx will revert to default
+			},
+		},
+		{
+			"Hawtio Burst Rate 6000",
+			&hawtiov2.Hawtio{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "hawtio-online",
+					Namespace: "hawtio",
+				},
+				Spec: hawtiov2.HawtioSpec{
+					Nginx: hawtiov2.HawtioNginx{
+						MasterBurstSize: "6000",
+					},
+				},
+			},
+			Expected{
+				masterBurstSize: "6000",
+			},
+		},
+		{
+			"Hawtio Burst Rate 1000",
+			&hawtiov2.Hawtio{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "hawtio-online",
+					Namespace: "hawtio",
+				},
+				Spec: hawtiov2.HawtioSpec{
+					Nginx: hawtiov2.HawtioNginx{
+						MasterBurstSize: "1000",
+					},
+				},
+			},
+			Expected{
+				masterBurstSize: "1000",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			deployment, err := NewDeployment(tc.hawtio, apiSpec, openShiftConsoleURL, configMapVersion, clientCertSecretVersion, buildVariables, log)
+			assert.NoError(t, err)
+
+			onlineEnv := deployment.Spec.Template.Spec.Containers[0].Env
+			masterBurstSize, found := findEnvVar(onlineEnv, NginxMasterBurstSizeEnvVar)
+
+			// Check if the test case expects a value
+			if tc.expected.masterBurstSize != "" {
+				// If we expect a value, assert it was found AND matches the value
+				assert.True(t, found, "Expected %s to be found", NginxMasterBurstSizeEnvVar)
+				assert.Equal(t, tc.expected.masterBurstSize, masterBurstSize)
+			} else {
+				// If we expect empty/nothing, assert it was NOT found
+				assert.False(t, found, "Expected %s NOT to be found", NginxMasterBurstSizeEnvVar)
+			}
 		})
 	}
 }

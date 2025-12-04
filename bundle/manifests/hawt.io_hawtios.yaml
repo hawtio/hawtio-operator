@@ -1030,6 +1030,14 @@ spec:
                     description: The buffer size for reading client request body.
                       Defaults to `256k`.
                     type: string
+                  masterBurstSize:
+                    description: |-
+                      Defines the maximum number of concurrent requests to the master cluster,
+                      allowed to exceed the rate limit immediately. Must be sized to handle the
+                      "thundering herd" of API calls when Hawtio initializes in Cluster Mode
+                      (e.g., loading 1000+ pods across all namespaces).
+                      Defaults to `5000`.
+                    type: string
                   proxyBuffers:
                     description: |-
                       The number and size of the buffers used for reading a response from
