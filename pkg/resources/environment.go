@@ -23,6 +23,7 @@ const (
 	NginxClientBodyBufferSize       = "NGINX_CLIENT_BODY_BUFFER_SIZE"
 	NginxProxyBuffers               = "NGINX_PROXY_BUFFERS"
 	NginxSubrequestOutputBufferSize = "NGINX_SUBREQUEST_OUTPUT_BUFFER_SIZE"
+	NginxMasterBurstSizeEnvVar      = "NGINX_MASTER_BURST"
 	HawtioAuthTypeForm              = "form"
 	HawtioAuthTypeOAuth             = "oauth"
 	HawtioSSLKey                    = "HAWTIO_ONLINE_SSL_KEY"
@@ -174,6 +175,12 @@ func envVarsForNginx(nginx hawtiov2.HawtioNginx) []corev1.EnvVar {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  NginxSubrequestOutputBufferSize,
 			Value: nginx.SubrequestOutputBufferSize,
+		})
+	}
+	if nginx.MasterBurstSize != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  NginxMasterBurstSizeEnvVar,
+			Value: nginx.MasterBurstSize,
 		})
 	}
 	return envVars
