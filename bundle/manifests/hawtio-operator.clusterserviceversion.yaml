@@ -98,8 +98,8 @@ metadata:
     capabilities: Seamless Upgrades
     categories: Integration & Delivery
     certified: "false"
-    containerImage: quay.io/hawtio/operator:1.3.0
-    createdAt: "2025-11-21T14:10:36Z"
+    containerImage: quay.io/hawtio/operator:1.4.0
+    createdAt: "2025-12-08T16:51:17Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <1.0.2'
@@ -113,7 +113,7 @@ metadata:
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
     operatorframework.io/os.zos: supported
-  name: hawtio-operator.v1.3.0
+  name: hawtio-operator.v1.4.0
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -224,7 +224,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: hawtio-operator
-                image: quay.io/hawtio/operator:1.3.0
+                image: quay.io/hawtio/operator:1.4.0
                 imagePullPolicy: Always
                 name: hawtio-operator
                 ports:
@@ -353,5 +353,5 @@ spec:
   minKubeVersion: 1.11.0
   provider:
     name: Red Hat
-  replaces: hawtio-operator.v1.2.0
-  version: 1.3.0
+  replaces: hawtio-operator.v1.3.0
+  version: 1.4.0
