@@ -113,7 +113,7 @@ metadata:
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
     operatorframework.io/os.zos: supported
-  name: red-hat-hawtio-operator.v1.4.0
+  name: hawtio-operator.v1.4.0
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -353,5 +353,5 @@ spec:
   minKubeVersion: 1.11.0
   provider:
     name: Red Hat
-  replaces: red-hat-hawtio-operator.v1.3.0
+  replaces: hawtio-operator.v1.3.0
   version: 1.4.0
