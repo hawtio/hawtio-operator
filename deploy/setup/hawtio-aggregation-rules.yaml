@@ -1,7 +1,7 @@
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: hawtio-operator-installer
+  name: hawtio-admin-aggregation
   labels:
     #
     # Add these permissions to the "admin" and "edit" default roles

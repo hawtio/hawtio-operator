@@ -10,4 +10,4 @@ resources:
 - ../role.yaml
 - ../role_binding.yaml
 - ../service_account.yaml
-- role_app_user.yaml
+- hawtio-aggregation-rules.yaml
