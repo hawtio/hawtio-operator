@@ -21,7 +21,7 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 	Context("on Kubernetes", func() {
 
 		BeforeEach(func() {
-			mgrState = hawtiotest.StartManager(testTools.Cfg)
+			mgrState = hawtiotest.StartManager(testTools)
 
 			// Used in preference to AfterEach since
 			// DeferCleanup executes right at the end of the test

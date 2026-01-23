@@ -17,27 +17,21 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/hawtio/hawtio-operator/pkg/capabilities"
-	"github.com/hawtio/hawtio-operator/pkg/controller"
+	"github.com/hawtio/hawtio-operator/pkg/clients"
+	hawtiomgr "github.com/hawtio/hawtio-operator/pkg/manager"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
-
-	configclient "github.com/openshift/client-go/config/clientset/versioned"
-	oauthclient "github.com/openshift/client-go/oauth/clientset/versioned"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kclient "k8s.io/client-go/kubernetes"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,16 +51,13 @@ const (
 
 // These vars are used by tests to interact with the simulated cluster
 type TestTools struct {
-	ApiClient    kclient.Interface
-	ApiSpec      *capabilities.ApiServerSpec
-	Cancel       context.CancelFunc
-	Cfg          *rest.Config
-	ConfigClient configclient.Interface
-	CoreClient   corev1client.CoreV1Interface
-	Ctx          context.Context
-	K8sClient    client.Client
-	Logger       logr.Logger
-	OauthClient  oauthclient.Interface
+	Cfg         *rest.Config
+	Scheme      *runtime.Scheme
+	ClientTools *clients.ClientTools
+	K8sClient   client.Client
+	Cancel      context.CancelFunc
+	Ctx         context.Context
+	Logger      logr.Logger
 }
 
 type ManagerState struct {
@@ -202,20 +193,25 @@ func lookupKey(hawtio *hawtiov2.Hawtio) types.NamespacedName {
 	}
 }
 
-func StartManager(cfg *rest.Config) *ManagerState {
+func StartManager(testTools *TestTools) *ManagerState {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
 	By("Starting Manager")
-	mgr, err := manager.New(cfg, manager.Options{
-		Scheme: scheme.Scheme,
-		Metrics: metricserver.Options{
-			BindAddress: "0", // Disable metrics for tests
-		},
-	})
-	Expect(err).NotTo(HaveOccurred())
 
-	err = controller.AddToManager(mgr, buildVariables)
+	metricsOptions := metricserver.Options{
+		BindAddress: "0", // Disable metrics for tests
+	}
+
+	mgr, err := hawtiomgr.New(
+		hawtiomgr.WithRestConfig(testTools.Cfg),
+		hawtiomgr.WithWatchNamespace(HawtioNamespace),
+		hawtiomgr.WithPodNamespace(HawtioNamespace),
+		hawtiomgr.WithBuildVariables(buildVariables),
+		hawtiomgr.WithScheme(testTools.Scheme),
+		hawtiomgr.WithClientTools(testTools.ClientTools),
+		hawtiomgr.WithMetrics(metricsOptions))
+
 	Expect(err).NotTo(HaveOccurred())
 
 	wg.Add(1)

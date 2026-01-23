@@ -14,7 +14,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,6 +47,7 @@ import (
 	kresources "github.com/hawtio/hawtio-operator/pkg/resources/kubernetes"
 	oresources "github.com/hawtio/hawtio-operator/pkg/resources/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/util"
+	"github.com/hawtio/hawtio-operator/pkg/clients"
 )
 
 var log = logf.Log.WithName("controller_hawtio")
@@ -56,55 +57,22 @@ const (
 	HawtioUnderTestEnvVar   = "HAWTIO_UNDER_TEST"
 )
 
+func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedEventHandler[T, reconcile.Request] {
+	return handler.TypedEnqueueRequestForOwner[T](mgr.GetScheme(), mgr.GetRESTMapper(), hawtiov2.NewHawtio(), handler.OnlyControllerOwner())
+}
+
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, bv util.BuildVariables) error {
-	err := oauthv1.Install(mgr.GetScheme())
-	if err != nil {
-		return err
-	}
-	err = routev1.Install(mgr.GetScheme())
-	if err != nil {
-		return err
-	}
-	err = consolev1.Install(mgr.GetScheme())
-	if err != nil {
-		return err
-	}
-	err = apiextensionsv1.AddToScheme(mgr.GetScheme())
-	if err != nil {
-		return err
-	}
-
+func Add(mgr manager.Manager, clientTools *clients.ClientTools, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables) error {
 	r := &ReconcileHawtio{
 		BuildVariables: bv,
 		client:         mgr.GetClient(),
+		coreClient:     clientTools.CoreClient,
+		oauthClient:    clientTools.OAuthClient,
+		configClient:   clientTools.ConfigClient,
+		apiClient:      clientTools.ApiClient,
+		apiSpec:        apiSpec,
 		scheme:         mgr.GetScheme(),
-	}
-
-	oauthClient, err := oauthclient.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return err
-	}
-	r.oauthClient = oauthClient
-
-	configClient, err := configclient.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return err
-	}
-	r.configClient = configClient
-
-	apiClient, err := kclient.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return err
-	}
-	r.apiClient = apiClient
-	r.coreClient = apiClient.CoreV1()
-
-	// Identify cluster capabilities
-	r.apiSpec, err = capabilities.APICapabilities(context.TODO(), r.apiClient, r.configClient)
-	if err != nil {
-		return errs.Wrap(err, "Cluster API capability discovery failed")
 	}
 
 	if r.apiSpec.IsOpenShift4 {
@@ -113,15 +81,6 @@ func Add(mgr manager.Manager, bv util.BuildVariables) error {
 		}
 	}
 
-	return add(mgr, r, r.apiSpec.Routes)
-}
-
-func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedEventHandler[T, reconcile.Request] {
-	return handler.TypedEnqueueRequestForOwner[T](mgr.GetScheme(), mgr.GetRESTMapper(), hawtiov2.NewHawtio(), handler.OnlyControllerOwner())
-}
-
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 	// Need to skip name registry validation if
 	// the controller is being run through test suites
 	skipValidation := false
@@ -166,7 +125,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler, routeSupport bool) error {
 		return errs.Wrap(err, "Failed to create watch for ConfigMap resource")
 	}
 
-	if routeSupport {
+	if r.apiSpec.Routes {
 		err = c.Watch(source.Kind(mgr.GetCache(), &routev1.Route{}, enqueueRequestForOwner[*routev1.Route](mgr)))
 		if err != nil {
 			return errs.Wrap(err, "Failed to create watch for Route resource")

@@ -12,25 +12,15 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	hawtioapis "github.com/hawtio/hawtio-operator/pkg/apis"
-	consolev1 "github.com/openshift/api/console/v1"
-	oauthv1 "github.com/openshift/api/oauth/v1"
-	routev1 "github.com/openshift/api/route/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-
-	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/hawtio/hawtio-operator/pkg/capabilities"
-	configv1 "github.com/openshift/api/config/v1"
-	configclient "github.com/openshift/client-go/config/clientset/versioned"
-	oauthclient "github.com/openshift/client-go/oauth/clientset/versioned"
-	kclient "k8s.io/client-go/kubernetes"
+	"github.com/hawtio/hawtio-operator/pkg/clients"
 
 	"github.com/hawtio/hawtio-operator/pkg/controller/hawtiotest"
+	hawtiomgr "github.com/hawtio/hawtio-operator/pkg/manager"
 )
 
 var testTools *hawtiotest.TestTools
@@ -67,42 +57,17 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = hawtioapis.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = oauthv1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = routev1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = consolev1.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = apiextensionsv1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	err = configv1.AddToScheme(scheme.Scheme)
+	scheme, err := hawtiomgr.ConfigureScheme()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Create the Kubernetes client for interacting with the test environment.
-	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	apiClient, err := kclient.NewForConfig(cfg)
+	clientTools, err := clients.NewTools(cfg)
 	Expect(err).NotTo(HaveOccurred())
-
-	coreClient := apiClient.CoreV1()
-
-	oauthClient, err := oauthclient.NewForConfig(cfg)
-	Expect(err).NotTo(HaveOccurred())
-
-	configClient, err := configclient.NewForConfig(cfg)
-	Expect(err).NotTo(HaveOccurred())
-
-	apiSpec, err := capabilities.APICapabilities(ctx, apiClient, configClient)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(clientTools).NotTo(BeNil())
 
 	logger := logf.Log.WithName("Integration_Test")
 
@@ -110,16 +75,13 @@ var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(30 * time.Second)
 
 	testTools = &hawtiotest.TestTools{
-		ApiClient:    apiClient,
-		ApiSpec:      apiSpec,
-		Cancel:       cancel,
-		Cfg:          cfg,
-		ConfigClient: configClient,
-		CoreClient:   coreClient,
-		Ctx:          ctx,
-		K8sClient:    k8sClient,
-		Logger:       logger,
-		OauthClient:  oauthClient,
+		Scheme:      scheme,
+		Cancel:      cancel,
+		Cfg:         cfg,
+		Ctx:         ctx,
+		K8sClient:   k8sClient,
+		Logger:      logger,
+		ClientTools: clientTools,
 	}
 })
 
