@@ -332,6 +332,8 @@ func PerformCommonResourceTest(testTools *TestTools, ctx context.Context, platfo
 		return err == nil
 	}, Timeout, Interval).Should(BeTrue(), "ConfigMap should be created")
 
+	Expect(configMap.Labels).To(HaveKeyWithValue("app", "hawtio"), "Should have expected app label")
+
 	By("Checking the created ConfigMap against expected test data")
 	expConfigMap := &corev1.ConfigMap{}
 	loadExpectedFile("configmap", platform, expConfigMap)

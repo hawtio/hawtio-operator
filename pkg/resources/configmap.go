@@ -64,6 +64,12 @@ func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, 
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio config map: %s", config))
 
 	configMap := NewDefaultConfigMap(hawtio)
+
+	labels := LabelsForHawtio(hawtio.Name)
+
+	PropagateLabels(hawtio, labels, log)
+	configMap.SetLabels(labels)
+
 	configMap.Data = map[string]string{
 		hawtioConfigKey: config,
 	}

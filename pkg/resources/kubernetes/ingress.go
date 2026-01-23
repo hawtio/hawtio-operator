@@ -45,9 +45,7 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 
 	resources.PropagateAnnotations(hawtio, annotations, log)
 
-	labels := map[string]string{
-		resources.LabelAppKey: "hawtio",
-	}
+	labels := resources.LabelsForHawtio(hawtio.Name)
 	resources.PropagateLabels(hawtio, labels, log)
 
 	ingressTLS := networkingv1.IngressTLS{}
