@@ -41,7 +41,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 		if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
 			expirationDate = date.Time
 		}
-		servingCertSecret, err := generateSelfSignedCertSecret(servingSecretName, namespace, commonName, expirationDate)
+		servingCertSecret, err := generateSelfSignedCertSecret(hawtio, servingSecretName, namespace, commonName, expirationDate)
 		if err != nil {
 			return nil, errs.Wrap(err, "Generating the serving certificate failed")
 		}

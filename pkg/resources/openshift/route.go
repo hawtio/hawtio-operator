@@ -41,9 +41,7 @@ func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSec
 		annotations[RouteHostGeneratedAnnotation] = "true"
 	}
 
-	labels := map[string]string{
-		resources.LabelAppKey: "hawtio",
-	}
+	labels := resources.LabelsForHawtio(hawtio.Name)
 	resources.PropagateLabels(hawtio, labels, log)
 
 	route := NewDefaultRoute(hawtio)

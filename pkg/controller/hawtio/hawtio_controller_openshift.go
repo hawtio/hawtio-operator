@@ -59,7 +59,7 @@ func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *
 		if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
 			expirationDate = date.Time
 		}
-		clientCertSecret, err := generateCASignedCertSecret(clientSecretName, namespace, caSecret, commonName, expirationDate)
+		clientCertSecret, err := generateCASignedCertSecret(hawtio, clientSecretName, namespace, caSecret, commonName, expirationDate)
 		if err != nil {
 			return nil, errs.Wrap(err, "Generating the client certificate failed")
 		}
