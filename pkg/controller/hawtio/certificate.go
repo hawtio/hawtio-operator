@@ -15,21 +15,24 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	"github.com/hawtio/hawtio-operator/pkg/resources"
 )
 
-func generateSelfSignedCertSecret(name string, namespace string, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
-	return generateCertificateSecret(name, namespace, nil, commonName, expirationDate)
+func generateSelfSignedCertSecret(hawtio *hawtiov2.Hawtio, name string, namespace string, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
+	return generateCertificateSecret(hawtio, name, namespace, nil, commonName, expirationDate)
 }
 
-func generateCASignedCertSecret(name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
+func generateCASignedCertSecret(hawtio *hawtiov2.Hawtio, name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
 	if caSecret == nil {
 		return nil, errors.New("Generating a CA-signed certificate requires the CA Secret")
 	}
 
-	return generateCertificateSecret(name, namespace, caSecret, commonName, expirationDate)
+	return generateCertificateSecret(hawtio, name, namespace, caSecret, commonName, expirationDate)
 }
 
-func generateCertificateSecret(name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
+func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace string, caSecret *corev1.Secret, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
 	var caCert *x509.Certificate
 	var caPrivateKey crypto.PrivateKey
 	var err error
@@ -103,10 +106,14 @@ func generateCertificateSecret(name string, namespace string, caSecret *corev1.S
 			Bytes: certBytes,
 		})
 
+	labels := resources.LabelsForHawtio(hawtio.Name)
+	resources.PropagateLabels(hawtio, labels, log)
+
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels: 	 labels,
 		}, Data: map[string][]byte{
 			corev1.TLSCertKey:       certPEM,
 			corev1.TLSPrivateKeyKey: privateKeyPem,
