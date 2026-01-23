@@ -3,52 +3,60 @@ kind: ClusterRole
 metadata:
   name: hawtio-operator
 rules:
-- apiGroups:
-  - oauth.openshift.io
-  resources:
-  - oauthclients
-  verbs:
-  - '*'
-- apiGroups:
-  - config.openshift.io
-  resources:
-  - clusterversions
-  verbs:
-  - get
-- apiGroups:
-  - apiextensions.k8s.io
-  resources:
-  - customresourcedefinitions
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - console.openshift.io
-  resources:
-  - consolelinks
-  - consoleyamlsamples
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  resourceNames:
-  - signing-key
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
-  - watch
+# --- SECRETS (Isolated) ---
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "delete", "get", "list", "watch"]
+
+# --- CORE RESOURCES (High Privilege) ---
+- apiGroups: [""]
+  resources: ["configmaps", "serviceaccounts", "services"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+# --- APPS (High Privilege) ---
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+# --- BATCH ---
+- apiGroups: ["batch"]
+  resources: ["cronjobs"]
+  verbs: ["create", "delete", "get", "list", "update", "watch"]
+
+# --- NETWORKING ---
+- apiGroups: ["route.openshift.io"]
+  resources: ["routes"]
+  verbs: ["create", "delete", "get", "list", "update", "patch", "watch"]
+- apiGroups: ["route.openshift.io"]
+  resources: ["routes/custom-host"]
+  verbs: ["create"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["create", "delete", "get", "list", "update", "patch", "watch"]
+
+# --- OPENSHIFT ---
+- apiGroups: ["console.openshift.io"]
+  resources: ["consolelinks", "consoleyamlsamples"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["template.openshift.io"]
+  resources: ["processedtemplates"]
+  verbs: ["create", "delete", "get", "list", "update", "patch"]
+- apiGroups: ["oauth.openshift.io"]
+  resources: ["oauthclients"]
+  verbs: ["create", "delete", "get", "list", "update", "watch"]
+
+# --- READ-ONLY METADATA ---
+- apiGroups: [""]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["config.openshift.io"]
+  resources: ["clusterversions"]
+  verbs: ["get"]
+
+# --- HAWTIO CUSTOM RESOURCE ACCESS ---
+- apiGroups: ["hawt.io"]
+  resources: ["*"]
+  verbs: ["*"]

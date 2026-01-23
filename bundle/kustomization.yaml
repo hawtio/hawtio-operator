@@ -6,3 +6,11 @@ resources:
 - ../deploy/crs
 - ../deploy
 - scorecard
+
+patches:
+- path: patches/patch-watch-namespaces.yaml
+  target:
+    group: apps
+    kind: Deployment
+    name: hawtio-operator
+    version: v1

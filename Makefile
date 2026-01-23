@@ -3,14 +3,14 @@ NAMESPACE ?= hawtio
 PROJECT = operator
 DEFAULT_IMAGE := quay.io/${ORG}/${PROJECT}
 IMAGE ?= $(DEFAULT_IMAGE)
-VERSION ?= 1.4.0
+VERSION ?= 2.0.0
 HAWTIO_ONLINE_VERSION ?= 2.4.0
 HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 HAWTIO_ONLINE_GATEWAY_VERSION ?= 2.4.0
 HAWTIO_ONLINE_GATEWAY_IMAGE_NAME ?= quay.io/${ORG}/online-gateway
 DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := hawtio-operator
-LAST_RELEASED_VERSION ?= 1.3.0
+LAST_RELEASED_VERSION ?= 1.4.0
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 
 # Is this build part of an automated CI pipeline
@@ -225,7 +225,7 @@ else
 endif
 
 # Generate bundle manifests and metadata
-DEFAULT_CHANNEL ?= $(shell echo "stable-v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
+DEFAULT_CHANNEL ?= $(shell echo "v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
 CHANNELS ?= $(DEFAULT_CHANNEL),latest
 PACKAGE := hawtio-operator
 MANIFESTS := bundle
