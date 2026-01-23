@@ -4,7 +4,20 @@ A [Kubernetes](https://kubernetes.io) operator, based on the [Operator SDK](http
 
 ## Upgrading
 
-See [Upgrading Guide](docs/upgrading.md) when you are upgrading your hawtio-operator installation.
+### Upgrading from v1.x to v2.0
+
+**⚠️ Important:** Version 2.0.0 is a major architectural update that changes the Hawtio Operator from "Namespace Scoped" to "Cluster Scoped" (All Namespaces).
+
+**You cannot upgrade directly from v1.x to v2.0.**
+
+Due to the change in permission scope, OLM cannot automatically update the operator. You must perform a manual migration:
+1. **Uninstall** the existing v1.x Hawtio Operator. (*Your running Hawtio consoles will NOT be deleted*).
+2. **Install** the v2.0 Hawtio Operator.
+3. The new operator will automatically detect and adopt your existing Hawtio instances.
+
+### Upgrading between other versions
+
+See [Upgrading Guide](docs/upgrading.md) for more details.
 
 ## Resources
 
@@ -53,7 +66,7 @@ Unlike previous versions of the operator, the version of the `Hawtio-Online` ope
 - IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online` container image, eg. `quay.io/hawtio/online`;
 - GATEWAY_IMAGE_VERSION: Adding this environment variable will override the version / tag of the 'Hawtio-Online-Gateway' container image, eg. `2.1.0-20240725`;
 - GATEWAY_IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online-Gateway` container image, eg. `quay.io/hawtio/gateway`.
-- IMAGE_PULL_POLICY: Adding this environment variable will override the default pull policy (Always) of the deployed hawtio-online images. Accepted values are 'Always', 'IfNotPresent' and 'Never'. 
+- IMAGE_PULL_POLICY: Adding this environment variable will override the default pull policy (Always) of the deployed hawtio-online images. Accepted values are 'Always', 'IfNotPresent' and 'Never'.
 
 ## Features
 
@@ -182,18 +195,6 @@ Waiting for deployment "hawtio-online" rollout to finish: 2 out of 3 new replica
 Waiting for deployment "hawtio-online" rollout to finish: 1 old replicas are pending termination...
 deployment "hawtio-online" successfully rolled out
 
-# Change the Hawtio version
-$ kubectl patch hawtio hawtio-online --type='merge' -p '{"spec":{"version":"1.7.1"}}'
-hawtio.hawt.io/hawtio-online patched
-# Check the status has updated accordingly
-$ kubectl get hawtio
-NAME             AGE   URL                                   IMAGE
-hawtio-online   1m    https://hawtio.192.168.64.38.nip.io   quay.io/hawtio/online:1.7.1
-# Watch rollout deployment triggered by version change
-$ kubectl rollout status deployment.v1.apps/hawtio-online
-...
-deployment "hawtio-online" successfully rolled out
-
 # Delete Hawtio
 $ kubectl delete hawtio hawtio-online
 hawtio.hawt.io "hawtio-online" deleted
@@ -210,19 +211,19 @@ make build
 Once you get `hawtio-operator` locally, you can run the operator as follows:
 
 ```console
-WATCH_NAMESPACE=<namespace> ./hawtio-operator
+WATCH_NAMESPACES=<namespace> ./hawtio-operator
 ```
 
-where `WATCH_NAMESPACE` is the mandatory environment variable. Setting `WATCH_NAMESPACE=` (empty) runs the operator as `cluster` type.
+where `WATCH_NAMESPACES` is an optional environment variable. Setting `WATCH_NAMESPACES=` (empty) or not including it runs the *operator* as `cluster` type, ie. watches all namespaces. This is the standard for production installs and running with a single watched namespace is now (v2+) only for testing purposes.
 
 You can also specify the `IMAGE_REPOSITORY` environment variable to change the quay image repository for the hawtio-online instances from the default `quay.io/hawtio/online` to somewhere else. For example:
 
 ```console
-WATCH_NAMESPACE=hawtio IMAGE_REPOSITORY=quay.io/fuse/hawtio-online ./hawtio-operator
+IMAGE_REPOSITORY=quay.io/fuse/hawtio-online ./hawtio-operator
 ```
 
 Likewise, you can specify the `IMAGE_VERSION` environment variable to change the version tag for the `Hawtio-Online` instances to a snapshot or self-compiled image. For example:
 
 ```console
-WATCH_NAMESPACE=hawtio IMAGE_REPOSITORY=quay.io/hawtio/online IMAGE_VERSION=2.0.0-202312061128 ./hawtio-operator
+IMAGE_REPOSITORY=quay.io/hawtio/online IMAGE_VERSION=2.0.0-202312061128 ./hawtio-operator
 ```

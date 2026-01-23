@@ -7,7 +7,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     description: Hawtio eases the discovery and management of Java applications deployed on OpenShift.
-    containerImage: quay.io/hawtio/operator:1.4.0
+    containerImage: quay.io/hawtio/operator:2.0.0
     repository: https://github.com/hawtio/hawtio-operator
     support: Red Hat
   labels:
@@ -16,7 +16,7 @@ metadata:
     operatorframework.io/arch.amd64: supported
     operatorframework.io/os.linux: supported
     operatorframework.io/os.zos: supported
-  name: hawtio-operator.v1.4.0
+  name: hawtio-operator.v2.0.0
 spec:
   displayName: Hawtio Operator
   maintainers:
@@ -24,19 +24,53 @@ spec:
     name: The Hawtio team
   provider:
     name: Red Hat
-  version: 1.4.0
-  replaces: hawtio-operator.v1.3.0
-  maturity: alpha
-  minKubeVersion: 1.11.0
+  version: 2.0.0
+  replaces: hawtio-operator.v1.4.0
+  maturity: stable
+  minKubeVersion: 1.24.0
   description: |
-    Hawtio
-    ==============
+    ## Important Notice: Upgrading to v2.0
+
+    **Version 2.0.0 is a major architectural update** that changes the Hawtio Operator from "Namespace Scoped" to "Cluster Scoped" (All Namespaces).
+
+    **⚠️ v1.x cannot be upgraded directly to v2.0.**
+
+    Due to the change in permission scope, OLM cannot automatically update the operator. A manual migration must be performed:
+
+    1. **Uninstall** the existing v1.x Hawtio Operator from individual namespaces.
+        * *Note: Running Hawtio consoles and configuration will NOT be deleted.*
+    2. **Install** the v2.0 Hawtio Operator from the OperatorHub (Channel: `v2`).
+    3. The new operator will automatically detect and adopt existing Hawtio instances.
+
+    ---
 
     The Hawtio console eases the discovery and management of Java applications deployed on OpenShift.
 
     To secure the communication between the Hawtio console and the Jolokia agents, a client certificate is automatically generated.
 
-    Note that the client certificate CN (defaults to `hawtio-online.hawtio.svc`) must be trusted by the Jolokia agents, for which client certification authentication is enabled. See the `clientPrincipal` parameter from the [Jolokia agent configuration options](https://jolokia.org/reference/html/manual/agents.html#jvm-agent).
+    *Note that the client certificate CN (defaults to `hawtio-online.hawtio.svc`) must be trusted by the Jolokia agents, for which client certification authentication is enabled. See the `clientPrincipal` parameter from the [Jolokia agent configuration options](https://jolokia.org/reference/html/manual/agents.html#jvm-agent).*
+
+    ### Security & Certificates
+    The operator automatically secures the Hawtio console with HTTPS.
+
+    * **OpenShift:** Uses the cluster's internal Service CA automatically.
+    * **Kubernetes:** Auto-generates a self-signed certificate if no secret is provided.
+
+    <details>
+    <summary><strong>Click to view Kubernetes (Vanilla) Details</strong></summary>
+
+    #### Running on Vanilla Kubernetes
+
+    If you are not running on OpenShift, the operator will behave as follows:
+
+    1. **Self-Signed Certificate:** The operator will detect that the OpenShift Service CA is missing and automatically generate a self-signed certificate named `hawtio-online-serving`.
+        * *Note:* You will see a "Not Secure" warning in your browser. This is expected.
+        * To use a real certificate, create a Secret named `hawtio-online-tls-serving` and label it `app: hawtio`.
+
+    2. **Ingress Required:**
+        Ensure you have an Ingress Controller (like Nginx or Traefik) installed.
+
+    </details>
   keywords:
   - Hawtio
   - Java
@@ -56,11 +90,11 @@ spec:
       kind: Hawtio
       version: v1
   installModes:
-  - supported: true
+  - supported: false
     type: OwnNamespace
-  - supported: true
+  - supported: false
     type: SingleNamespace
   - supported: false
     type: MultiNamespace
-  - supported: false
+  - supported: true
     type: AllNamespaces
