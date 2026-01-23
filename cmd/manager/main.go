@@ -15,18 +15,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	"github.com/operator-framework/operator-lib/leader"
 
-	"github.com/hawtio/hawtio-operator/pkg/apis"
-	"github.com/hawtio/hawtio-operator/pkg/controller"
 	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio"
+	hawtiomgr "github.com/hawtio/hawtio-operator/pkg/manager"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -35,10 +33,15 @@ import (
 // An empty value means the operator runs with a level of "Info".
 var logLevelEnvVar = "OPERATOR_LOG_LEVEL"
 
-// WatchNamespaceEnvVar is the constant for env variable WATCH_NAMESPACE
+// watchNamespacesEnvVar is the constant for env variable WATCH_NAMESPACES
 // which specifies the Namespace to watch.
 // An empty value means the operator is running with cluster scope.
-var watchNamespaceEnvVar = "WATCH_NAMESPACE"
+var watchNamespacesEnvVar = "WATCH_NAMESPACES"
+
+// podNamespaceEnvVar is the constant for env variable POD_NAMESPACE
+// which specifies the Namespace the operator pod is running in.
+// This is required for Leader Election.
+var podNamespaceEnvVar = "POD_NAMESPACE"
 
 // Go build-time variables
 var (
@@ -128,50 +131,36 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	namespace, err = getWatchNamespace()
+
+	// Check POD_NAMESPACE (Required for Leader Election)
+	podNamespace, found := os.LookupEnv(podNamespaceEnvVar)
+	if !found {
+		log.Error(nil, fmt.Sprintf("%s must be set for leader election", podNamespaceEnvVar))
+		os.Exit(1)
+	}
+
+	// Get Watch Namespace (Empty = AllNamespaces)
+	watchNamespace, err := getWatchNamespace()
 	if err != nil {
 		log.Error(err, "failed to get watch namespace")
 		os.Exit(1)
 	}
 	flag.Parse()
-	err = operatorRun(namespace, cfg)
+
+	err = operatorRun(watchNamespace, podNamespace, cfg)
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
 // operatorRun setup and run the operator
-func operatorRun(namespace string, cfg *rest.Config) error {
+func operatorRun(watchNamespace string, podNamespace string, cfg *rest.Config) error {
 	// Become the leader before proceeding
+	// Note: leader.Become uses POD_NAMESPACE env var implicitly
 	err := leader.Become(context.TODO(), "hawtio-lock")
 	if err == leader.ErrNoNamespace {
 		log.Info("Local run detected, leader election is disabled")
 	} else if err != nil {
-		log.Error(err, "")
-		return err
-	}
-
-	// Create a new Cmd to provide shared dependencies and start components
-
-	var namespaces map[string]cache.Config
-	if namespace != "" {
-		namespaces = map[string]cache.Config{
-			namespace: {},
-		}
-	}
-
-	mgr, err := manager.New(cfg, manager.Options{
-		Cache: cache.Options{
-			DefaultNamespaces: namespaces,
-		},
-	})
-	if err != nil {
-		log.Error(err, "")
-		return err
-	}
-
-	// Setup Scheme for all resources
-	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
 		log.Error(err, "")
 		return err
 	}
@@ -191,8 +180,15 @@ func operatorRun(namespace string, cfg *rest.Config) error {
 
 	printBuildVars(bv)
 
-	if err := controller.AddToManager(mgr, bv); err != nil {
-		log.Error(err, "")
+	mgr, err := hawtiomgr.New(
+		hawtiomgr.WithRestConfig(cfg),
+		hawtiomgr.WithWatchNamespace(watchNamespace),
+		hawtiomgr.WithPodNamespace(podNamespace),
+		hawtiomgr.WithBuildVariables(bv),
+	)
+
+	if err != nil {
+		log.Error(err, "failed to create manager")
 		return err
 	}
 
@@ -249,10 +245,12 @@ func checkCertExpiry(namespace string, secretName string, period float64, cfg *r
 }
 
 // getWatchNamespace returns the Namespace the operator should be watching for changes
+// Returns empty string if WATCH_NAMESPACES is not set (Cluster Scope)
 func getWatchNamespace() (string, error) {
-	ns, found := os.LookupEnv(watchNamespaceEnvVar)
+	ns, found := os.LookupEnv(watchNamespacesEnvVar)
 	if !found {
-		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
+		log.Info(fmt.Sprintf("%s is not set. Defaulting to all namespaces.", watchNamespacesEnvVar))
+		return "", nil
 	}
 	return ns, nil
 }
