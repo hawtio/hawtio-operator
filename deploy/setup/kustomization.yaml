@@ -7,7 +7,5 @@ resources:
 - ../crd
 - ../cluster_role.yaml
 - ../cluster_role_binding.yaml
-- ../role.yaml
-- ../role_binding.yaml
 - ../service_account.yaml
 - hawtio-aggregation-rules.yaml

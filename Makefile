@@ -3,7 +3,7 @@ NAMESPACE ?= hawtio
 PROJECT = operator
 DEFAULT_IMAGE := quay.io/${ORG}/${PROJECT}
 IMAGE ?= $(DEFAULT_IMAGE)
-VERSION ?= 1.4.0
+VERSION ?= 2.0.0
 HAWTIO_ONLINE_VERSION ?= 2.4.0
 HAWTIO_ONLINE_IMAGE_NAME ?= quay.io/${ORG}/online
 HAWTIO_ONLINE_GATEWAY_VERSION ?= 2.4.0
@@ -225,7 +225,7 @@ else
 endif
 
 # Generate bundle manifests and metadata
-DEFAULT_CHANNEL ?= $(shell echo "stable-v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
+DEFAULT_CHANNEL ?= $(shell echo "v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
 CHANNELS ?= $(DEFAULT_CHANNEL),latest
 PACKAGE := red-hat-hawtio-operator
 MANIFESTS := bundle

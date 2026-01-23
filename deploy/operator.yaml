@@ -23,7 +23,9 @@ spec:
           - hawtio-operator
           imagePullPolicy: Always
           env:
-            - name: WATCH_NAMESPACE
+            - name: WATCH_NAMESPACES
+              value: ""
+            - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace

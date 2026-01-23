@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hawtio-operator
+spec:
+  template:
+    spec:
+      containers:
+      - name: hawtio-operator
+        env:
+        # Maps to OLM target namespaces. For AllNamespaces, this becomes "" (Empty).
+        - name: WATCH_NAMESPACES
+          # Clear the explicit value from the base
+          value: null
+          # Inject the OLM annotation reference
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['olm.targetNamespaces']
