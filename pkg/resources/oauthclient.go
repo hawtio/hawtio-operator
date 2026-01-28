@@ -1,9 +1,11 @@
 package resources
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/go-logr/logr"
 
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	oauthv1 "github.com/openshift/api/oauth/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const OAuthClientName = "hawtio"
@@ -16,9 +18,13 @@ func NewDefaultOAuthClient(name string) *oauthv1.OAuthClient {
 	}
 }
 
-func NewOAuthClient(name string) *oauthv1.OAuthClient {
+func NewOAuthClient(name string, hawtio *hawtiov2.Hawtio, log logr.Logger) *oauthv1.OAuthClient {
 	oAuthClient := NewDefaultOAuthClient(name)
 	oAuthClient.GrantMethod = oauthv1.GrantHandlerAuto
+
+	labels := LabelsForHawtio(hawtio.Name)
+	PropagateLabels(hawtio, labels, log)
+	oAuthClient.SetLabels(labels)
 
 	return oAuthClient
 }

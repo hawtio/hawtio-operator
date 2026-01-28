@@ -7,6 +7,7 @@ import (
 	"time"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	"github.com/hawtio/hawtio-operator/pkg/resources"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,6 +36,19 @@ func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *
 	// Check whether client certificate secret exists
 	clientCertSecret, err := r.coreClient.Secrets(namespace).Get(ctx, clientSecretName, metav1.GetOptions{})
 	if err == nil {
+		// Found the secret
+		labels := clientCertSecret.GetLabels()
+		if labels == nil || labels[resources.LabelAppKey] != resources.LabelAppValue {
+			// This a legacy certificate so adopt it
+			// Note: adoptLegacyResource returns the Sentinel Error (ErrLegacyResourceAdopted)
+			// on success.
+			adoptErr := r.adoptLegacyResource(ctx, clientCertSecret)
+			if adoptErr != nil {
+				// Returns ErrLegacyResourceAdopted (to requeue) or a real API error
+				return nil, adoptErr
+			}
+		}
+
 		return clientCertSecret, nil
 	}
 
