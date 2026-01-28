@@ -172,7 +172,8 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 				hawtioContainer,
 				gatewayContainer,
 			},
-			Volumes: volumes,
+			ServiceAccountName: hawtio.Name,
+			Volumes:            volumes,
 		},
 	}
 

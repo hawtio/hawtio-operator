@@ -32,6 +32,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -111,12 +112,17 @@ var svcSpecFieldsToIgnore = []string{
 	"ClusterIPs", // Different ip address each time
 }
 
+var podSpecFieldsToIgnore = []string{
+	"DeprecatedServiceAccount", // Created at runtime for kube backward-compatibility but not required
+}
+
 // k8sSpecComparator defines reusable options for comparing Kubernetes specs
 var k8sSpecComparator = cmp.Options{
 	// Ignore specific field names anywhere they appear
 	cmpopts.IgnoreFields(metav1.TypeMeta{}, metaTypeFieldsToIgnore...),
 	cmpopts.IgnoreFields(metav1.ObjectMeta{}, metaObjFieldsToIgnore...),
 	cmpopts.IgnoreFields(corev1.ServiceSpec{}, svcSpecFieldsToIgnore...),
+	cmpopts.IgnoreFields(corev1.PodSpec{}, podSpecFieldsToIgnore...),
 
 	// Ignore map entries based on key patterns anywhere
 	cmp.FilterPath(func(p cmp.Path) bool {
@@ -338,6 +344,30 @@ func PerformCommonResourceTest(testTools *TestTools, ctx context.Context, platfo
 	expConfigMap := &corev1.ConfigMap{}
 	loadExpectedFile("configmap", platform, expConfigMap)
 	compareResource("ConfigMap", configMap.Data, expConfigMap.Data)
+
+	By("Checking if the service account was created")
+	sa := &corev1.ServiceAccount{}
+	saLookupKey := lookupKey(hawtio)
+	Eventually(func() bool {
+		err := testTools.K8sClient.Get(ctx, saLookupKey, sa)
+		return err == nil
+	}, Timeout, Interval).Should(BeTrue(), "ServiceAccount should be created")
+
+	By("Checking if the service account role was created")
+	role := &rbacv1.Role{}
+	roleLookupKey := lookupKey(hawtio)
+	Eventually(func() bool {
+		err := testTools.K8sClient.Get(ctx, roleLookupKey, role)
+		return err == nil
+	}, Timeout, Interval).Should(BeTrue(), "ServiceAccount Role should be created")
+
+	By("Checking if the service account role binding was created")
+	roleBinding := &rbacv1.RoleBinding{}
+	roleBindingLookupKey := lookupKey(hawtio)
+	Eventually(func() bool {
+		err := testTools.K8sClient.Get(ctx, roleBindingLookupKey, roleBinding)
+		return err == nil
+	}, Timeout, Interval).Should(BeTrue(), "ServiceAccount RoleBinding should be created")
 
 	By("Checking if the Deployment was created")
 	deployment := &appsv1.Deployment{}
