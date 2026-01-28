@@ -36,6 +36,8 @@ func TestIntegrationController(t *testing.T) {
 var _ = BeforeSuite(func() {
 	// Ensure the controller is placed under test mode
 	os.Setenv("HAWTIO_UNDER_TEST", "true")
+	os.Setenv("POD_NAME", "hawtio-operator-test-pod")
+	os.Setenv("POD_NAMESPACE", "hawtio-dev-test")
 
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 

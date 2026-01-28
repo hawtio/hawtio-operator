@@ -33,7 +33,7 @@ func NewCronJob(hawtio *hawtiov2.Hawtio, pod *corev1.Pod, namespace string) (*ba
 
 func populateCertValidationCronJob(cronJob *batchv1.CronJob, hawtio *hawtiov2.Hawtio, pod *corev1.Pod, namespace string) {
 	schedule := hawtio.Spec.Auth.ClientCertCheckSchedule
-	serviceAccountName := pod.Spec.ServiceAccountName
+	serviceAccountName := hawtio.Name // matches the service account
 	container := pod.Spec.Containers[0]
 	period := hawtio.Spec.Auth.ClientCertExpirationPeriod
 

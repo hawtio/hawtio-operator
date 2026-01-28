@@ -63,7 +63,7 @@ func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedE
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, clientTools *clients.ClientTools, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables) error {
+func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *clients.ClientTools, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables) error {
 	r := &ReconcileHawtio{
 		BuildVariables: bv,
 		client:         mgr.GetClient(),
@@ -73,6 +73,7 @@ func Add(mgr manager.Manager, clientTools *clients.ClientTools, apiSpec *capabil
 		apiClient:      clientTools.ApiClient,
 		apiSpec:        apiSpec,
 		scheme:         mgr.GetScheme(),
+		operatorPod:    operatorPod,
 	}
 
 	if r.apiSpec.IsOpenShift4 {
@@ -184,6 +185,7 @@ type ReconcileHawtio struct {
 	apiClient    kclient.Interface
 	apiSpec      *capabilities.ApiServerSpec
 	logger       logr.Logger
+	operatorPod   types.NamespacedName
 }
 
 // DeploymentConfiguration acquires properties used in deployment
@@ -202,17 +204,20 @@ type DeploymentConfiguration struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	r.logger = log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	r.logger.Info("Reconciling Hawtio")
+	r.logger = log.WithValues("Operator Namespace", r.operatorPod, "Hawtio CR Namespace", request.Namespace, "Request.Name", request.Name)
+	r.logger.Info(fmt.Sprintf("Reconciling Hawtio in %s", request.Namespace))
 
 	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
+
+	crNamespacedName := request.NamespacedName
+	opNamespacedName := r.operatorPod
 
 	// =====================================================================
 	// PHASE 1: SETUP & FETCH
 	// =====================================================================
 	// Fetch the Hawtio instance from the cluster.
 	r.logger.V(util.DebugLogLevel).Info("=== Fetching Hawtio Custom Resource ===")
-	hawtio, err := r.fetchHawtio(ctx, request.NamespacedName)
+	hawtio, err := r.fetchHawtio(ctx, crNamespacedName)
 	if (err != nil) {
 		return reconcile.Result{}, err
 	} else if hawtio == nil {
@@ -257,7 +262,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// Check the status of the RBAC ConfigMap.
 	// If specified in the CR then it should be present.
 	r.logger.V(util.DebugLogLevel).Info("=== Verifying RBAC ConfigMap ===")
-	valid, err := r.verifyRBACConfigMap(ctx, hawtio, request.NamespacedName)
+	valid, err := r.verifyRBACConfigMap(ctx, hawtio, crNamespacedName)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			// Let's poll for the RBAC ConfigMap to be created
@@ -284,9 +289,25 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// PHASE 4: RECONCILE AND DEPLOY PHASE
 	// =====================================================================
 
+	// Reconcile the service account
+	// - may include OAuth Client annotations, if applicable
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account ===")
+	opResult, err := r.reconcileServiceAccount(ctx, hawtio)
+	r.logOperationResult("ServiceAccount", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account Role and Binding ===")
+	opResult, err = r.reconcileServiceAccountRole(ctx, hawtio)
+	r.logOperationResult("ServiceAccountRole", opResult)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Intialize the deployment inputs required for the deployment resources
 	r.logger.V(util.DebugLogLevel).Info("=== Initializing Deployment Configuration ===")
-	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, request.NamespacedName)
+	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, crNamespacedName)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -300,7 +321,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Makes the configMap available to the deployment
-	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Assigning reconciled config map %s to deployment", request.NamespacedName.Name))
+	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Assigning reconciled config map %s to deployment", crNamespacedName.Name))
 	deploymentConfig.configMap = configMap
 
 	// Reconcile the deployment resource
@@ -348,14 +369,6 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		ingressRouteURL = kresources.GetIngressURL(ingress)
 	}
 
-	// Reconcile the service account as OAuth Client resource, if applicable
-	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account as OAuth Client ===")
-	opResult, err = r.reconcileServiceAccountAsOauthClient(ctx, hawtio)
-	r.logOperationResult("ServiceAccountAsOauthClient", opResult)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// Reconcile the OAuthClient resource, if applicable
 	r.logger.V(util.DebugLogLevel).Info("=== Reconciling OAuth Client ===")
 	opResult, err = r.reconcileOAuthClient(ctx, hawtio, ingressRouteURL)
@@ -366,7 +379,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Reconcile the ConsoleLink resource, if applicable
 	r.logger.V(util.DebugLogLevel).Info("=== Reconciling ConsoleLink ===")
-	opResult, err = r.reconcileConsoleLink(ctx, hawtio, request.NamespacedName, deploymentConfig, route)
+	opResult, err = r.reconcileConsoleLink(ctx, hawtio, crNamespacedName, deploymentConfig, route)
 	r.logOperationResult("ConsoleLink", opResult)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -374,7 +387,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Reconcile the Certificate cronjob resource, if applicable
 	r.logger.V(util.DebugLogLevel).Info("=== Reconciling CronJob ===")
-	opResult, err = r.reconcileCronJob(ctx, hawtio, request.NamespacedName, deploymentConfig)
+	opResult, err = r.reconcileCronJob(ctx, hawtio, crNamespacedName, opNamespacedName, deploymentConfig)
 	r.logOperationResult("ConsoleLink", opResult)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -386,7 +399,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	r.logger.V(util.DebugLogLevel).Info("Update phase - refreshing Hawtio status")
 
 	deployment := &appsv1.Deployment{}
-	err = r.client.Get(ctx, request.NamespacedName, deployment)
+	err = r.client.Get(ctx, crNamespacedName, deployment)
 	if err != nil && kerrors.IsNotFound(err) {
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
@@ -396,7 +409,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Refresh the hawtio CR to minimize conflict window
 	// Gets the absolute latest ResourceVersion from the server.
-	if err := r.client.Get(ctx, request.NamespacedName, hawtio); err != nil {
+	if err := r.client.Get(ctx, crNamespacedName, hawtio); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -790,6 +803,105 @@ func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, desi
   return obj, nil
 }
 
+func (r *ReconcileHawtio) reconcileServiceAccount(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
+	serviceAccount := resources.NewDefaultServiceAccount(hawtio)
+
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, serviceAccount, func() error {
+		liveObj := serviceAccount.DeepCopy()
+
+		// Set the owner reference for garbage collection.
+		if err := controllerutil.SetControllerReference(hawtio, serviceAccount, r.scheme); err != nil {
+			return err
+		}
+
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccount", hawtio.Name))
+		crServiceAccount, err := resources.NewServiceAccount(hawtio, reqLogger)
+		if (err != nil) {
+			return err
+		}
+
+		serviceAccount.SetLabels(crServiceAccount.GetLabels())
+		serviceAccount.SetAnnotations(crServiceAccount.GetAnnotations())
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("ServiceAccount", liveObj, serviceAccount)
+
+		return nil
+	})
+
+	if err != nil {
+		return opResult, err
+	}
+
+	util.ReportResourceChange("ServiceAccount", serviceAccount, opResult)
+	return opResult, nil
+}
+
+func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
+	// Reconcile the Role used for permissions for the ServiceAccount
+	role := resources.NewDefaultServiceAccountRole(hawtio)
+
+	opResultRole, err := controllerutil.CreateOrUpdate(ctx, r.client, role, func() error {
+		liveObj := role.DeepCopy()
+
+		if err := controllerutil.SetControllerReference(hawtio, role, r.scheme); err != nil {
+			return err
+		}
+
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccountRole", hawtio.Name))
+		crRole := resources.NewServiceAccountRole(hawtio, reqLogger)
+
+		role.SetLabels(crRole.GetLabels())
+		role.SetAnnotations(crRole.GetAnnotations())
+		role.Rules = crRole.Rules
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("ServiceAccountRole", liveObj, role)
+
+		return nil
+	})
+
+	if err != nil {
+		return opResultRole, err
+	}
+
+	util.ReportResourceChange("Role", role, opResultRole)
+
+	// Reconcile the RoleBinding
+	// Binds the Role to the "hawtio-online" ServiceAccount
+	// Reconcile the Role used for permissions for the ServiceAccount
+	roleBinding := resources.NewDefaultServiceAccountRoleBinding(hawtio)
+
+	opResultRole, err = controllerutil.CreateOrUpdate(ctx, r.client, roleBinding, func() error {
+		liveObj := role.DeepCopy()
+
+		if err := controllerutil.SetControllerReference(hawtio, roleBinding, r.scheme); err != nil {
+			return err
+		}
+
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccountRoleBinding", hawtio.Name))
+		crRoleBinding := resources.NewServiceAccountRoleBinding(hawtio, reqLogger)
+
+		roleBinding.SetLabels(crRoleBinding.GetLabels())
+		roleBinding.SetAnnotations(crRoleBinding.GetAnnotations())
+		roleBinding.RoleRef = crRoleBinding.RoleRef
+		roleBinding.Subjects = crRoleBinding.Subjects
+
+		// Report any known differences to the log (only if in debug log level)
+		util.ReportDiff("ServiceAccountRoleBinding", liveObj, roleBinding)
+
+		return nil
+	})
+
+	if err != nil {
+		return opResultRole, err
+	}
+
+	util.ReportResourceChange("RoleBinding", roleBinding, opResultRole)
+
+  return controllerutil.OperationResultNone, nil
+}
+
 func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
 	deployment := resources.NewDefaultDeployment(hawtio)
 
@@ -1030,43 +1142,6 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 	return ingress, opResult, nil
 }
 
-func (r *ReconcileHawtio) reconcileServiceAccountAsOauthClient(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
-	if hawtio.Spec.Type != hawtiov2.NamespaceHawtioDeploymentType {
-		return controllerutil.OperationResultNone, nil
-	}
-
-	serviceAccount := resources.NewDefaultServiceAccountAsOauthClient(hawtio)
-
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, serviceAccount, func() error {
-		liveObj := serviceAccount.DeepCopy()
-
-		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, serviceAccount, r.scheme); err != nil {
-			return err
-		}
-
-		crServiceAccount, err := resources.NewServiceAccountAsOauthClient(hawtio)
-		if (err != nil) {
-			return err
-		}
-
-		serviceAccount.SetLabels(crServiceAccount.GetLabels())
-		serviceAccount.SetAnnotations(crServiceAccount.GetAnnotations())
-
-		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("ServiceAccount", liveObj, serviceAccount)
-
-		return nil
-	})
-
-	if err != nil {
-		return opResult, err
-	}
-
-	util.ReportResourceChange("ServiceAccount", serviceAccount, opResult)
-	return opResult, nil
-}
-
 func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawtiov2.Hawtio, newRouteURL string)  (controllerutil.OperationResult, error) {
 	if !r.apiSpec.IsOpenShift4 {
 		// Not applicable to cluster
@@ -1267,7 +1342,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 	return opResult, nil
 }
 
-func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
+func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2.Hawtio, crNamespacedName client.ObjectKey, opNamespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
 	if deploymentConfig.clientCertSecret == nil {
 		// No certificate so cronjob not necessary
 		return controllerutil.OperationResultNone, nil
@@ -1279,7 +1354,7 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 
 	if shouldExist {
 		// The CronJob SHOULD exist. ---
-		r.logger.Info("Ensuring CronJob exists and is up to date", "CronJob.Name", cronJobName)
+		r.logger.Info("Ensuring CronJob exists and is up to date", "CronJob.Name", cronJobName, "CronJob.Namespace", crNamespacedName.Namespace)
 		cronJob := resources.NewDefaultCronJob(hawtio)
 
 		return controllerutil.CreateOrUpdate(ctx, r.client, cronJob, func() error {
@@ -1290,12 +1365,14 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 				return err
 			}
 
-			pod, err := getOperatorPod(ctx, r.client, namespacedName.Namespace)
+			// Need to get the operator from the
+			// operator namespace and not the CR namespace
+			pod, err := getOperatorPod(ctx, r.client, opNamespacedName)
 			if err != nil {
 				return err
 			}
 
-			crCronJob, err := resources.NewCronJob(hawtio, pod, namespacedName.Namespace)
+			crCronJob, err := resources.NewCronJob(hawtio, pod, crNamespacedName.Namespace)
 			if err != nil {
 				return fmt.Errorf("failed to build desired cronjob: %w", err)
 			}
@@ -1321,7 +1398,7 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 		log.V(util.DebugLogLevel).Info("Ensuring CronJob does not exist", "CronJob.Name", cronJobName)
 
 		staleCronJob := &batchv1.CronJob{}
-		err := r.client.Get(ctx, types.NamespacedName{Name: cronJobName, Namespace: hawtio.Namespace}, staleCronJob)
+		err := r.client.Get(ctx, types.NamespacedName{Name: cronJobName, Namespace: crNamespacedName.Namespace}, staleCronJob)
 
 		if err != nil {
 			if kerrors.IsNotFound(err) {
@@ -1360,11 +1437,9 @@ func (r *ReconcileHawtio) isDeploymentFailed(deployment *appsv1.Deployment) bool
 	return false
 }
 
-func getOperatorPod(ctx context.Context, c client.Client, namespace string) (*corev1.Pod, error) {
-	podName, _ := os.LookupEnv("POD_NAME")
-
+func getOperatorPod(ctx context.Context, c client.Client, namespacedName client.ObjectKey) (*corev1.Pod, error) {
 	pod := &corev1.Pod{}
-	err := c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, pod)
+	err := c.Get(ctx, namespacedName, pod)
 
 	if err != nil {
 		log.Error(err, "Pod not found")

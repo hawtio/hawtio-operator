@@ -6,7 +6,7 @@ rules:
 # --- SECRETS (Isolated) ---
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["create", "delete", "get", "list", "watch"]
+  verbs: ["create", "delete", "get", "list", "update", "watch"]
 
 # --- CORE RESOURCES (High Privilege) ---
 - apiGroups: [""]
@@ -16,7 +16,12 @@ rules:
 # --- APPS (High Privilege) ---
 - apiGroups: ["apps"]
   resources: ["deployments"]
-  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  verbs: ["create", "get", "list", "patch", "update", "watch"]
+
+# --- RBAC (High Privilege) ---
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["create", "get", "list", "update", "watch"]
 
 # --- BATCH ---
 - apiGroups: ["batch"]
@@ -32,7 +37,7 @@ rules:
   verbs: ["create"]
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses"]
-  verbs: ["create", "delete", "get", "list", "update", "patch", "watch"]
+  verbs: ["create", "get", "list", "update", "patch", "watch"]
 
 # --- OPENSHIFT ---
 - apiGroups: ["console.openshift.io"]
@@ -40,10 +45,10 @@ rules:
   verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 - apiGroups: ["template.openshift.io"]
   resources: ["processedtemplates"]
-  verbs: ["create", "delete", "get", "list", "update", "patch"]
+  verbs: ["create", "get", "list", "update", "patch"]
 - apiGroups: ["oauth.openshift.io"]
   resources: ["oauthclients"]
-  verbs: ["create", "delete", "get", "list", "update", "watch"]
+  verbs: ["create", "get", "list", "update", "watch"]
 
 # --- READ-ONLY METADATA ---
 - apiGroups: [""]

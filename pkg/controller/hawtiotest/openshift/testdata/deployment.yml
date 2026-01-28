@@ -154,6 +154,7 @@ spec:
       restartPolicy: Always
       schedulerName: default-scheduler
       securityContext: {}
+      serviceAccountName: hawtio-online
       terminationGracePeriodSeconds: 30
       volumes:
       - name: hawtio-online-tls-serving

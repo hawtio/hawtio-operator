@@ -99,7 +99,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: quay.io/hawtio/operator:2.0.0
-    createdAt: "2026-01-23T20:37:47Z"
+    createdAt: "2026-01-27T17:43:09Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <1.0.2'
@@ -190,6 +190,7 @@ spec:
           - delete
           - get
           - list
+          - update
           - watch
         - apiGroups:
           - ""
@@ -211,10 +212,20 @@ spec:
           - deployments
           verbs:
           - create
-          - delete
           - get
           - list
           - patch
+          - update
+          - watch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - roles
+          - rolebindings
+          verbs:
+          - create
+          - get
+          - list
           - update
           - watch
         - apiGroups:
@@ -252,7 +263,6 @@ spec:
           - ingresses
           verbs:
           - create
-          - delete
           - get
           - list
           - update
@@ -277,7 +287,6 @@ spec:
           - processedtemplates
           verbs:
           - create
-          - delete
           - get
           - list
           - update
@@ -288,7 +297,6 @@ spec:
           - oauthclients
           verbs:
           - create
-          - delete
           - get
           - list
           - update
