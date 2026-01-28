@@ -57,6 +57,8 @@ const (
 	HawtioUnderTestEnvVar   = "HAWTIO_UNDER_TEST"
 )
 
+var ErrLegacyResourceAdopted = errs.New("A legacy resource has been adopted, requeue required")
+
 func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedEventHandler[T, reconcile.Request] {
 	return handler.TypedEnqueueRequestForOwner[T](mgr.GetScheme(), mgr.GetRESTMapper(), hawtiov2.NewHawtio(), handler.OnlyControllerOwner())
 }
@@ -67,12 +69,13 @@ func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *cli
 	r := &ReconcileHawtio{
 		BuildVariables: bv,
 		client:         mgr.GetClient(),
+		scheme:         mgr.GetScheme(),
+		apiReader:      mgr.GetAPIReader(),
 		coreClient:     clientTools.CoreClient,
 		oauthClient:    clientTools.OAuthClient,
 		configClient:   clientTools.ConfigClient,
 		apiClient:      clientTools.ApiClient,
 		apiSpec:        apiSpec,
-		scheme:         mgr.GetScheme(),
 		operatorPod:    operatorPod,
 	}
 
@@ -170,6 +173,18 @@ func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *cli
 	return nil
 }
 
+// handleResultAndError
+// If error is the Sentinel legacy adopted resource error
+// then signal for a requeue. Otherwise, just return the error
+func handleResultAndError(err error) (reconcile.Result, error) {
+	if err == ErrLegacyResourceAdopted {
+		// Adoption occurred so requeue
+		return reconcile.Result{Requeue: true}, err
+	}
+
+	return reconcile.Result{}, err
+}
+
 var _ reconcile.Reconciler = &ReconcileHawtio{}
 
 // ReconcileHawtio reconciles a Hawtio object
@@ -179,6 +194,7 @@ type ReconcileHawtio struct {
 	// that reads objects from the cache and writes to the API server
 	client       client.Client
 	scheme       *runtime.Scheme
+	apiReader    client.Reader
 	coreClient   corev1client.CoreV1Interface
 	oauthClient  oauthclient.Interface
 	configClient configclient.Interface
@@ -295,21 +311,21 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	opResult, err := r.reconcileServiceAccount(ctx, hawtio)
 	r.logOperationResult("ServiceAccount", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account Role and Binding ===")
 	opResult, err = r.reconcileServiceAccountRole(ctx, hawtio)
 	r.logOperationResult("ServiceAccountRole", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// Intialize the deployment inputs required for the deployment resources
 	r.logger.V(util.DebugLogLevel).Info("=== Initializing Deployment Configuration ===")
 	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, crNamespacedName)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// Reconcile the configMap to ensure it is present for use with the deployment
@@ -317,7 +333,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	configMap, opResult, err := r.reconcileConfigMap(ctx, hawtio)
 	r.logOperationResult("ConfigMap", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// Makes the configMap available to the deployment
@@ -329,7 +345,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	opResult, err = r.reconcileDeployment(ctx, hawtio, deploymentConfig)
 	r.logOperationResult("Deployment", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// Reconcile the service resource
@@ -337,7 +353,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	opResult, err = r.reconcileService(ctx, hawtio)
 	r.logOperationResult("Service", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// Declare this for use later in the OAuthClient and Hawtio.Status
@@ -348,7 +364,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	route, opResult, err := r.reconcileRoute(ctx, hawtio, deploymentConfig)
 	r.logOperationResult("Route", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	} else if route == nil && opResult != controllerutil.OperationResultNone {
 		// This means the route was intentionally deleted to be regenerated.
 		// Stop this loop and wait for the automatic requeue that the delete
@@ -364,7 +380,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	ingress, opResult, err := r.reconcileIngress(ctx, hawtio, deploymentConfig)
 	r.logOperationResult("Ingress", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	} else if ingress != nil {
 		ingressRouteURL = kresources.GetIngressURL(ingress)
 	}
@@ -374,7 +390,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	opResult, err = r.reconcileOAuthClient(ctx, hawtio, ingressRouteURL)
 	r.logOperationResult("OAuthClient", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// Reconcile the ConsoleLink resource, if applicable
@@ -382,7 +398,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	opResult, err = r.reconcileConsoleLink(ctx, hawtio, crNamespacedName, deploymentConfig, route)
 	r.logOperationResult("ConsoleLink", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// Reconcile the Certificate cronjob resource, if applicable
@@ -390,7 +406,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	opResult, err = r.reconcileCronJob(ctx, hawtio, crNamespacedName, opNamespacedName, deploymentConfig)
 	r.logOperationResult("ConsoleLink", opResult)
 	if err != nil {
-		return reconcile.Result{}, err
+		return handleResultAndError(err)
 	}
 
 	// =====================================================================
@@ -678,7 +694,11 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 		//
 		clientCertSecret, err := osCreateClientCertificate(ctx, r, hawtio, namespacedName.Name, namespacedName.Namespace)
 		if err != nil {
-			r.logger.Error(err, "Failed to create OpenShift proxying certificate")
+			if err == ErrLegacyResourceAdopted {
+				r.logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
+			} else {
+				r.logger.Error(err, "Failed to create OpenShift proxying certificate")
+			}
 			return deploymentConfiguration, err
 		}
 		deploymentConfiguration.clientCertSecret = clientCertSecret
@@ -691,7 +711,11 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 		// Create -serving certificate
 		servingCertSecret, err := kubeCreateServingCertificate(ctx, r, hawtio, namespacedName.Name, namespacedName.Namespace)
 		if err != nil {
-			r.logger.Error(err, "Failed to create serving certificate")
+			if err == ErrLegacyResourceAdopted {
+				r.logger.Error(err, "Kube serving certificate exists but need to adopt")
+			} else {
+				r.logger.Error(err, "Failed to create serving certificate")
+			}
 			return deploymentConfiguration, err
 		}
 		deploymentConfiguration.servingCertSecret = servingCertSecret
@@ -722,6 +746,51 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	}
 
 	return deploymentConfiguration, nil
+}
+
+// adoptLegacyResource
+// If upgrading from older version or overwriting a manual install it's possible a
+// resource may not have a label so cannot be 'seen' by the client's cache. So, need
+// to adopt the resource by providing it with a label and requeuing.
+func (r *ReconcileHawtio) adoptLegacyResource(ctx context.Context, obj client.Object) error {
+	r.logger.Info(fmt.Sprintf("Adopting legacy resource [Type: %T] [Name: %s/%s]", obj, obj.GetNamespace(), obj.GetName()))
+	key := client.ObjectKeyFromObject(obj)
+
+	// Use API Reader to bypass cache and obtain legacy resource
+	if err := r.apiReader.Get(ctx, key, obj); err != nil {
+		if kerrors.IsNotFound(err) {
+			// It really doesn't exist. The 'AlreadyExists' error was a race condition or ghost.
+			return nil
+		}
+		// Some other error that needs to be logged
+		return err
+	}
+
+	// Check/Add the Missing Label
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	// Safety: If label exists, we shouldn't be here. Avoid infinite loops.
+	if val, ok := labels[resources.LabelAppKey]; ok && val == resources.LabelAppValue {
+		return nil
+	}
+
+	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Self-healing: Adopting legacy resource %s/%s by adding missing label", obj.GetNamespace(), obj.GetName()))
+
+	labels[resources.LabelAppKey] = resources.LabelAppValue
+	obj.SetLabels(labels)
+
+	// Update the object (triggers a new Reconcile event)
+	if err := r.client.Update(ctx, obj); err != nil {
+		// Update failed so return that error
+		return err
+	}
+
+	// Return adopted error to signal that reconcile should be
+	// requeued immediately and object should be found in the cache
+	return ErrLegacyResourceAdopted
 }
 
 func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.ConfigMap, controllerutil.OperationResult, error) {
@@ -759,7 +828,20 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 		return nil
 	})
 
-	if (err != nil) {
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return nil, controllerutil.OperationResultNone, adoptionErr
+		}
+	}
+
+	// Any other error
+	if err != nil {
 		return nil, opResult, err
 	}
 
@@ -829,6 +911,18 @@ func (r *ReconcileHawtio) reconcileServiceAccount(ctx context.Context, hawtio *h
 		return nil
 	})
 
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return controllerutil.OperationResultNone, adoptionErr
+		}
+	}
+
 	if err != nil {
 		return opResult, err
 	}
@@ -860,6 +954,18 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 
 		return nil
 	})
+
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return controllerutil.OperationResultNone, adoptionErr
+		}
+	}
 
 	if err != nil {
 		return opResultRole, err
@@ -954,6 +1060,18 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 		return nil
 	})
 
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return controllerutil.OperationResultNone, adoptionErr
+		}
+	}
+
 	util.ReportResourceChange("Deployment", deployment, opResult)
 	return opResult, err
 }
@@ -1004,6 +1122,18 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 
 		return nil
 	})
+
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return controllerutil.OperationResultNone, adoptionErr
+		}
+	}
 
 	if err != nil {
 		return opResult, err
@@ -1092,6 +1222,18 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		return nil
 	})
 
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return nil, controllerutil.OperationResultNone, adoptionErr
+		}
+	}
+
 	if err != nil {
 		return nil, opResult, err
 	}
@@ -1133,6 +1275,18 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 
 		return nil
 	})
+
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return nil, controllerutil.OperationResultNone, adoptionErr
+		}
+	}
 
 	if err != nil {
 		return nil, opResult, err
@@ -1185,7 +1339,8 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, oAuthClient, func() error {
 		liveObj := oAuthClient.DeepCopy()
 
-		crOAuthClient := resources.NewOAuthClient(resources.OAuthClientName)
+		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileOAuthClient", hawtio.Name))
+		crOAuthClient := resources.NewOAuthClient(resources.OAuthClientName, hawtio, reqLogger)
 
 		hydratedOAuth, err := hydrateDefaults(ctx, r.client, crOAuthClient)
 		if err != nil {
@@ -1193,6 +1348,7 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 		}
 
 		oAuthClient.GrantMethod = hydratedOAuth.GrantMethod
+		oAuthClient.Labels = util.MergeMap(hydratedOAuth.Labels, oAuthClient.Labels)
 
 		// Only set RedirectURIs if the list is nil (creation time).
 		// Never overwrite it if it exists, because we manage specific entries below.
@@ -1205,6 +1361,18 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 
 		return nil
 	})
+
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return controllerutil.OperationResultNone, adoptionErr
+		}
+	}
 
 	if err != nil {
 		return controllerutil.OperationResultNone, err
@@ -1334,6 +1502,18 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 		return nil
 	})
 
+	// There is a resource but the default client cache cannot see it
+	// since it is legacy and not labelled. The create failed so it
+	// should be adopted and reconciled.
+	if err != nil && kerrors.IsAlreadyExists(err) {
+		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		if adoptionErr != nil {
+			// If adoption failed (e.g., API error) or an adoption was called
+			// return any of these errors
+			return controllerutil.OperationResultNone, adoptionErr
+		}
+	}
+
 	if err != nil {
 		return opResult, err
 	}
@@ -1357,7 +1537,7 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 		r.logger.Info("Ensuring CronJob exists and is up to date", "CronJob.Name", cronJobName, "CronJob.Namespace", crNamespacedName.Namespace)
 		cronJob := resources.NewDefaultCronJob(hawtio)
 
-		return controllerutil.CreateOrUpdate(ctx, r.client, cronJob, func() error {
+		opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, cronJob, func() error {
 			liveObj := cronJob.DeepCopy()
 
 			// Set the owner reference for garbage collection.
@@ -1392,6 +1572,24 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 			return nil
 		})
 
+		// There is a resource but the default client cache cannot see it
+		// since it is legacy and not labelled. The create failed so it
+		// should be adopted and reconciled.
+		if err != nil && kerrors.IsAlreadyExists(err) {
+			adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+			if adoptionErr != nil {
+				// If adoption failed (e.g., API error) or an adoption was called
+				// return any of these errors
+				return controllerutil.OperationResultNone, adoptionErr
+			}
+		}
+
+		if err != nil {
+			return opResult, err
+		}
+
+		util.ReportResourceChange("CronJob", cronJob, opResult)
+		return opResult, nil
 	} else {
 		// The CronJob SHOULD NOT exist. ---
 		// We must ensure it is deleted if it's found.

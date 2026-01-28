@@ -10,13 +10,14 @@ import (
 
 const (
 	LabelAppKey      = "app"
+	LabelAppValue    = "hawtio"
 	labelResourceKey = "deployment"
 )
 
 // LabelsForHawtio Set labels in a map
 func LabelsForHawtio(name string) map[string]string {
 	return map[string]string{
-		LabelAppKey:      "hawtio",
+		LabelAppKey:      LabelAppValue,
 		labelResourceKey: name,
 	}
 }
