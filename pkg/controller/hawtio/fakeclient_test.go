@@ -8,6 +8,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/version"
@@ -38,6 +39,11 @@ func buildReconcileWithFakeClientWithMocks(objs []client.Object, t *testing.T) *
 	}
 
 	err = appsv1.AddToScheme(scheme)
+	if err != nil {
+		assert.Fail(t, "unable to build scheme")
+	}
+
+	err = rbacv1.AddToScheme(scheme)
 	if err != nil {
 		assert.Fail(t, "unable to build scheme")
 	}

@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"os"
 
 	errs "github.com/pkg/errors"
 
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 
@@ -117,7 +119,7 @@ type mgrConfig struct {
 	// Required
 	restConfig     *rest.Config
 	watchNamespace string
-	podNamespace   string
+	operatorPodNS  string
 	buildVariables util.BuildVariables
 	// Optional
 	scheme      *runtime.Scheme
@@ -145,7 +147,7 @@ func WithWatchNamespace(ns string) MgrOption {
 // WithPodNamespace allows an external pod namespace to be defined
 func WithPodNamespace(ns string) MgrOption {
 	return func(c *mgrConfig) {
-		c.podNamespace = ns
+		c.operatorPodNS = ns
 	}
 }
 
@@ -207,8 +209,8 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 
 	// mc.watchNamespace can be empty as it will act in cluster mode
 
-	if len(mc.podNamespace) == 0 {
-		return nil, fmt.Errorf("The pod namespace must be specified")
+	if len(mc.operatorPodNS) == 0 {
+		return nil, fmt.Errorf("The operator pod namespace must be specified")
 	}
 
 	// mc.buildVariables can be empty
@@ -236,11 +238,20 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 
 	cacheOptions := createCacheOptions(mc.watchNamespace, apiSpec)
 
+	podName, found := os.LookupEnv("POD_NAME")
+	if !found {
+		return nil, fmt.Errorf("POD_NAME environment variable is not set")
+	}
+	operatorPod := types.NamespacedName{
+		Name:      podName,
+		Namespace: mc.operatorPodNS,
+	}
+
 	// construct the manager
 	mgr, err := manager.New(mc.restConfig, manager.Options{
 		Scheme:                  mc.scheme,
 		Cache:                   cacheOptions,
-		LeaderElectionNamespace: mc.podNamespace,
+		LeaderElectionNamespace: mc.operatorPodNS,
 		Metrics:                 mc.metrics,
 	})
 	if err != nil {
@@ -248,7 +259,9 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	}
 
 	// Register the hawtio controller with the manager
-	if err := hawtio.Add(mgr, mc.clientTools, apiSpec, mc.buildVariables); err != nil {
+	if err := hawtio.Add(
+		mgr, operatorPod, mc.clientTools,
+		apiSpec, mc.buildVariables); err != nil {
 		return nil, err
 	}
 
