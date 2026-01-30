@@ -530,6 +530,8 @@ endif
 UNINSTALLS = .uninstall-app .uninstall-operator .uninstall-setup
 
 $(UNINSTALLS): kubectl kustomize
+	# Delete CR instances first while the operator is still running
+	kubectl delete hawtios --all -n $(NAMESPACE) --ignore-not-found --wait=true
 	@$(call set-kvars,$(INSTALL_ROOT)/$(subst .uninstall-,,$@))
 ifeq ($(DEBUG), false)
 	@$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/$(subst .uninstall-,,$@) | kubectl delete --ignore-not-found=true -f -
