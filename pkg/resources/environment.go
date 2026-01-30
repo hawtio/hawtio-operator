@@ -73,14 +73,14 @@ func envVarsForHawtio(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSp
 	 *    env var so need to specify CR name as that env var's value
 	 *
 	 * 2. In cluster mode, a separate oauthClient resource is created (see oauthclient.go).
-	 *    This resource is given a default name (see OAuthClientName constant).
+	 *    This resource is given a default namespaced name.
 	 */
 
 	// HAWTIO_OAUTH_CLIENT_ID given CR name by default
 	oauthClientID := hawtio.Name
 	if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
-		// Update HAWTIO_OAUTH_CLIENT_ID to known name for cluster-wide OAuthClient
-		oauthClientID = OAuthClientName
+		// Update HAWTIO_OAUTH_CLIENT_ID to known namespaced name for cluster-wide OAuthClient
+		oauthClientID = hawtio.Name + "-" + hawtio.Namespace
 	}
 
 	envVars := []corev1.EnvVar{
