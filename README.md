@@ -4,20 +4,69 @@ A [Kubernetes](https://kubernetes.io) operator, based on the [Operator SDK](http
 
 ## Upgrading
 
-### Upgrading from v1.x to v2.0
+### ⚠️ Upgrading from v1.x to v2.0
 
-**⚠️ Important:** Version 2.0.0 is a major architectural update that changes the Hawtio Operator from "Namespace Scoped" to "Cluster Scoped" (All Namespaces).
+**⚠️ Important**: Version 2.0.0 is a major architectural update that changes the Hawtio Operator from Namespace Scoped to Cluster Scoped (All Namespaces).
 
-**You cannot upgrade directly from v1.x to v2.0.**
+Because of this scope change, the standard OLM automatic upgrade process will pause, requiring manual intervention to authorize the new cluster-wide permissions.
 
-Due to the change in permission scope, OLM cannot automatically update the operator. You must perform a manual migration:
-1. **Uninstall** the existing v1.x Hawtio Operator. (*Your running Hawtio consoles will NOT be deleted*).
-2. **Install** the v2.0 Hawtio Operator.
-3. The new operator will automatically detect and adopt your existing Hawtio instances.
+You have two options to upgrade:
+
+#### Option 1: Clean Reinstall (Recommended)
+
+The simplest path is to remove the old operator and install the new one. The new operator includes auto-adoption logic that will detect existing Hawtio instances and automatically manage them.
+
+1. **Uninstall** the existing v1.x Hawtio Operator via the OpenShift Console or CLI. _(Note: Your running Hawtio console instances will NOT be deleted)_
+
+2. **Install** the v2.0 Hawtio Operator from OperatorHub.
+
+3. The new operator will automatically detect, adopt, and label your existing resources.
+
+#### Option 2: In-Place Upgrade
+
+If you prefer to upgrade the existing subscription without uninstalling, follow these steps:
+
+1. **Approve the Upgrade**: Allow the InstallPlan to proceed (if set to Manual).
+
+2. **Expect a "Stalled" State**: The upgrade will appear to hang or fail.
+
+  - The v1.x Operator may report Failed with "...InstallModeType not supported..."
+  - The v2.0 Operator will remain Pending / Failed.
+
+3. **Update the OperatorGroup**: Manually widen the scope of the installed operator.
+
+```Bash
+    # Edit your OperatorGroup
+    oc edit operatorgroup -n <your-namespace>
+```
+Remove the targetNamespaces list entirely so the operator targets all namespaces:
+
+```YAML
+    spec:
+      # Delete the targetNamespaces list
+      # targetNamespaces:
+      #   - <your-namespace>
+```
+
+4. **Remove the Blocked CSV**: The failed v1.x CSV may block the new version from starting. Manually delete it to clear the lock:
+```Bash
+oc delete csv hawtio-operator.v1.4.0 -n <your-namespace>
+```
+
+5. **Finish**: OLM will detect the change, install the required ClusterRoles, and start the v2.0 Operator.
+
+### Verification
+
+After upgrading, verify that the new operator is running and watching all namespaces:
+```Bash
+oc logs -n <your-namespace> -l name=hawtio-operator | grep -i "Watching"
+# Output should indicate: "Watching ALL namespaces" or "Watching <namespace> namespace only"""
+```
 
 ### Upgrading between other versions
 
 See [Upgrading Guide](docs/upgrading.md) for more details.
+
 
 ## Resources
 
