@@ -1,4 +1,4 @@
-FROM golang:1.24.6-alpine3.22 AS builder
+FROM golang:1.24-alpine3.23 AS builder
 
 ARG HAWTIO_ONLINE_VERSION=latest
 ARG HAWTIO_ONLINE_IMAGE_NAME=quay.io/hawtio/online
@@ -23,7 +23,7 @@ COPY . .
 
 RUN GOLDFLAGS=${GOLDFLAGS} CI_BUILD=true make build
 
-FROM alpine:3.22
+FROM alpine:3.23
 
 USER nobody
 
