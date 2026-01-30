@@ -7,22 +7,33 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+
+	"github.com/hawtio/hawtio-operator/pkg/resources"
 )
 
 // defaultConsoleLinkText Default text for console launcher link
 const defaultConsoleLinkText = "HawtIO Console"
 
-// NewApplicationMenuLink creates an ApplicationMenu ConsoleLink instance
-func NewApplicationMenuLink(name string, route *routev1.Route, config *hawtiov2.HawtioConfig) *consolev1.ConsoleLink {
+func NewDefaultConsoleLink(name string, namespace string) *consolev1.ConsoleLink {
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: map[string]string{"app": "hawtio"},
+			Name:      name,
+			Namespace: namespace,
 		},
-		Spec: consolev1.ConsoleLinkSpec{
-			Location:        consolev1.ApplicationMenu,
-			ApplicationMenu: &consolev1.ApplicationMenuSpec{},
-		},
+	}
+
+	return consoleLink
+}
+
+// NewApplicationMenuLink creates an ApplicationMenu ConsoleLink instance
+func NewApplicationMenuLink(name string, namespace string, route *routev1.Route, config *hawtiov2.HawtioConfig) *consolev1.ConsoleLink {
+	consoleLink := NewDefaultConsoleLink(name, namespace)
+
+	labels := resources.LabelsForHawtio(name)
+	consoleLink.SetLabels(labels)
+	consoleLink.Spec = consolev1.ConsoleLinkSpec{
+		Location:        consolev1.ApplicationMenu,
+		ApplicationMenu: &consolev1.ApplicationMenuSpec{},
 	}
 
 	UpdateApplicationMenuLink(consoleLink, route, config)
@@ -50,16 +61,14 @@ func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev
 
 // NewNamespaceDashboardLink creates a NamespaceDashboard ConsoleLink instance
 func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Route, config *hawtiov2.HawtioConfig) *consolev1.ConsoleLink {
-	consoleLink := &consolev1.ConsoleLink{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: map[string]string{"app": "hawtio"},
-		},
-		Spec: consolev1.ConsoleLinkSpec{
-			Location: consolev1.NamespaceDashboard,
-			NamespaceDashboard: &consolev1.NamespaceDashboardSpec{
-				Namespaces: []string{namespace},
-			},
+	consoleLink := NewDefaultConsoleLink(name, namespace)
+
+	labels := resources.LabelsForHawtio(name)
+	consoleLink.SetLabels(labels)
+	consoleLink.Spec = consolev1.ConsoleLinkSpec{
+		Location: consolev1.NamespaceDashboard,
+		NamespaceDashboard: &consolev1.NamespaceDashboardSpec{
+			Namespaces: []string{namespace},
 		},
 	}
 

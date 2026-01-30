@@ -8,8 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const OAuthClientName = "hawtio"
-
 func NewDefaultOAuthClient(name string) *oauthv1.OAuthClient {
 	return &oauthv1.OAuthClient{
 		ObjectMeta: metav1.ObjectMeta{
