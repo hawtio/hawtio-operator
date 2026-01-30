@@ -49,6 +49,7 @@ var (
 	ImageVersion                         string
 	GatewayImageVersion                  string
 	GatewayImageRepository               string
+	OperatorVersion                      string
 	LegacyServingCertificateMountVersion string
 	ProductName                          string
 	ServerRootDirectory                  string
@@ -66,6 +67,7 @@ func printVersion() {
 }
 
 func printBuildVars(bv util.BuildVariables) {
+	log.Info(fmt.Sprintf("Hawtio Operator Version: %s", bv.OperatorVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.ImageRepository))
 	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.ImageVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Repository: %s", bv.GatewayImageRepository))
@@ -171,6 +173,7 @@ func operatorRun(watchNamespace string, podNamespace string, cfg *rest.Config) e
 		ImageVersion:                         ImageVersion,
 		GatewayImageVersion:                  GatewayImageVersion,
 		GatewayImageRepository:               GatewayImageRepository,
+		OperatorVersion:                      OperatorVersion,
 		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
 		ProductName:                          ProductName,
 		ServerRootDirectory:                  ServerRootDirectory,
