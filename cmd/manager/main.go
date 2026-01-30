@@ -66,12 +66,18 @@ func printVersion() {
 	log.V(util.DebugLogLevel).Info("Debug logging has been enabled")
 }
 
-func printBuildVars(bv util.BuildVariables) {
+func printBuildVars(bv util.BuildVariables, watchNamespace string) {
 	log.Info(fmt.Sprintf("Hawtio Operator Version: %s", bv.OperatorVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.ImageRepository))
 	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.ImageVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Repository: %s", bv.GatewayImageRepository))
 	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Version: %s", bv.GatewayImageVersion))
+
+	if watchNamespace == "" {
+		log.Info("Operator: Watching ALL namespaces (Cluster Scoped)")
+	} else {
+		log.Info(fmt.Sprintf("Operator: Watching '%s' namespace only", watchNamespace))
+	}
 }
 
 func main() {
@@ -181,7 +187,7 @@ func operatorRun(watchNamespace string, podNamespace string, cfg *rest.Config) e
 		AdditionalLabels:                     AdditionalLabels,
 	}
 
-	printBuildVars(bv)
+	printBuildVars(bv, watchNamespace)
 
 	mgr, err := hawtiomgr.New(
 		hawtiomgr.WithRestConfig(cfg),
