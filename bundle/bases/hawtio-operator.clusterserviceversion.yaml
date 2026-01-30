@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    olm.skipRange: '>=1.0.0 <1.0.2'
+    olm.skipRange: '>=1.0.0 <2.0.0'
     capabilities: Seamless Upgrades
     categories: Integration & Delivery
     certified: "false"
