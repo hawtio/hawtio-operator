@@ -15,6 +15,8 @@ type BuildVariables struct {
 	ImageVersion string
 	// The hawtio-gateway operand image version
 	GatewayImageVersion string
+	// The operator version
+	OperatorVersion string
 	// Legacy serving certificate version
 	LegacyServingCertificateMountVersion string
 	// Product name
