@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine3.23 AS builder
+FROM golang:1.25.7-alpine3.23 AS builder
 
 ARG HAWTIO_ONLINE_VERSION=latest
 ARG HAWTIO_ONLINE_IMAGE_NAME=quay.io/hawtio/online
