@@ -1511,12 +1511,15 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 	consoleLinkName := namespacedName.Name + "-" + namespacedName.Namespace
 
 	// The only prerequisites are being on OCP and having a valid Route.
-	shouldExist := r.apiSpec.Routes && route != nil && route.Spec.Host != ""
+	validRoute := r.apiSpec.Routes && route != nil && route.Spec.Host != ""
+	isClusterType := hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType
+	isNamespaceTypeWithDashboard := hawtio.Spec.Type == hawtiov2.NamespaceHawtioDeploymentType && r.apiSpec.IsOpenShift43Plus
+	shouldExist := validRoute && (isClusterType || isNamespaceTypeWithDashboard)
 
 	// Prerequisite check
 	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Prerequisite Check")
 	if !shouldExist {
-		r.logger.V(util.DebugLogLevel).Info("Removing ConsoleLink as not required")
+		r.logger.V(util.DebugLogLevel).Info("Removing ConsoleLink as not applicable", "valid route", validRoute, "cluster link?", isClusterType, "namespace link?", isNamespaceTypeWithDashboard)
 		return r.removeConsoleLink(ctx, consoleLinkName)
 	}
 
@@ -1542,13 +1545,16 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 		} else if r.apiSpec.IsOpenShift43Plus {
 			r.logger.V(util.DebugLogLevel).Info("Adding console link as Namespace Dashboard Link")
 			blueprint = openshift.NewNamespaceDashboardLink(consoleLinkName, namespacedName.Namespace, route, hawtconfig)
-		}  else {
+		} else {
 			// If no link should exist, we can't model that with CreateOrUpdate.
-			// This case is handled below. For the mutate function, we do nothing.
-			return nil
+			return fmt.Errorf("Unsupported ConsoleLink configuration - neither Application nor Namespace link")
 		}
 
+		r.logger.V(util.DebugLogLevel).Info("ConsoleLink Default", "blueprint", blueprint)
+
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *consolev1.ConsoleLink) {
+			r.logger.V(util.DebugLogLevel).Info("ConsoleLink Hydrating Callback", "hydrated", hydrated, "source", source)
+
 			// If hydration stripped required fields, patch them directly back from source
 			if hydrated.Spec.Href == "" || hydrated.Spec.Location == "" {
 				r.logger.Info("ConsoleLink hydration dropped required fields. Restoring from source spec.",
@@ -1558,10 +1564,13 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 					hydrated.Spec.Location = source.Spec.Location
 			}
 		})
+
+		r.logger.V(util.DebugLogLevel).Info("ConsoleLink Hydrated Default", "serverBlueprint", serverBlueprint)
 		if err != nil {
 			return err
 		}
 
+		r.logger.V(util.DebugLogLevel).Info("ConsoleLink Merging target with blueprint")
 		targetConsoleLink.Labels = util.MergeMap(targetConsoleLink.Labels, blueprint.Labels)
 		targetConsoleLink.Annotations = util.MergeMap(targetConsoleLink.Annotations, blueprint.Annotations)
 		targetConsoleLink.Spec = serverBlueprint.Spec
