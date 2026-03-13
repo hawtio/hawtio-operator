@@ -123,7 +123,8 @@ func APICapabilities(ctx context.Context, apiClient kclient.Interface, configCli
 				apiSpec.Version = openShiftSemVer.String()
 
 				// Update whether this is OpenShift 4.3+
-				constraint43, err := semver.NewConstraint(">= 4.3")
+				// (needs the 0-0 to include correctly evaluating pre-releases)
+				constraint43, err := semver.NewConstraint(">= 4.3.0-0")
 				if err != nil {
 					return nil, errs.Wrap(err, fmt.Sprintf("Error parsing OpenShift cluster semantic version %s", update.Version))
 				}
