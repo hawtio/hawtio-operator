@@ -800,7 +800,8 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 	configMap := resources.NewDefaultConfigMap(hawtio)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, configMap, func() error {
-		liveObj := configMap.DeepCopy()
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := configMap.DeepCopy()
 
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, configMap, r.scheme); err != nil {
@@ -820,13 +821,13 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 		configMap.Labels = util.MergeMap(configMap.Labels, crConfigMap.Labels)
 		configMap.Annotations = util.MergeMap(configMap.Annotations, crConfigMap.Annotations)
 
-		// Mutate the object's Data field to match the desired state.
+		// Mutate the object's Data field to match the source state.
 		// No hydration needed because K8s doesn't default this field.
 		configMap.Data = crConfigMap.Data
 		configMap.BinaryData = crConfigMap.BinaryData
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("ConfigMap", liveObj, configMap)
+		util.ReportDiff("ConfigMap", liveSnapshot, configMap)
 
 		return nil
 	})
@@ -853,13 +854,16 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 }
 
 // hydrateDefaults performs a server-side Dry-Run Create to populate the
-// 'desired' object with all the default values (Spec, Status, etc.) that
+// 'blueprint' object with all the default values (Spec, Status, etc.) that
 // the specific cluster applies.
+// It accepts an optional ensureSpecIntegrity closure to validate that
+// critical fields remain present and if not restore them from the blueprint
+// object.
 // It returns the "hydrated" object.
-func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, desired T) (T, error) {
+func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, blueprint T, ensureSpecIntegrity func(source T, hydrated T)) (T, error) {
 	// DeepCopy to avoid mutating the input object in case the caller reuses it
-	// We cast the result back to T (which works because T is a pointer to a struct)
-	obj := desired.DeepCopyObject().(T)
+	// Cast the result back to T (which works because T is a pointer to a struct)
+	obj := blueprint.DeepCopyObject().(T)
 
 	// OpenShift OAuthClient validation rejects it.
 	obj.SetGenerateName("")
@@ -885,6 +889,12 @@ func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, desi
 		return zero, fmt.Errorf("failed to hydrate defaults via dry-run: %w", err)
 	}
 
+	// Validate with the ensureSpecIntegrity function if one was provided
+	// to patch any dropped fields
+	if ensureSpecIntegrity != nil {
+		ensureSpecIntegrity(blueprint, obj)
+	}
+
   return obj, nil
 }
 
@@ -892,7 +902,8 @@ func (r *ReconcileHawtio) reconcileServiceAccount(ctx context.Context, hawtio *h
 	serviceAccount := resources.NewDefaultServiceAccount(hawtio)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, serviceAccount, func() error {
-		liveObj := serviceAccount.DeepCopy()
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := serviceAccount.DeepCopy()
 
 		// Set the owner reference for garbage collection.
 		if err := controllerutil.SetControllerReference(hawtio, serviceAccount, r.scheme); err != nil {
@@ -909,7 +920,7 @@ func (r *ReconcileHawtio) reconcileServiceAccount(ctx context.Context, hawtio *h
 		serviceAccount.SetAnnotations(crServiceAccount.GetAnnotations())
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("ServiceAccount", liveObj, serviceAccount)
+		util.ReportDiff("ServiceAccount", liveSnapshot, serviceAccount)
 
 		return nil
 	})
@@ -939,7 +950,8 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 	role := resources.NewDefaultServiceAccountRole(hawtio)
 
 	opResultRole, err := controllerutil.CreateOrUpdate(ctx, r.client, role, func() error {
-		liveObj := role.DeepCopy()
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := role.DeepCopy()
 
 		if err := controllerutil.SetControllerReference(hawtio, role, r.scheme); err != nil {
 			return err
@@ -953,7 +965,7 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 		role.Rules = crRole.Rules
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("ServiceAccountRole", liveObj, role)
+		util.ReportDiff("ServiceAccountRole", liveSnapshot, role)
 
 		return nil
 	})
@@ -982,7 +994,8 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 	roleBinding := resources.NewDefaultServiceAccountRoleBinding(hawtio)
 
 	opResultRole, err = controllerutil.CreateOrUpdate(ctx, r.client, roleBinding, func() error {
-		liveObj := role.DeepCopy()
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := role.DeepCopy()
 
 		if err := controllerutil.SetControllerReference(hawtio, roleBinding, r.scheme); err != nil {
 			return err
@@ -997,7 +1010,7 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 		roleBinding.Subjects = crRoleBinding.Subjects
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("ServiceAccountRoleBinding", liveObj, roleBinding)
+		util.ReportDiff("ServiceAccountRoleBinding", liveSnapshot, roleBinding)
 
 		return nil
 	})
@@ -1012,13 +1025,15 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 }
 
 func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
-	deployment := resources.NewDefaultDeployment(hawtio)
+	// The object the K8s client fetches into, and ultimately saves.
+	targetDeployment := resources.NewDefaultDeployment(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, deployment, func() error {
-		liveObj := deployment.DeepCopy()
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetDeployment, func() error {
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := targetDeployment.DeepCopy()
 
-		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, deployment, r.scheme); err != nil {
+		// Set the owner reference for garbage collection
+		if err := controllerutil.SetControllerReference(hawtio, targetDeployment, r.scheme); err != nil {
 			return err
 		}
 
@@ -1029,7 +1044,8 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 		}
 
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileDeployment", hawtio.Name))
-		crDeployment, err := resources.NewDeployment(hawtio, r.apiSpec,
+		// Local, ideal state generated from the Hawtio CR
+		blueprint, err := resources.NewDeployment(hawtio, r.apiSpec,
 													deploymentConfig.openShiftConsoleURL,
 													deploymentConfig.configMap.GetResourceVersion(),
 													clientCertSecretVersion,
@@ -1039,26 +1055,26 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			return err
 		}
 
-		hydratedDeployment, err := hydrateDefaults(ctx, r.client, crDeployment)
+		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *appsv1.Deployment) {
+			// If hydration stripped required fields, patch them directly back from source
+			if hydrated.Spec.Selector == nil {
+				hydrated.Spec.Selector = source.Spec.Selector
+			}
+			if len(hydrated.Spec.Template.Spec.Containers) == 0 {
+				hydrated.Spec.Template.Spec.Containers = source.Spec.Template.Spec.Containers
+			}
+		})
 		if err != nil {
 			return err
 		}
 
-		// Now 'desiredSpec' has , for example,
-		// "ClusterFirst" instead of "" matching Live state.
-		desiredSpec := hydratedDeployment.Spec
-
-		// Merge Labels (Preserve system labels)
-		deployment.Labels = util.MergeMap(deployment.Labels, crDeployment.Labels)
-
-		// Merge Annotations (Preserve system annotations like 'revision')
-		deployment.Annotations = util.MergeMap(deployment.Annotations, crDeployment.Annotations)
-
-		// Apply Spec (Your Dry-Run logic handles the spec defaults)
-		deployment.Spec = desiredSpec
+		targetDeployment.Labels = util.MergeMap(targetDeployment.Labels, blueprint.Labels)
+		targetDeployment.Annotations = util.MergeMap(targetDeployment.Annotations, blueprint.Annotations)
+		// Assign the fully hydrated and patched blueprint spec
+		targetDeployment.Spec = serverBlueprint.Spec
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("Deployment", liveObj, deployment)
+		util.ReportDiff("Deployment", liveSnapshot, targetDeployment)
 
 		return nil
 	})
@@ -1075,53 +1091,62 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 		}
 	}
 
-	util.ReportResourceChange("Deployment", deployment, opResult)
+	util.ReportResourceChange("Deployment", targetDeployment, opResult)
 	return opResult, err
 }
 
 func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
-	service := resources.NewDefaultService(hawtio)
+	targetService := resources.NewDefaultService(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, service, func() error {
-		liveObj := service.DeepCopy()
-		oldClusterIP := service.Spec.ClusterIP
-		oldClusterIPs := service.Spec.ClusterIPs
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetService, func() error {
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := targetService.DeepCopy()
+		oldClusterIP := targetService.Spec.ClusterIP
+		oldClusterIPs := targetService.Spec.ClusterIPs
 
 		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, service, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, targetService, r.scheme); err != nil {
 			return err
 		}
 
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
-		crService := resources.NewService(hawtio, r.apiSpec, reqLogger)
+		blueprint := resources.NewService(hawtio, r.apiSpec, reqLogger)
 
-		hydratedService, err := hydrateDefaults(ctx, r.client, crService)
+		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *corev1.Service) {
+			// If hydration stripped required fields, patch them directly back from source
+			if len(hydrated.Spec.Ports) == 0 {
+				hydrated.Spec.Ports = source.Spec.Ports
+			}
+			if len(hydrated.Spec.Selector) == 0 {
+				hydrated.Spec.Selector = source.Spec.Selector
+			}
+
+			for i := range hydrated.Spec.Ports {
+				hydrated.Spec.Ports[i].NodePort = 0
+			}
+
+			// Ensure ClusterIP is not changed to a new random one from hydration of default.
+			// If the service already exists, must preserve its IP.
+			// If it doesn't exist (len == 0), leave it empty so K8s allocates a fresh one.
+			if len(oldClusterIP) > 0 {
+				hydrated.Spec.ClusterIP = oldClusterIP
+				hydrated.Spec.ClusterIPs = oldClusterIPs
+			} else {
+				hydrated.Spec.ClusterIP = ""
+				hydrated.Spec.ClusterIPs = nil
+			}
+		})
 		if err != nil {
 			return err
 		}
 
-		// Dry-Run allocates an IP, but don't want to force that specific IP
-		// during creation (race condition) but a dynamic allocation.
-		hydratedService.Spec.ClusterIP = ""
-		hydratedService.Spec.ClusterIPs = nil
-		for i := range hydratedService.Spec.Ports {
-			hydratedService.Spec.Ports[i].NodePort = 0
-		}
-
-		service.Labels = util.MergeMap(service.Labels, crService.Labels)
-		service.Annotations = util.MergeMap(service.Annotations, crService.Annotations)
-		service.Spec = hydratedService.Spec
-
-		// Ensure ClusterIP is not changed to a new random one from hydration of default.
-		// If the service already exists, must preserve its IP.
-    // If it doesn't exist (len == 0), leave it empty so K8s allocates a fresh one.
-		if len(oldClusterIP) > 0 {
-			service.Spec.ClusterIP = oldClusterIP
-			service.Spec.ClusterIPs = oldClusterIPs
-		}
+		targetService.Labels = util.MergeMap(targetService.Labels, blueprint.Labels)
+		targetService.Annotations = util.MergeMap(targetService.Annotations, serverBlueprint.Annotations)
+		// Assign the fully hydrated and patched blueprint spec
+		targetService.Spec = serverBlueprint.Spec
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("Service", liveObj, service)
+		util.ReportDiff("Service", liveSnapshot, targetService)
 
 		return nil
 	})
@@ -1142,7 +1167,7 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 		return opResult, err
 	}
 
-	util.ReportResourceChange("Service", service, opResult)
+	util.ReportResourceChange("Service", targetService, opResult)
 	return opResult, nil
 }
 
@@ -1184,43 +1209,58 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 	}
 
 	// err was not found so carry-on with creating a new route
-	route := oresources.NewDefaultRoute(hawtio)
+	targetRoute := oresources.NewDefaultRoute(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, route, func() error {
-		liveObj := route.DeepCopy()
-		oldHost := route.Spec.Host
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetRoute, func() error {
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := targetRoute.DeepCopy()
+		// The current route's host field
+		existingHost := liveSnapshot.Spec.Host
 
 		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, route, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, targetRoute, r.scheme); err != nil {
 			return err
 		}
 
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
-		crRoute := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
+		blueprint := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
 
-		hydratedRoute, err := hydrateDefaults(ctx, r.client, crRoute)
+		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *routev1.Route) {
+			// If hydration stripped required fields, patch them directly back from source
+			if hydrated.Spec.To.Kind == "" || hydrated.Spec.To.Name == "" {
+				hydrated.Spec.To = source.Spec.To
+			}
+			if hydrated.Spec.Port == nil && source.Spec.Port != nil {
+				hydrated.Spec.Port = source.Spec.Port
+			}
+			if hydrated.Spec.TLS == nil && source.Spec.TLS != nil {
+				hydrated.Spec.TLS = source.Spec.TLS
+			}
+
+			// The hydration generates a host field based on the temporary name
+			// (e.g. "hawtio-dry-run-123..."). This must be updated, using the
+			// live cluster's existingHost or discarded.
+			if source.Spec.Host == "" {
+				if existingHost != "" {
+					// Restore the live cluster Host
+					hydrated.Spec.Host = existingHost
+				} else {
+					// Discard the garbage temporary host
+					hydrated.Spec.Host = ""
+				}
+			}
+		})
 		if err != nil {
 			return err
 		}
 
-		// The hydration generated a host based on the temporary name
-		// (e.g. "hawtio-dry-run-123...").
-		// We must discard this garbage host.
-		if crRoute.Spec.Host == "" {
-			hydratedRoute.Spec.Host = ""
-		}
-
-		route.Labels = util.MergeMap(route.Labels, crRoute.Labels)
-		route.Annotations = util.MergeMap(route.Annotations, crRoute.Annotations)
-		route.Spec = hydratedRoute.Spec
-
-		// Restore Host if not forcing one
-		if crRoute.Spec.Host == "" && oldHost != "" {
-			route.Spec.Host = oldHost
-		}
+		targetRoute.Labels = util.MergeMap(targetRoute.Labels, blueprint.Labels)
+		targetRoute.Annotations = util.MergeMap(targetRoute.Annotations, serverBlueprint.Annotations)
+		// Assign the fully hydrated and patched blueprint spec
+		targetRoute.Spec = serverBlueprint.Spec
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("Route", liveObj, route)
+		util.ReportDiff("Route", liveSnapshot, targetRoute)
 
 		return nil
 	})
@@ -1241,8 +1281,8 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		return nil, opResult, err
 	}
 
-	util.ReportResourceChange("Route", route, opResult)
-	return route, opResult, nil
+	util.ReportResourceChange("Route", targetRoute, opResult)
+	return targetRoute, opResult, nil
 }
 
 func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*networkingv1.Ingress, controllerutil.OperationResult, error) {
@@ -1251,30 +1291,41 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 		return nil, controllerutil.OperationResultNone, nil
 	}
 
-	ingress := kresources.NewDefaultIngress(hawtio)
+	targetIngress := kresources.NewDefaultIngress(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, ingress, func() error {
-		liveObj := ingress.DeepCopy()
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetIngress, func() error {
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := targetIngress.DeepCopy()
 
 		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, ingress, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, targetIngress, r.scheme); err != nil {
 			return err
 		}
 
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
-		crIngress := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
+		blueprint := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
 
-		hydratedIngress, err := hydrateDefaults(ctx, r.client, crIngress)
+		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *networkingv1.Ingress) {
+			// If hydration stripped required fields, patch them directly back from source
+			if len(hydrated.Spec.Rules) == 0 {
+				hydrated.Spec.Rules = source.Spec.Rules
+			}
+
+			if len(hydrated.Spec.TLS) == 0 && len(source.Spec.TLS) > 0 {
+				hydrated.Spec.TLS = source.Spec.TLS
+			}
+		})
 		if err != nil {
 			return err
 		}
 
-		ingress.Labels = util.MergeMap(ingress.Labels, crIngress.Labels)
-		ingress.Annotations = util.MergeMap(ingress.Annotations, crIngress.Annotations)
-		ingress.Spec = hydratedIngress.Spec
+		targetIngress.Labels = util.MergeMap(targetIngress.Labels, blueprint.Labels)
+		targetIngress.Annotations = util.MergeMap(targetIngress.Annotations, serverBlueprint.Annotations)
+		// Assign the fully hydrated and patched blueprint spec
+		targetIngress.Spec = serverBlueprint.Spec
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("Ingress", liveObj, ingress)
+		util.ReportDiff("Ingress", liveSnapshot, targetIngress)
 
 		return nil
 	})
@@ -1295,8 +1346,8 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 		return nil, opResult, err
 	}
 
-	util.ReportResourceChange("Ingress", ingress, opResult)
-	return ingress, opResult, nil
+	util.ReportResourceChange("Ingress", targetIngress, opResult)
+	return targetIngress, opResult, nil
 }
 
 func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawtiov2.Hawtio, newRouteURL string, namespacedName client.ObjectKey)  (controllerutil.OperationResult, error) {
@@ -1337,31 +1388,40 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 	}
 
 	// Ensure the OAuthClient exists and is correctly configured.
-	oAuthClient := resources.NewDefaultOAuthClient(clientName)
+	targetOAuthClient := resources.NewDefaultOAuthClient(clientName)
 
 	// We use CreateOrUpdate to ensure the base object exists.
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, oAuthClient, func() error {
-		liveObj := oAuthClient.DeepCopy()
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetOAuthClient, func() error {
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := targetOAuthClient.DeepCopy()
 
 		reqLogger := log.WithName(fmt.Sprintf("%s-%s-reconcileOAuthClient", namespacedName.Name, namespacedName.Namespace))
-		crOAuthClient := resources.NewOAuthClient(clientName, hawtio, reqLogger)
+		blueprint := resources.NewOAuthClient(clientName, hawtio, reqLogger)
 
-		hydratedOAuth, err := hydrateDefaults(ctx, r.client, crOAuthClient)
+		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *oauthv1.OAuthClient) {
+			// If hydration stripped required fields, patch them directly back from source
+			if hydrated.GrantMethod == "" {
+				hydrated.GrantMethod = source.GrantMethod
+			}
+			if len(hydrated.RedirectURIs) == 0 && len(source.RedirectURIs) > 0 {
+				hydrated.RedirectURIs = source.RedirectURIs
+			}
+		})
 		if err != nil {
 			return err
 		}
 
-		oAuthClient.GrantMethod = hydratedOAuth.GrantMethod
-		oAuthClient.Labels = util.MergeMap(hydratedOAuth.Labels, oAuthClient.Labels)
+		targetOAuthClient.GrantMethod = serverBlueprint.GrantMethod
+		targetOAuthClient.Labels = util.MergeMap(targetOAuthClient.Labels, blueprint.Labels)
 
 		// Only set RedirectURIs if the list is nil (creation time).
 		// Never overwrite it if it exists, because we manage specific entries below.
-		if oAuthClient.RedirectURIs == nil {
-			oAuthClient.RedirectURIs = hydratedOAuth.RedirectURIs
+		if targetOAuthClient.RedirectURIs == nil {
+			targetOAuthClient.RedirectURIs = serverBlueprint.RedirectURIs
 		}
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("OAuthClient", liveObj, oAuthClient)
+		util.ReportDiff("OAuthClient", liveSnapshot, targetOAuthClient)
 
 		return nil
 	})
@@ -1385,7 +1445,7 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 	// Read-Modify-Write for RedirectURIs
 	// We must re-fetch the object to ensure we have the latest version
 	// before modifying the list.
-	err = r.client.Get(ctx, types.NamespacedName{Name: clientName}, oAuthClient)
+	err = r.client.Get(ctx, types.NamespacedName{Name: clientName}, targetOAuthClient)
 	if err != nil {
 		return controllerutil.OperationResultNone, err
 	}
@@ -1395,28 +1455,28 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 	// Remove the old URL if it's different from the new one
 	if oldRouteURL != "" && oldRouteURL != newRouteURL {
 		r.logger.Info("Removing stale RedirectURI from OAuthClient", "URI", oldRouteURL)
-		if resources.RemoveRedirectURIFromOauthClient(oAuthClient, oldRouteURL) {
+		if resources.RemoveRedirectURIFromOauthClient(targetOAuthClient, oldRouteURL) {
 			updateOAuthClient = true
 		}
 	}
 
 	// Add the current route URL if it's not already present.
-	if ok, _ := resources.OauthClientContainsRedirectURI(oAuthClient, newRouteURL); !ok && newRouteURL != "" {
+	if ok, _ := resources.OauthClientContainsRedirectURI(targetOAuthClient, newRouteURL); !ok && newRouteURL != "" {
 		r.logger.V(util.DebugLogLevel).Info("OAuthClient URI mismatch detected",
 			"Wanted", newRouteURL,
-			"ExistingURIs", oAuthClient.RedirectURIs)
+			"ExistingURIs", targetOAuthClient.RedirectURIs)
 
 		r.logger.Info("Adding new RedirectURI to OAuthClient", "URI", newRouteURL)
-		oAuthClient.RedirectURIs = append(oAuthClient.RedirectURIs, newRouteURL)
+		targetOAuthClient.RedirectURIs = append(targetOAuthClient.RedirectURIs, newRouteURL)
 		updateOAuthClient = true
 	}
 
 	if updateOAuthClient {
-		err := r.client.Update(ctx, oAuthClient)
+		err := r.client.Update(ctx, targetOAuthClient)
 		return controllerutil.OperationResultUpdated, err
 	}
 
-	util.ReportResourceChange("OAuthClient", oAuthClient, opResult)
+	util.ReportResourceChange("OAuthClient", targetOAuthClient, opResult)
 	return opResult, nil
 }
 
@@ -1425,7 +1485,7 @@ func (r *ReconcileHawtio) removeConsoleLink(ctx context.Context, consoleLinkName
 	err := r.client.Get(ctx, types.NamespacedName{Name: consoleLinkName}, consoleLink)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			// The link doesn't exist, which is the desired state. Nothing to do.
+			// The link doesn't exist, which is the source state. Nothing to do.
 			return controllerutil.OperationResultNone, nil
 		}
 		// A real error occurred trying to get the object.
@@ -1468,40 +1528,46 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 	}
 
 	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Creating new ConsoleLink")
-	consoleLink := &consolev1.ConsoleLink{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: consoleLinkName,
-		},
-	}
+	targetConsoleLink := openshift.NewDefaultConsoleLink(consoleLinkName, namespacedName.Namespace)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, consoleLink, func() error {
-		liveObj := consoleLink.DeepCopy()
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetConsoleLink, func() error {
+		// A read-only copy of the cluster state for diff logging
+		liveSnapshot := targetConsoleLink.DeepCopy()
 
-		var crConsoleLink *consolev1.ConsoleLink
+		var blueprint *consolev1.ConsoleLink
 
 		if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
 			r.logger.V(util.DebugLogLevel).Info("Adding console link as Application Menu Link")
-			crConsoleLink = openshift.NewApplicationMenuLink(consoleLinkName, namespacedName.Namespace, route, hawtconfig)
+			blueprint = openshift.NewApplicationMenuLink(consoleLinkName, namespacedName.Namespace, route, hawtconfig)
 		} else if r.apiSpec.IsOpenShift43Plus {
 			r.logger.V(util.DebugLogLevel).Info("Adding console link as Namespace Dashboard Link")
-			crConsoleLink = openshift.NewNamespaceDashboardLink(consoleLinkName, namespacedName.Namespace, route, hawtconfig)
+			blueprint = openshift.NewNamespaceDashboardLink(consoleLinkName, namespacedName.Namespace, route, hawtconfig)
 		}  else {
 			// If no link should exist, we can't model that with CreateOrUpdate.
 			// This case is handled below. For the mutate function, we do nothing.
 			return nil
 		}
 
-		hydratedLink, err := hydrateDefaults(ctx, r.client, crConsoleLink)
+		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *consolev1.ConsoleLink) {
+			// If hydration stripped required fields, patch them directly back from source
+			if hydrated.Spec.Href == "" || hydrated.Spec.Location == "" {
+				r.logger.Info("ConsoleLink hydration dropped required fields. Restoring from source spec.",
+					"ConsoleLink.Name", source.Name)
+
+					hydrated.Spec.Href = source.Spec.Href
+					hydrated.Spec.Location = source.Spec.Location
+			}
+		})
 		if err != nil {
 			return err
 		}
 
-		consoleLink.Labels = util.MergeMap(consoleLink.Labels, crConsoleLink.Labels)
-		consoleLink.Annotations = util.MergeMap(consoleLink.Annotations, crConsoleLink.Annotations)
-		consoleLink.Spec = hydratedLink.Spec
+		targetConsoleLink.Labels = util.MergeMap(targetConsoleLink.Labels, blueprint.Labels)
+		targetConsoleLink.Annotations = util.MergeMap(targetConsoleLink.Annotations, blueprint.Annotations)
+		targetConsoleLink.Spec = serverBlueprint.Spec
 
 		// Report any known differences to the log (only if in debug log level)
-		util.ReportDiff("ConsoleLink", liveObj, consoleLink)
+		util.ReportDiff("ConsoleLink", liveSnapshot, targetConsoleLink)
 
 		return nil
 	})
@@ -1522,7 +1588,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 		return opResult, err
 	}
 
-	util.ReportResourceChange("ConsoleLink", consoleLink, opResult)
+	util.ReportResourceChange("ConsoleLink", targetConsoleLink, opResult)
 	return opResult, nil
 }
 
@@ -1539,13 +1605,14 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 	if shouldExist {
 		// The CronJob SHOULD exist. ---
 		r.logger.Info("Ensuring CronJob exists and is up to date", "CronJob.Name", cronJobName, "CronJob.Namespace", crNamespacedName.Namespace)
-		cronJob := resources.NewDefaultCronJob(hawtio)
+		targetCronJob := resources.NewDefaultCronJob(hawtio)
 
-		opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, cronJob, func() error {
-			liveObj := cronJob.DeepCopy()
+		opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetCronJob, func() error {
+			// A read-only copy of the cluster state for diff logging
+			liveSnapshot := targetCronJob.DeepCopy()
 
 			// Set the owner reference for garbage collection.
-			if err := controllerutil.SetControllerReference(hawtio, cronJob, r.scheme); err != nil {
+			if err := controllerutil.SetControllerReference(hawtio, targetCronJob, r.scheme); err != nil {
 				return err
 			}
 
@@ -1556,22 +1623,34 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 				return err
 			}
 
-			crCronJob, err := resources.NewCronJob(hawtio, pod, crNamespacedName.Namespace)
+			blueprint, err := resources.NewCronJob(hawtio, pod, crNamespacedName.Namespace)
 			if err != nil {
-				return fmt.Errorf("failed to build desired cronjob: %w", err)
+				return fmt.Errorf("failed to build source cronjob: %w", err)
 			}
 
-			hydratedCronJob, err := hydrateDefaults(ctx, r.client, crCronJob)
+			serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *batchv1.CronJob) {
+				// If hydration stripped required fields, patch them directly back from source
+				if hydrated.Spec.Schedule == "" {
+					r.logger.Info("CronJob hydration dropped the Schedule. Restoring from source spec.",
+						"CronJob.Name", source.Name)
+					hydrated.Spec.Schedule = source.Spec.Schedule
+				}
+				if len(hydrated.Spec.JobTemplate.Spec.Template.Spec.Containers) == 0 {
+					r.logger.Info("CronJob hydration dropped Containers. Restoring from source spec.",
+						"CronJob.Name", source.Name)
+					hydrated.Spec.JobTemplate.Spec.Template.Spec.Containers = source.Spec.JobTemplate.Spec.Template.Spec.Containers
+				}
+			})
 			if err != nil {
 				return err
 			}
 
-			cronJob.Labels = util.MergeMap(cronJob.Labels, crCronJob.Labels)
-			cronJob.Annotations = util.MergeMap(cronJob.Annotations, crCronJob.Annotations)
-			cronJob.Spec = hydratedCronJob.Spec
+			targetCronJob.Labels = util.MergeMap(targetCronJob.Labels, blueprint.Labels)
+			targetCronJob.Annotations = util.MergeMap(targetCronJob.Annotations, blueprint.Annotations)
+			targetCronJob.Spec = serverBlueprint.Spec
 
 			// Report any known differences to the log (only if in debug log level)
-			util.ReportDiff("CronJob", liveObj, cronJob)
+			util.ReportDiff("CronJob", liveSnapshot, targetCronJob)
 
 			return nil
 		})
@@ -1592,7 +1671,7 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 			return opResult, err
 		}
 
-		util.ReportResourceChange("CronJob", cronJob, opResult)
+		util.ReportResourceChange("CronJob", targetCronJob, opResult)
 		return opResult, nil
 	} else {
 		// The CronJob SHOULD NOT exist. ---
