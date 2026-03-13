@@ -90,3 +90,4 @@ index.Dockerfile
 
 # snyk
 .dccache
+.aider*
