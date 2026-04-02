@@ -14,11 +14,11 @@ import (
 // defaultConsoleLinkText Default text for console launcher link
 const defaultConsoleLinkText = "HawtIO Console"
 
-func NewDefaultConsoleLink(name string, namespace string) *consolev1.ConsoleLink {
+func NewDefaultConsoleLink(name string) *consolev1.ConsoleLink {
+	// console link has no need of a namespace since it is cluster scoped
 	consoleLink := &consolev1.ConsoleLink{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name: name,
 		},
 	}
 
@@ -27,7 +27,7 @@ func NewDefaultConsoleLink(name string, namespace string) *consolev1.ConsoleLink
 
 // NewApplicationMenuLink creates an ApplicationMenu ConsoleLink instance
 func NewApplicationMenuLink(name string, namespace string, route *routev1.Route, config *hawtiov2.HawtioConfig) *consolev1.ConsoleLink {
-	consoleLink := NewDefaultConsoleLink(name, namespace)
+	consoleLink := NewDefaultConsoleLink(name)
 
 	labels := resources.LabelsForHawtio(name)
 	consoleLink.SetLabels(labels)
@@ -61,7 +61,7 @@ func UpdateApplicationMenuLink(consoleLink *consolev1.ConsoleLink, route *routev
 
 // NewNamespaceDashboardLink creates a NamespaceDashboard ConsoleLink instance
 func NewNamespaceDashboardLink(name string, namespace string, route *routev1.Route, config *hawtiov2.HawtioConfig) *consolev1.ConsoleLink {
-	consoleLink := NewDefaultConsoleLink(name, namespace)
+	consoleLink := NewDefaultConsoleLink(name)
 
 	labels := resources.LabelsForHawtio(name)
 	consoleLink.SetLabels(labels)
