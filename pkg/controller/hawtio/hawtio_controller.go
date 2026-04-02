@@ -640,7 +640,9 @@ func (r *ReconcileHawtio) verifyRBACConfigMap(ctx context.Context, hawtio *hawti
 
 	// Check that the ConfigMap exists
 	var rbacConfigMap corev1.ConfigMap
-	err := r.client.Get(ctx, types.NamespacedName{Namespace: namespacedName.Namespace, Name: cm}, &rbacConfigMap)
+
+	// Use API Reader to bypass cache and obtain legacy resource
+	err := r.apiReader.Get(ctx, types.NamespacedName{Namespace: namespacedName.Namespace, Name: cm}, &rbacConfigMap)
 	if err != nil {
 		r.logger.Error(err, "Failed to get RBAC ConfigMap")
 		return false, err
