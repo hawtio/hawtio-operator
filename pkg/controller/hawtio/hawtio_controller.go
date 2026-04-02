@@ -1533,7 +1533,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 	}
 
 	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Creating new ConsoleLink")
-	targetConsoleLink := openshift.NewDefaultConsoleLink(consoleLinkName, namespacedName.Namespace)
+	targetConsoleLink := openshift.NewDefaultConsoleLink(consoleLinkName)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetConsoleLink, func() error {
 		// A read-only copy of the cluster state for diff logging
@@ -1587,7 +1587,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, openshift.NewDefaultConsoleLink(consoleLinkName, namespacedName.Namespace))
+		adoptionErr := r.adoptLegacyResource(ctx, openshift.NewDefaultConsoleLink(consoleLinkName))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors
