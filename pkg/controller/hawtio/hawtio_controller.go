@@ -50,7 +50,7 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/clients"
 )
 
-var log = logf.Log.WithName("controller_hawtio")
+var hawtioLogger = logf.Log.WithName("controller_hawtio")
 
 const (
 	hawtioFinalizer         = "hawt.io/finalizer"
@@ -220,7 +220,7 @@ type DeploymentConfiguration struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	r.logger = log.WithValues("Operator Namespace", r.operatorPod, "Hawtio CR Namespace", request.Namespace, "Request.Name", request.Name)
+	r.logger = hawtioLogger.WithValues("Operator Namespace", r.operatorPod, "Hawtio CR Namespace", request.Namespace, "Request.Name", request.Name)
 	r.logger.Info(fmt.Sprintf("Reconciling Hawtio in %s", request.Namespace))
 
 	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
@@ -811,7 +811,7 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 		}
 
 		// Get the target state for the ConfigMap
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileConfigMap", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileConfigMap", hawtio.Name))
 		crConfigMap, err := resources.NewConfigMap(hawtio, r.apiSpec, reqLogger)
 		if (err != nil) {
 			reqLogger.Error(err, "Error reconciling ConfigMap")
@@ -912,7 +912,7 @@ func (r *ReconcileHawtio) reconcileServiceAccount(ctx context.Context, hawtio *h
 			return err
 		}
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccount", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileServiceAccount", hawtio.Name))
 		crServiceAccount, err := resources.NewServiceAccount(hawtio, reqLogger)
 		if (err != nil) {
 			return err
@@ -959,7 +959,7 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 			return err
 		}
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccountRole", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileServiceAccountRole", hawtio.Name))
 		crRole := resources.NewServiceAccountRole(hawtio, reqLogger)
 
 		role.SetLabels(crRole.GetLabels())
@@ -1003,7 +1003,7 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 			return err
 		}
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccountRoleBinding", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileServiceAccountRoleBinding", hawtio.Name))
 		crRoleBinding := resources.NewServiceAccountRoleBinding(hawtio, reqLogger)
 
 		roleBinding.SetLabels(crRoleBinding.GetLabels())
@@ -1045,7 +1045,7 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
 		}
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileDeployment", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileDeployment", hawtio.Name))
 		// Local, ideal state generated from the Hawtio CR
 		blueprint, err := resources.NewDeployment(hawtio, r.apiSpec,
 													deploymentConfig.openShiftConsoleURL,
@@ -1111,7 +1111,7 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 			return err
 		}
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
 		blueprint := resources.NewService(hawtio, r.apiSpec, reqLogger)
 
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *corev1.Service) {
@@ -1206,7 +1206,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		}
 	} else if !kerrors.IsNotFound(err) {
 		// A real error occurred trying to get the Route. Fail fast.
-		log.Error(err, "Failed to get existing Route for pre-check")
+		r.logger.Error(err, "Failed to get existing Route for pre-check")
 		return nil, controllerutil.OperationResultNone, err
 	}
 
@@ -1224,7 +1224,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 			return err
 		}
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
 		blueprint := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
 
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *routev1.Route) {
@@ -1304,7 +1304,7 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 			return err
 		}
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
 		blueprint := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
 
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *networkingv1.Ingress) {
@@ -1397,7 +1397,7 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 		// A read-only copy of the cluster state for diff logging
 		liveSnapshot := targetOAuthClient.DeepCopy()
 
-		reqLogger := log.WithName(fmt.Sprintf("%s-%s-reconcileOAuthClient", namespacedName.Name, namespacedName.Namespace))
+		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-%s-reconcileOAuthClient", namespacedName.Name, namespacedName.Namespace))
 		blueprint := resources.NewOAuthClient(clientName, hawtio, reqLogger)
 
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *oauthv1.OAuthClient) {
@@ -1506,7 +1506,7 @@ func (r *ReconcileHawtio) removeConsoleLink(ctx context.Context, consoleLinkName
 func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration, route *routev1.Route) (controllerutil.OperationResult, error) {
 	// If not OpenShift 4, ConsoleLink is irrelevant. Do nothing.
 	if !r.apiSpec.IsOpenShift4 {
-		log.V(util.DebugLogLevel).Info("Not an OpenShift 4 cluster, skipping ConsoleLink reconciliation.")
+		r.logger.V(util.DebugLogLevel).Info("Not an OpenShift 4 cluster, skipping ConsoleLink reconciliation.")
 		return controllerutil.OperationResultNone, nil
 	}
 
@@ -1687,7 +1687,7 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 	} else {
 		// The CronJob SHOULD NOT exist. ---
 		// We must ensure it is deleted if it's found.
-		log.V(util.DebugLogLevel).Info("Ensuring CronJob does not exist", "CronJob.Name", cronJobName)
+		r.logger.V(util.DebugLogLevel).Info("Ensuring CronJob does not exist", "CronJob.Name", cronJobName)
 
 		staleCronJob := &batchv1.CronJob{}
 		err := r.client.Get(ctx, types.NamespacedName{Name: cronJobName, Namespace: crNamespacedName.Namespace}, staleCronJob)
@@ -1701,7 +1701,7 @@ func (r *ReconcileHawtio) reconcileCronJob(ctx context.Context, hawtio *hawtiov2
 		}
 
 		// If we found it, it's a stale resource that needs to be deleted.
-		log.Info("Deleting stale CronJob", "CronJob.Name", cronJobName)
+		r.logger.Info("Deleting stale CronJob", "CronJob.Name", cronJobName)
 		if err := r.client.Delete(ctx, staleCronJob); err != nil {
 			return controllerutil.OperationResultNone, err
 		}
@@ -1734,7 +1734,7 @@ func getOperatorPod(ctx context.Context, c client.Client, namespacedName client.
 	err := c.Get(ctx, namespacedName, pod)
 
 	if err != nil {
-		log.Error(err, "Pod not found")
+		hawtioLogger.Error(err, "Pod not found")
 		return nil, err
 	}
 	return pod, nil
