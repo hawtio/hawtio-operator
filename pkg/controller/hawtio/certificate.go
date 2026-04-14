@@ -107,7 +107,7 @@ func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace s
 		})
 
 	labels := resources.LabelsForHawtio(hawtio.Name)
-	resources.PropagateLabels(hawtio, labels, log)
+	resources.PropagateLabels(hawtio, labels, hawtioLogger)
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -126,14 +126,14 @@ func ValidateCertificate(caSecret corev1.Secret, validAtLeastForHours float64) (
 	cert, err := x509.ParseCertificate(block.Bytes)
 
 	if err != nil {
-		log.Error(err, "certificate reading error")
+		hawtioLogger.Error(err, "certificate reading error")
 		return false, err
 	}
 
 	diff := cert.NotAfter.Sub(time.Now()).Hours()
 	// if cert is valid longer than certain amount of hours
 	if diff > validAtLeastForHours {
-		log.Info(fmt.Sprintf("Certificate is valid for %.0f days", diff/24))
+		hawtioLogger.Info(fmt.Sprintf("Certificate is valid for %.0f days", diff/24))
 		return true, nil
 	}
 	//if is valid
