@@ -11,6 +11,8 @@ on:
       - main
     paths-ignore:
       - "**.md"
+  # Allow manual run if necessary
+  workflow_dispatch:
 
 jobs:
   build:
@@ -35,7 +37,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Build
-        run: CI_BUILD=true make build
+        run: make build
       - name: Build image
         run: |
           make image
