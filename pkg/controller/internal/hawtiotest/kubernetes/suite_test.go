@@ -19,7 +19,7 @@ import (
 
 	"github.com/hawtio/hawtio-operator/pkg/clients"
 
-	"github.com/hawtio/hawtio-operator/pkg/controller/hawtiotest"
+	"github.com/hawtio/hawtio-operator/pkg/controller/internal/hawtiotest"
 	hawtiomgr "github.com/hawtio/hawtio-operator/pkg/manager"
 )
 
@@ -48,10 +48,7 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		// CRDDirectoryPaths tells envtest where to find your CRD YAMLs
 		CRDDirectoryPaths: []string{
-			filepath.Join("..", "..", "..", "..", "deploy", "crd"),
-
-			// Point directly to the OpenShift CRDs in your vendor dir
-			filepath.Join("testdata", "crds"),
+			filepath.Join(hawtiotest.FindProjectRoot(), "deploy", "crd"),
 		},
 		ErrorIfCRDPathMissing: true,
 		DownloadBinaryAssets:  true,
@@ -80,7 +77,7 @@ var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(30 * time.Second)
 
 	testTools = &hawtiotest.TestTools{
-		Platform:        "OpenShift",
+		Platform:        "Kubernetes",
 		Scheme:          scheme,
 		Cancel:          cancel,
 		Cfg:             cfg,
