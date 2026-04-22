@@ -22,7 +22,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
-	"github.com/hawtio/hawtio-operator/pkg/controller/hawtiotest"
+	"github.com/hawtio/hawtio-operator/pkg/controller/internal/hawtiotest"
 )
 
 var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
