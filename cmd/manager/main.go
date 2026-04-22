@@ -29,6 +29,11 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+// DefaultPollingInterval is the default polling interval
+// of the updater if no override has been specified with
+// the UPDATE_POLLING_INTERVAL environment variable
+const DefaultPollingInterval = 12 * time.Hour
+
 // logLevelEnvVar is the constant for env variable OPERATOR_LOG_LEVEL
 // which specifies the level of the operator logging.
 // An empty value means the operator runs with a level of "Info".
@@ -309,7 +314,7 @@ func getLogLevel() zapcore.Level {
 }
 
 func getUpdateInterval() time.Duration {
-	updatePollingInterval := 12 * time.Hour
+	updatePollingInterval := DefaultPollingInterval
 	updatePollingIntervalStr, found := os.LookupEnv(updatePollingIntervalEnvVar)
 	if found {
 		if updatePollingIntervalStr == "0" {
