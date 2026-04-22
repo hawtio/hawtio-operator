@@ -217,6 +217,28 @@ var k8sSpecComparator = cmp.Options{
 // This regex finds the phrase and captures the word "Kubernetes" or "OpenShift"
 var platformRegex = regexp.MustCompile(`applications deployed on [A-Za-z]+`)
 
+// FindProjectRoot walks up the directory tree from the current test execution
+// path until it finds the go.mod file, returning the absolute path to the project root.
+func FindProjectRoot() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		panic("Could not get working directory: " + err.Error())
+	}
+
+	for {
+		// If we find go.mod, we are at the root of the repository
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir { // Reached the top of the filesystem
+			panic("Reached filesystem root without finding go.mod")
+		}
+		dir = parent
+	}
+}
+
 func loadExpectedFile(filename string, platform string, obj runtime.Object) {
 	platformPath := filepath.Join("testdata", fmt.Sprintf("%s.yml", filename))
 	bytes, err := os.ReadFile(platformPath)
