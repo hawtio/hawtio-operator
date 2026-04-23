@@ -36,7 +36,8 @@ OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
 CONTROLLER_GEN_VERSION := v0.20.1
 KUSTOMIZE_VERSION := v5.8.1
 OPERATOR_SDK_VERSION := v1.42.2
-OPM_VERSION := v1.64.x
+OPM_VERSION := v1.65.0
+YQ_VERSION := v4.53.2
 
 CRD_OPTIONS ?= crd:crdVersions=v1
 
@@ -385,7 +386,7 @@ kustomize:
 # If FORCE_TOOL_UPDATE is true, it intentionally returns an empty string to force the install.
 # Otherwise, it returns the tool's existing path.
 ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v kustomize 2> /dev/null)))
-	go install sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION)
+	go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
 KUSTOMIZE=$(GOBIN)/kustomize
 else
 KUSTOMIZE=$(shell command -v kustomize 2> /dev/null)
@@ -423,15 +424,17 @@ ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v opm 2> /dev
 		-L https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$(OS_LOWER)-amd64-opm \
 		-o opm; \
 	chmod +x opm;\
-	mkdir -p $(GOBIN) ;\
+	echo "Expected Version: $(OPM_VERSION)" ;\
+	echo "Downloaded Version: $$(./opm version | sed -n 's/.*"\(v[^"]*\)".*/\1/p')" ;\
+	if [ "$(OPM_VERSION)" != "$$(./opm version | sed -n 's/.*"\(v[^"]*\)".*/\1/p')" ]; then echo "opm install failure" && exit 1; fi ;\
 	mv opm $(GOBIN)/ ;\
+	mkdir -p $(GOBIN) ;\
 	}
 OPM=$(GOBIN)/opm
 else
 	@{ \
-	echo -n "opm already installed: "; \
-  opm version | sed -n 's/.*"v\([^"]*\)".*/\1/p'; \
-	echo " If this is less than $(OPM_VERSION) then please consider moving it aside and allowing the approved version to be downloaded."; \
+	echo "opm $$(opm version | sed -n 's/.*"\(v[^"]*\)".*/\1/p') installed"; \
+	if [ "$(OPM_VERSION)" != "$$(opm version | sed -n 's/.*"\(v[^"]*\)".*/\1/p')" ]; then echo "opm version difference. Move opm version aside and install approved version" && exit 1; fi ;\
 	}
 OPM=$(shell command -v opm 2> /dev/null)
 endif
@@ -440,9 +443,18 @@ yq:
 # If FORCE_TOOL_UPDATE is true, it intentionally returns an empty string to force the install.
 # Otherwise, it returns the tool's existing path.
 ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v yq 2> /dev/null)))
-	@GO111MODULE=on go install github.com/mikefarah/yq/v3
+	{ \
+	go install github.com/mikefarah/yq/v4@$(YQ_VERSION) ;\
+	echo "Expected Version: $(YQ_VERSION)" ;\
+	echo "Downloaded Version: $$($(GOBIN)/yq --version | sed -n 's/.*version \(v.*\)/\1/p')" ;\
+	if [ "$(YQ_VERSION)" != "$$($(GOBIN)/yq --version | sed -n 's/.*version \(v.*\)/\1/p')" ]; then echo "yq install failure" && exit 1; fi ;\
+	}
 YQ=$(GOBIN)/yq
 else
+	@{ \
+	echo "yq $$(yq --version | sed -n 's/.*version \(v.*\)/\1/p') installed"; \
+	if [ "$(YQ_VERSION)" != "$$(yq --version | sed -n 's/.*version \(v.*\)/\1/p')" ]; then echo "yq version difference. Move yq version aside and install approved version" && exit 1; fi ;\
+	}
 YQ=$(shell command -v yq 2> /dev/null)
 endif
 
