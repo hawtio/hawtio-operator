@@ -33,10 +33,10 @@ OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
 #
 # Versions of tools and binaries
 #
-CONTROLLER_GEN_VERSION := v0.19.0
-KUSTOMIZE_VERSION := v4.5.4
-OPERATOR_SDK_VERSION := v1.28.0
-OPM_VERSION := v1.60.0
+CONTROLLER_GEN_VERSION := v0.20.1
+KUSTOMIZE_VERSION := v5.8.1
+OPERATOR_SDK_VERSION := v1.42.2
+OPM_VERSION := v1.64.x
 
 CRD_OPTIONS ?= crd:crdVersions=v1
 
@@ -152,7 +152,10 @@ go-generate:
 # Only use gotestfmt if building / testing locally
 test:
 ifeq ($(CI_BUILD), false)
-ifeq (, $(shell command -v gotestfmt 2> /dev/null))
+# If FORCE_TOOL_UPDATE is true, it intentionally
+# returns an empty string to force the install.
+# Otherwise, it returns the tool's existing path.
+ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v gotestfmt 2> /dev/null)))
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 endif
 	CGO_ENABLED=0 $(TEST_ENV_VARS) go test $(TEST_FLAGS) -count=1 -json ./... 2>&1 | gotestfmt
@@ -360,7 +363,10 @@ check-admin: kubectl
 #
 controller-gen:
 ifeq ($(CI_BUILD), false)
-ifeq (, $(shell command -v controller-gen 2> /dev/null))
+# If FORCE_TOOL_UPDATE is true, it intentionally
+# returns an empty string to force the install.
+# Otherwise, it returns the tool's existing path.
+ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v controller-gen 2> /dev/null)))
 	go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
@@ -376,7 +382,9 @@ ifeq (, $(shell command -v kubectl 2> /dev/null))
 endif
 
 kustomize:
-ifeq (, $(shell command -v kustomize 2> /dev/null))
+# If FORCE_TOOL_UPDATE is true, it intentionally returns an empty string to force the install.
+# Otherwise, it returns the tool's existing path.
+ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v kustomize 2> /dev/null)))
 	go install sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION)
 KUSTOMIZE=$(GOBIN)/kustomize
 else
@@ -406,7 +414,9 @@ operator-sdk: detect-os
 OPERATOR_SDK=$(GOBIN)/operator-sdk
 
 opm: detect-os
-ifeq (, $(shell command -v opm 2> /dev/null))
+# If FORCE_TOOL_UPDATE is true, it intentionally returns an empty string to force the install.
+# Otherwise, it returns the tool's existing path.
+ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v opm 2> /dev/null)))
 	@{ \
 	set -e ;\
 	curl \
@@ -427,7 +437,9 @@ OPM=$(shell command -v opm 2> /dev/null)
 endif
 
 yq:
-ifeq (, $(shell command -v yq 2> /dev/null))
+# If FORCE_TOOL_UPDATE is true, it intentionally returns an empty string to force the install.
+# Otherwise, it returns the tool's existing path.
+ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v yq 2> /dev/null)))
 	@GO111MODULE=on go install github.com/mikefarah/yq/v3
 YQ=$(GOBIN)/yq
 else

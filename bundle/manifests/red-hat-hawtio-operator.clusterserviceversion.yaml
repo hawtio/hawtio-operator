@@ -103,8 +103,8 @@ metadata:
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <2.0.0'
-    operators.operatorframework.io/builder: operator-sdk-v1.28.0
-    operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
+    operators.operatorframework.io/builder: operator-sdk-v1.42.2
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/hawtio/hawtio-operator
     support: Red Hat
   labels:
