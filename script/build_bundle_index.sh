@@ -35,9 +35,8 @@ check_env_var "CSV_NAME" ${CSV_NAME}
 check_env_var "CHANNELS" ${CHANNELS}
 check_env_var "CONTAINER_BUILDER" ${CONTAINER_BUILDER}
 
-PACKAGE_YAML=${INDEX_DIR}/${PACKAGE}.yaml
+NEW_BUNDLE_YAML=${INDEX_DIR}/${CSV_NAME}-bundle.yaml
 INDEX_BASE_YAML=${INDEX_DIR}/bundles.yaml
-CHANNELS_YAML="${INDEX_DIR}/${PACKAGE}-channels.yaml"
 
 echo "=== Checking OPM command ..."
 if ! command -v ${OPM} &> /dev/null
@@ -50,6 +49,12 @@ echo "=== Checking container-builder ..."
 if ! command -v ${CONTAINER_BUILDER} &> /dev/null
 then
   echo "Error: ${CONTAINER_BUILDER} is not available. Was CONTAINER_BUILDER env var defined correctly: ${CONTAINER_BUILDER}"
+  exit 1
+fi
+
+echo "=== Checking IMAGE variable for double bundle suffix..."
+if [[ "${BUNDLE_IMAGE}" =~ .*-bundle-bundle.* ]]; then
+  echo "Error: IMAGE variable from Makefile should NOT include the -bundle prefix!"
   exit 1
 fi
 
@@ -87,7 +92,18 @@ if [ -f "${INDEX_DIR}.Dockerfile" ]; then
   rm -f "${INDEX_DIR}.Dockerfile"
 fi
 
+echo "=== Removing old index directory"
+if [ -d "${INDEX_DIR}" ]; then
+  rm -rf "${INDEX_DIR}"
+fi
 mkdir -p "${INDEX_DIR}"
+
+echo "=== Checking yq version"
+YQ_VERSION=$(yq --version | sed 's/.*v\([0-9]\).*/\1/')
+if [ ${YQ_VERSION} -lt 4 ]; then
+  echo "Error: yq version should be at least v4"
+  exit 1
+fi
 
 echo "=== Checking index base ..."
 if [ ! -f ${INDEX_BASE_YAML} ]; then
@@ -129,10 +145,9 @@ if [ ! -f ${INDEX_BASE_YAML} ]; then
   echo "=== Base index successfully filtered."
 fi
 
-if [ ! -f ${PACKAGE_YAML} ]; then
+if [ ! -f ${NEW_BUNDLE_YAML} ]; then
   echo "=== Calling opm render on ${BUNDLE_IMAGE} ..."
-  ${OPM} render --skip-tls -o yaml \
-    ${BUNDLE_IMAGE} > ${PACKAGE_YAML}
+  ${OPM} render -o yaml ${BUNDLE_IMAGE} > ${NEW_BUNDLE_YAML}
   if [ $? != 0 ]; then
     echo "Error: failed to render the ${PACKAGE} bundle catalog"
     exit 1
@@ -145,26 +160,30 @@ if [ ! -f ${PACKAGE_YAML} ]; then
   echo "=== Determing whether to add a package schema or not ..."
   RESULT=$(${YQ} eval ". | select(.schema == \"olm.package\" and .name == \"${PACKAGE}\") | .name" ${INDEX_BASE_YAML})
   if [ "${RESULT}" != "${PACKAGE}" ]; then
-    echo "Cannot find package entry in catalog. Adding package to ${PACKAGE_YAML} ..."
+    echo "Cannot find package entry in catalog. Adding package to ${NEW_BUNDLE_YAML} ..."
 
     object="{ \"defaultChannel\": \"latest\", \"name\": \"${PACKAGE}\", \"schema\": \"olm.package\" }"
     package_file=$(mktemp ${PACKAGE}-package-XXX.yaml)
     trap 'rm -f ${package_file}' EXIT
     ${YQ} -n eval "${object}" > ${package_file}
 
-    echo "---" >> ${PACKAGE_YAML}
-    cat ${package_file} >> ${PACKAGE_YAML}
+    echo "---" >> ${NEW_BUNDLE_YAML}
+    cat ${package_file} >> ${NEW_BUNDLE_YAML}
   fi
 fi
 
 #
-# Extract the package channels
+# Extract ALL existing channels into their own standalone FBC files first!
 #
-echo "=== Extracting the package channels ..."
-${YQ} eval ". | select(.package == \"${PACKAGE}\" and .schema == \"olm.channel\")" ${INDEX_BASE_YAML} > ${CHANNELS_YAML}
-if [ $? != 0 ] || [ ! -f "${CHANNELS_YAML}" ]; then
-  echo "ERROR: Failed to extract package entries from bundle catalog"
-  exit 1
+echo "=== Extracting all existing channels to standalone FBC files ..."
+# --no-doc stops the --- being included
+EXISTING_CHANNELS=$(${YQ} --no-doc eval ". | select(.package == \"${PACKAGE}\" and .schema == \"olm.channel\") | .name" ${INDEX_BASE_YAML})
+if [ -n "${EXISTING_CHANNELS}" ]; then
+  for existing_channel in ${EXISTING_CHANNELS}; do
+    echo "  Extracting existing channel: ${existing_channel} ..."
+    CHANNEL_FILE="${INDEX_DIR}/${PACKAGE}-channel-${existing_channel}.yaml"
+    ${YQ} eval ". | select(.package == \"${PACKAGE}\" and .schema == \"olm.channel\" and .name == \"${existing_channel}\")" ${INDEX_BASE_YAML} > "${CHANNEL_FILE}"
+  done
 fi
 
 #
@@ -178,17 +197,22 @@ if [ $? != 0 ]; then
 fi
 
 #
-# Split the channels and append/insert the bundle into each one
+# Create or insert entries of new version of operator
+# into channels files
 #
-echo "=== Split the channels and append/insert the bundle into each ..."
+echo "=== Iterating over new operator channels (new channel or insert into existing one) ..."
+OLD_IFS=${IFS}
 IFS=','
 #Read the split words into an array based on comma delimiter
 read -r -a CHANNEL_ARR <<< "${CHANNELS}"
+IFS=${OLD_IFS}
 
 for channel in "${CHANNEL_ARR[@]}";
 do
-  channel_props=$(${YQ} eval ". | select(.name == \"${channel}\")" ${CHANNELS_YAML})
+  # Define a dedicated file for this single channel
+  CHANNEL_FILE="${INDEX_DIR}/${PACKAGE}-channel-${channel}.yaml"
 
+  # Build the new entry object
   entry="{ \"name\": \"${CSV_NAME}\""
   if [ -n "${CSV_REPLACES}" ]; then
     entry="${entry}, \"replaces\": \"${CSV_REPLACES}\""
@@ -197,26 +221,17 @@ do
     entry="${entry}, \"skipRange\": \"${CSV_SKIPS}\""
   fi
   entry="${entry} }"
+  yaml_entry=$(echo "${entry}" | ${YQ} eval -P)
 
-  if [ -z "${channel_props}" ]; then
-    #
-    # Append a new channel
-    #
-    echo "Appending channel ${channel} ..."
-    object="{ \"entries\": [${entry}], \"name\": \"${channel}\", \"package\": \"${PACKAGE}\", \"schema\": \"olm.channel\" }"
-
-    channel_file=$(mktemp ${channel}-channel-XXX.yaml)
-    trap 'rm -f ${channel_file}' EXIT
-    ${YQ} -n eval "${object}" > ${channel_file}
-
-    echo "---" >> ${CHANNELS_YAML}
-    cat ${channel_file} >> ${CHANNELS_YAML}
+  # If the file is empty, this is a brand new channel
+  if [ ! -s "${CHANNEL_FILE}" ]; then
+    echo "Creating new standalone channel file for ${channel} ..."
+    object="{ \"schema\": \"olm.channel\", \"package\": \"${PACKAGE}\", \"name\": \"${channel}\", \"entries\": [${entry}] }"
+    echo "${object}" | ${YQ} eval -P > "${CHANNEL_FILE}"
   else
-    #
-    # Channel already exists so insert entry
-    #
-    echo "Inserting channel ${channel} ..."
-    ${YQ} -i eval "(. | select(.name == \"${channel}\") | .entries) += ${entry}" ${CHANNELS_YAML}
+    # The channel exists. Append using yq
+    echo "Updating standalone channel file for ${channel} ..."
+    ${YQ} -i eval ".entries += [${entry}]" ${CHANNEL_FILE}
   fi
 done
 
