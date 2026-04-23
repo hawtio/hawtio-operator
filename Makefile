@@ -12,6 +12,7 @@ DEBUG ?= false
 LAST_RELEASED_IMAGE_NAME := red-hat-hawtio-operator
 LAST_RELEASED_VERSION ?= 1.3.0
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
+FORCE_TOOL_UPDATE ?= false
 
 # Is this build part of an automated CI pipeline
 CI_BUILD ?= false
@@ -28,10 +29,6 @@ endif
 
 # Drop suffix for use with bundle and CSV
 OPERATOR_VERSION := $(subst -SNAPSHOT,,$(VERSION))
-
-# Replace SNAPSHOT with the timestamp for the tag
-DATETIMESTAMP=$(shell date -u '+%Y%m%d-%H%M%S')
-VERSION := $(subst -SNAPSHOT,-$(DATETIMESTAMP),$(VERSION))
 
 #
 # Versions of tools and binaries
@@ -101,10 +98,10 @@ endif
 #* PARAMETERS:
 #** IMAGE:                            Set a custom image for the container image
 #** VERSION:                          Set a custom version for the container image tag
-#** HAWTIO_ONLINE_IMAGE_NAME          Set the operator's target hawtio-online image name
-#** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME  Set the operator's target hawtio-online-gateway image name
-#** HAWTIO_ONLINE_VERSION             Set the operator's target hawtio-online image version
-#** HAWTIO_ONLINE_GATEWAY_VERSION     Set the operator's target hawtio-online-gateway image version
+#** HAWTIO_ONLINE_IMAGE_NAME:         Set the operator's target hawtio-online image name
+#** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME: Set the operator's target hawtio-online-gateway image name
+#** HAWTIO_ONLINE_VERSION:            Set the operator's target hawtio-online image version
+#** HAWTIO_ONLINE_GATEWAY_VERSION:    Set the operator's target hawtio-online-gateway image version
 #
 #---
 image: container-builder
@@ -125,10 +122,10 @@ image: container-builder
 #* PARAMETERS:
 #** IMAGE:                            Set a custom image for the container image
 #** VERSION:                          Set a custom version for the container image tag
-#** HAWTIO_ONLINE_IMAGE_NAME          Set the operator's target hawtio-online image name
-#** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME  Set the operator's target hawtio-online-gateway image name
-#** HAWTIO_ONLINE_VERSION             Set the operator's target hawtio-online image version
-#** HAWTIO_ONLINE_GATEWAY_VERSION     Set the operator's target hawtio-online-gateway image version
+#** HAWTIO_ONLINE_IMAGE_NAME:         Set the operator's target hawtio-online image name
+#** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME: Set the operator's target hawtio-online-gateway image name
+#** HAWTIO_ONLINE_VERSION:            Set the operator's target hawtio-online image version
+#** HAWTIO_ONLINE_GATEWAY_VERSION:    Set the operator's target hawtio-online-gateway image version
 #
 #---
 publish-image: image
@@ -140,7 +137,7 @@ publish-image: image
 #== Build and test the operator binary
 #
 #* PARAMETERS:
-#** GOLDFLAGS:                 Add any go-lang ldflags, eg. -X main.ImageVersion=2.0.0-202312061128 will compile in the operand version
+#** GOLDFLAGS: Add any go-lang ldflags, eg. -X main.ImageVersion=2.0.0-202312061128 will compile in the operand version
 #
 #---
 build: generate compile test
@@ -192,7 +189,7 @@ get-version:
 #=== Can only be executed as a cluster-admin
 #
 #* PARAMETERS:
-#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#** DEBUG: Print the resources to be applied instead of applying them [true|false]
 #
 #---
 deploy-crd: kubectl
@@ -211,10 +208,10 @@ endif
 #=== Can only be executed as a cluster-admin
 #
 #* PARAMETERS:
-#** IMAGE:                     Set a custom image for the deployment
-#** VERSION:                   Set a custom version for the deployment
-#** NAMESPACE:                 Set the namespace for the resources
-#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#** IMAGE:     Set a custom image for the deployment
+#** VERSION:   Set a custom version for the deployment
+#** NAMESPACE: Set the namespace for the resources
+#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
 #
 #---
 deploy: kubectl kustomize install
@@ -290,10 +287,10 @@ endif
 #== Create the manifest bundle artifacts
 #
 #* PARAMETERS:
-#** IMAGE:                     Set a custom image for the deployment
-#** VERSION:                   Set a custom version for the deployment
-#** NAMESPACE:                 Set the namespace for the resources
-#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#** IMAGE:     Set a custom image for the deployment
+#** VERSION:   Set a custom version for the deployment
+#** NAMESPACE: Set the namespace for the resources
+#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
 #
 #---
 bundle: kustomize operator-sdk pre-bundle
@@ -324,8 +321,8 @@ validate-bundle: operator-sdk
 #== Build the bundle image.
 #
 #* PARAMETERS:
-#** IMAGE:                     Set the custom image name (suffixed with '-bundle')
-#** VERSION:                   Set the custom version for the bundle image
+#** IMAGE:   Set the custom image name (suffixed with '-bundle')
+#** VERSION: Set the custom version for the bundle image
 #
 #---
 bundle-build: bundle container-builder
@@ -338,9 +335,9 @@ bundle-build: bundle container-builder
 #== Builds a test catalog index for installing the operator via an OLM
 #
 #* PARAMETERS:
-#** IMAGE:                     Set the custom image name (will be suffixed with '-bundle')
-#** VERSION:                   Set the custom version for the bundle image
-#** CSV_VERSION:               Set the CSV version if different from the OPERATOR_VERSION / TAG
+#** IMAGE:       Set the custom image name (will be suffixed with '-bundle')
+#** VERSION:     Set the custom version for the bundle image
+#** CSV_VERSION: Set the CSV version if different from the OPERATOR_VERSION / TAG
 #
 #---
 bundle-index: opm yq container-builder
@@ -446,10 +443,10 @@ endif
 #=== Calls check-admin
 #
 #* PARAMETERS:
-#** IMAGE:                     Set a custom image for the deployment
-#** VERSION:                   Set a custom version for the deployment
-#** NAMESPACE:                 Set the namespace for the resources
-#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#** IMAGE:     Set a custom image for the deployment
+#** VERSION:   Set a custom version for the deployment
+#** NAMESPACE: Set the namespace for the resources
+#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
 setup: kubectl kustomize check-admin
 	#@ Must be invoked by a user with cluster-admin privileges
 	$(call set-kvars,$(INSTALL_ROOT)/setup)
@@ -468,10 +465,10 @@ endif
 #=== (must be granted the privileges by the Cluster-Admin executed `setup` procedure)
 #
 #* PARAMETERS:
-#** IMAGE:                     Set a custom image for the deployment
-#** VERSION:                   Set a custom version for the deployment
-#** NAMESPACE:                 Set the namespace for the resources
-#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#** IMAGE:     Set a custom image for the deployment
+#** VERSION:   Set a custom version for the deployment
+#** NAMESPACE: Set the namespace for the resources
+#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
 #
 #---
 operator: kubectl kustomize
@@ -490,8 +487,8 @@ endif
 #== Install the app CR only
 #
 #* PARAMETERS:
-#** NAMESPACE:                 Set the namespace for the resources
-#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#** NAMESPACE: Set the namespace for the resources
+#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
 #
 #---
 cr: kubectl kustomize
@@ -512,10 +509,10 @@ endif
 #=== (must be granted the privileges by the Cluster-Admin executed `setup` procedure)
 #
 #* PARAMETERS:
-#** IMAGE:                     Set a custom image for the deployment
-#** VERSION:                   Set a custom version for the deployment
-#** NAMESPACE:                 Set the namespace for the resources
-#** DEBUG:                     Print the resources to be applied instead of applying them [ true | false ]
+#** IMAGE:     Set a custom image for the deployment
+#** VERSION:   Set a custom version for the deployment
+#** NAMESPACE: Set the namespace for the resources
+#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
 #
 #---
 app: kubectl kustomize operator
@@ -548,8 +545,8 @@ endif
 #=== Calls check-admin
 #
 #* PARAMETERS:
-#** NAMESPACE:                 Set the namespace for the resources
-#** DEBUG:                     Print the resources to be deleted instead of deleting them [ true | false ]
+#** NAMESPACE: Set the namespace for the resources
+#** DEBUG:     Print the resources to be deleted instead of deleting them [true|false]
 #
 #---
 uninstall: kubectl kustomize check-admin $(UNINSTALLS)
@@ -557,4 +554,4 @@ uninstall: kubectl kustomize check-admin $(UNINSTALLS)
 .DEFAULT_GOAL := help
 .PHONY: help
 help: ## Show this help screen.
-	@awk 'BEGIN { printf "\nUsage: make \033[31m<PARAM1=val1 PARAM2=val2>\033[0m \033[36m<target>\033[0m\n"; printf "\nAvailable targets are:\n" } /^#@/ { printf "\033[36m%-15s\033[0m", $$2; subdesc=0; next } /^#===/ { printf "%-14s \033[32m%s\033[0m\n", " ", substr($$0, 5); subdesc=1; next } /^#==/ { printf "\033[0m%s\033[0m\n\n", substr($$0, 4); next } /^#\*\*/ { printf "%-14s \033[31m%s\033[0m\n", " ", substr($$0, 4); next } /^#\*/ && (subdesc == 1) { printf "\n"; next } /^#\-\-\-/ { printf "\n"; next }' $(MAKEFILE_LIST)
+	@./script/help.sh
