@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
@@ -48,6 +49,13 @@ var watchNamespacesLegacyEnvVar = "WATCH_NAMESPACE"
 // which specifies the Namespace the operator pod is running in.
 // This is required for Leader Election.
 var podNamespaceEnvVar = "POD_NAMESPACE"
+
+// updatePollingInterval is the constant for env variable UPDATE_POLLING_INTERVAL
+// which specifies the duration between checks for the updater to determine
+// if new operand images are available for the operator to upgrade to.
+// Values should be in the form of a duration, ie. 6h, 12h, and the default
+// will be 12h.
+var updatePollingIntervalEnvVar = "UPDATE_POLLING_INTERVAL"
 
 // Go build-time variables
 var (
@@ -159,16 +167,20 @@ func main() {
 		log.Error(err, "failed to get watch namespaces")
 		os.Exit(1)
 	}
+
+	// Get update polling interval (Empty = 12h)
+	updatePollingInterval := getUpdateInterval()
+
 	flag.Parse()
 
-	err = operatorRun(watchNamespaces, podNamespace, cfg)
+	err = operatorRun(watchNamespaces, podNamespace, updatePollingInterval, cfg)
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
 // operatorRun setup and run the operator
-func operatorRun(watchNamespaces string, podNamespace string, cfg *rest.Config) error {
+func operatorRun(watchNamespaces string, podNamespace string, updatePollingInterval time.Duration, cfg *rest.Config) error {
 	// Become the leader before proceeding
 	// Note: leader.Become uses POD_NAMESPACE env var implicitly
 	err := leader.Become(context.TODO(), "hawtio-lock")
@@ -200,6 +212,7 @@ func operatorRun(watchNamespaces string, podNamespace string, cfg *rest.Config) 
 		hawtiomgr.WithWatchNamespaces(watchNamespaces),
 		hawtiomgr.WithPodNamespace(podNamespace),
 		hawtiomgr.WithBuildVariables(bv),
+		hawtiomgr.WithUpdatePollingInterval(updatePollingInterval),
 	)
 
 	if err != nil {
@@ -293,4 +306,24 @@ func getLogLevel() zapcore.Level {
 
 	fmt.Println("Defaulting to log level of info")
 	return zap.InfoLevel
+}
+
+func getUpdateInterval() time.Duration {
+	updatePollingInterval := 12 * time.Hour
+	updatePollingIntervalStr, found := os.LookupEnv(updatePollingIntervalEnvVar)
+	if found {
+		if updatePollingIntervalStr == "0" {
+			updatePollingInterval = 0
+		} else {
+			d, err := time.ParseDuration(updatePollingIntervalStr)
+			if err != nil {
+				log.Error(err, "Invalid UPDATE_POLLING_INTERVAL format, defaulting to 12h")
+				// It naturally falls back to the 12h default we set at the top
+			} else {
+				updatePollingInterval = d
+			}
+		}
+	}
+
+	return updatePollingInterval
 }
