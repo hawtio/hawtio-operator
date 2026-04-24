@@ -132,9 +132,10 @@ type mgrConfig struct {
 	operatorPodNS   string
 	buildVariables  util.BuildVariables
 	// Optional
-	scheme      *runtime.Scheme
-	clientTools *clients.ClientTools
-	metrics     metricserver.Options
+	scheme                *runtime.Scheme
+	clientTools           *clients.ClientTools
+	metrics               metricserver.Options
+	updatePollingInterval time.Duration
 }
 
 // MgrOption function to populate manager config
@@ -158,6 +159,13 @@ func WithWatchNamespaces(nsStr string) MgrOption {
 func WithPodNamespace(ns string) MgrOption {
 	return func(c *mgrConfig) {
 		c.operatorPodNS = ns
+	}
+}
+
+// WithUpdatePollingInterval defines polling interval for updater of disables it
+func WithUpdatePollingInterval(interval time.Duration) MgrOption {
+	return func(c *mgrConfig) {
+		c.updatePollingInterval = interval
 	}
 }
 
