@@ -38,6 +38,12 @@ var logLevelEnvVar = "OPERATOR_LOG_LEVEL"
 // An empty value means the operator is running with cluster scope.
 var watchNamespacesEnvVar = "WATCH_NAMESPACES"
 
+// watchNamespacesLegacyEnvVar is the constant for the legacy env var WATCH_NAMESPACE
+// which despite only being singular can take a list of namespaces. This is also
+// magically injected by OLM so lets observe this as well just in case.
+// An empty value means the operator is running with cluster scope.
+var watchNamespacesLegacyEnvVar = "WATCH_NAMESPACE"
+
 // podNamespaceEnvVar is the constant for env variable POD_NAMESPACE
 // which specifies the Namespace the operator pod is running in.
 // This is required for Leader Election.
@@ -261,6 +267,15 @@ func getWatchNamespaces() (string, error) {
 		log.Info(fmt.Sprintf("%s is not set. Defaulting to all namespaces.", watchNamespacesEnvVar))
 		return "", nil
 	}
+
+	// Fall back to the legacy Operator SDK singular variant
+	nsLegacy, foundLegacy := os.LookupEnv(watchNamespacesLegacyEnvVar)
+	if foundLegacy && nsLegacy != "" {
+		log.Info("WATCH_NAMESPACES not found, falling back to legacy WATCH_NAMESPACE")
+		return nsLegacy, nil
+	}
+
+	log.Info("No watch namespace environment variables set. Defaulting to all namespaces.")
 	return ns, nil
 }
 
