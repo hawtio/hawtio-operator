@@ -66,17 +66,17 @@ func printVersion() {
 	log.V(util.DebugLogLevel).Info("Debug logging has been enabled")
 }
 
-func printBuildVars(bv util.BuildVariables, watchNamespace string) {
+func printBuildVars(bv util.BuildVariables, watchNamespaces string) {
 	log.Info(fmt.Sprintf("Hawtio Operator Version: %s", bv.OperatorVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.ImageRepository))
 	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.ImageVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Repository: %s", bv.GatewayImageRepository))
 	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Version: %s", bv.GatewayImageVersion))
 
-	if watchNamespace == "" {
+	if watchNamespaces == "" {
 		log.Info("Operator: Watching ALL namespaces (Cluster Scoped)")
 	} else {
-		log.Info(fmt.Sprintf("Operator: Watching '%s' namespace only", watchNamespace))
+		log.Info(fmt.Sprintf("Operator: Watching '%s' namespaces only", watchNamespaces))
 	}
 }
 
@@ -147,22 +147,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Get Watch Namespace (Empty = AllNamespaces)
-	watchNamespace, err := getWatchNamespace()
+	// Get Watch Namespaces (Empty = AllNamespaces)
+	watchNamespaces, err := getWatchNamespaces()
 	if err != nil {
-		log.Error(err, "failed to get watch namespace")
+		log.Error(err, "failed to get watch namespaces")
 		os.Exit(1)
 	}
 	flag.Parse()
 
-	err = operatorRun(watchNamespace, podNamespace, cfg)
+	err = operatorRun(watchNamespaces, podNamespace, cfg)
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
 // operatorRun setup and run the operator
-func operatorRun(watchNamespace string, podNamespace string, cfg *rest.Config) error {
+func operatorRun(watchNamespaces string, podNamespace string, cfg *rest.Config) error {
 	// Become the leader before proceeding
 	// Note: leader.Become uses POD_NAMESPACE env var implicitly
 	err := leader.Become(context.TODO(), "hawtio-lock")
@@ -187,11 +187,11 @@ func operatorRun(watchNamespace string, podNamespace string, cfg *rest.Config) e
 		AdditionalLabels:                     AdditionalLabels,
 	}
 
-	printBuildVars(bv, watchNamespace)
+	printBuildVars(bv, watchNamespaces)
 
 	mgr, err := hawtiomgr.New(
 		hawtiomgr.WithRestConfig(cfg),
-		hawtiomgr.WithWatchNamespace(watchNamespace),
+		hawtiomgr.WithWatchNamespaces(watchNamespaces),
 		hawtiomgr.WithPodNamespace(podNamespace),
 		hawtiomgr.WithBuildVariables(bv),
 	)
@@ -253,9 +253,9 @@ func checkCertExpiry(namespace string, secretName string, period float64, cfg *r
 	return nil
 }
 
-// getWatchNamespace returns the Namespace the operator should be watching for changes
+// getWatchNamespaces returns the Namespace the operator should be watching for changes
 // Returns empty string if WATCH_NAMESPACES is not set (Cluster Scope)
-func getWatchNamespace() (string, error) {
+func getWatchNamespaces() (string, error) {
 	ns, found := os.LookupEnv(watchNamespacesEnvVar)
 	if !found {
 		log.Info(fmt.Sprintf("%s is not set. Defaulting to all namespaces.", watchNamespacesEnvVar))
