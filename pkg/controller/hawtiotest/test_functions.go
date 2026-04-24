@@ -211,7 +211,7 @@ func StartManager(testTools *TestTools) *ManagerState {
 
 	mgr, err := hawtiomgr.New(
 		hawtiomgr.WithRestConfig(testTools.Cfg),
-		hawtiomgr.WithWatchNamespace(HawtioNamespace),
+		hawtiomgr.WithWatchNamespaces(HawtioNamespace),
 		hawtiomgr.WithPodNamespace(HawtioNamespace),
 		hawtiomgr.WithBuildVariables(buildVariables),
 		hawtiomgr.WithScheme(testTools.Scheme),

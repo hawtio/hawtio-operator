@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	errs "github.com/pkg/errors"
 
@@ -82,14 +83,23 @@ func ConfigureScheme() (*runtime.Scheme, error) {
 
 // createCacheOptions
 // Restrict resource watching to only those resources with the app/hawtio label
-func createCacheOptions(watchNamespace string, apiSpec *capabilities.ApiServerSpec) cache.Options {
+func createCacheOptions(watchNamespaces string, apiSpec *capabilities.ApiServerSpec) cache.Options {
 	lblReq, _ := labels.NewRequirement("app", selection.Equals, []string{"hawtio"})
 	selector := labels.NewSelector().Add(*lblReq)
 
 	// Configure namespace scope
 	var namespaces map[string]cache.Config
-	if watchNamespace != "" {
-		namespaces = map[string]cache.Config{watchNamespace: {}}
+	if watchNamespaces != "" {
+		namespaces = make(map[string]cache.Config)
+		// Split the string by comma
+		nsList := strings.Split(watchNamespaces, ",")
+		// Loop through the list, trim whitespace, and add each to the map
+		for _, ns := range nsList {
+			cleanNs := strings.TrimSpace(ns)
+			if cleanNs != "" {
+				namespaces[cleanNs] = cache.Config{}
+			}
+		}
 	}
 
 	cacheOptions := cache.Options{
@@ -117,10 +127,10 @@ func createCacheOptions(watchNamespace string, apiSpec *capabilities.ApiServerSp
 // Use With... functions to populate
 type mgrConfig struct {
 	// Required
-	restConfig     *rest.Config
-	watchNamespace string
-	operatorPodNS  string
-	buildVariables util.BuildVariables
+	restConfig      *rest.Config
+	watchNamespaces string
+	operatorPodNS   string
+	buildVariables  util.BuildVariables
 	// Optional
 	scheme      *runtime.Scheme
 	clientTools *clients.ClientTools
@@ -137,10 +147,10 @@ func WithRestConfig(cfg *rest.Config) MgrOption {
 	}
 }
 
-// WithWatchNamespace allows an external watch namespace to be defined
-func WithWatchNamespace(ns string) MgrOption {
+// WithWatchNamespaces allows an external watch namespace to be defined
+func WithWatchNamespaces(nsStr string) MgrOption {
 	return func(c *mgrConfig) {
-		c.watchNamespace = ns
+		c.watchNamespaces = nsStr
 	}
 }
 
@@ -207,7 +217,7 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 		mc.scheme = scheme
 	}
 
-	// mc.watchNamespace can be empty as it will act in cluster mode
+	// mc.watchNamespaces can be empty as it will act in cluster mode
 
 	if len(mc.operatorPodNS) == 0 {
 		return nil, fmt.Errorf("The operator pod namespace must be specified")
@@ -236,7 +246,7 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	// Initialise the manager
 	//
 
-	cacheOptions := createCacheOptions(mc.watchNamespace, apiSpec)
+	cacheOptions := createCacheOptions(mc.watchNamespaces, apiSpec)
 
 	podName, found := os.LookupEnv("POD_NAME")
 	if !found {
