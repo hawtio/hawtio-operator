@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,9 +31,9 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,13 +53,15 @@ const (
 
 // These vars are used by tests to interact with the simulated cluster
 type TestTools struct {
-	Cfg         *rest.Config
-	Scheme      *runtime.Scheme
-	ClientTools *clients.ClientTools
-	K8sClient   client.Client
-	Cancel      context.CancelFunc
-	Ctx         context.Context
-	Logger      logr.Logger
+	Platform        string
+	Cfg             *rest.Config
+	Scheme          *runtime.Scheme
+	ClientTools     *clients.ClientTools
+	K8sClient       client.Client
+	Cancel          context.CancelFunc
+	Ctx             context.Context
+	Logger          logr.Logger
+	WatchNamespaces string
 }
 
 type ManagerState struct {
@@ -199,11 +202,38 @@ func lookupKey(hawtio *hawtiov2.Hawtio) types.NamespacedName {
 	}
 }
 
+// createBasicHawtioCR is a lightweight helper for the cache tests
+func createBasicHawtioCR(ctx context.Context, testTools *TestTools, name, namespace string) *hawtiov2.Hawtio {
+	hawtio := &hawtiov2.Hawtio{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: hawtiov2.HawtioSpec{
+			Type:    hawtiov2.NamespaceHawtioDeploymentType,
+			Version: "latest",
+		},
+	}
+	Expect(testTools.K8sClient.Create(ctx, hawtio)).Should(Succeed())
+	return hawtio
+}
+
+func createNamespaces(ctx context.Context, testTools *TestTools, namespaces ...string) {
+	for _, ns := range namespaces {
+		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}
+		err := testTools.K8sClient.Create(ctx, namespace)
+		if err != nil {
+			Expect(kerrors.IsAlreadyExists(err)).To(BeTrue(), "Expected AlreadyExists error if namespace is present")
+		}
+	}
+}
+
+// StartManager boots the controller-runtime manager using the configuration defined in TestTools.
 func StartManager(testTools *TestTools) *ManagerState {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
-	By("Starting Manager")
+	By(fmt.Sprintf("Starting Manager with WATCH_NAMESPACES='%s'", testTools.WatchNamespaces))
 
 	metricsOptions := metricserver.Options{
 		BindAddress: "0", // Disable metrics for tests
@@ -211,7 +241,7 @@ func StartManager(testTools *TestTools) *ManagerState {
 
 	mgr, err := hawtiomgr.New(
 		hawtiomgr.WithRestConfig(testTools.Cfg),
-		hawtiomgr.WithWatchNamespaces(HawtioNamespace),
+		hawtiomgr.WithWatchNamespaces(testTools.WatchNamespaces),
 		hawtiomgr.WithPodNamespace(HawtioNamespace),
 		hawtiomgr.WithBuildVariables(buildVariables),
 		hawtiomgr.WithScheme(testTools.Scheme),
@@ -241,6 +271,25 @@ func StartManager(testTools *TestTools) *ManagerState {
 	}
 }
 
+// SetupManagerWithCleanup boots the manager and automatically registers
+// the teardown logic to run at the end of the current test or context.
+func SetupManagerWithCleanup(testTools *TestTools) *ManagerState {
+	mgrState := StartManager(testTools)
+
+	// DeferCleanup registers this block to run after the current test scope finishes.
+	DeferCleanup(func() {
+		By("Deleting the Hawtio CR")
+		PerformDeleteHawtioCR(testTools, HawtioName, HawtioNamespace)
+
+		By(fmt.Sprintf("Stopping the %s manager", testTools.Platform))
+		mgrState.Cancel()  // Signal manager to stop
+		mgrState.Wg.Wait() // Wait for it to shut down
+	})
+
+	return mgrState
+}
+
+// PerformDeleteHawtioCR deletes the hawtio CR under test
 func PerformDeleteHawtioCR(testTools *TestTools, name string, namespace string) {
 	// Use a detached context for cleanup to prevent "context canceled" errors
 	// during the delete/wait process.
@@ -271,7 +320,8 @@ func PerformDeleteHawtioCR(testTools *TestTools, name string, namespace string) 
 	}, "10s", "100ms").Should(Succeed())
 }
 
-func PerformEmptyTypeHawtioCR(testTools *TestTools, ctx context.Context) {
+// PerformEmptyTypeHawtioCR test the effect of an empty Hawtio CR
+func PerformEmptyTypeHawtioCR(ctx context.Context, testTools *TestTools) {
 	By("Creating an empty type Hawtio CR")
 	emptyTypeName := "empty-type-hawtio"
 	emptyTypeHawtio := &hawtiov2.Hawtio{
@@ -306,20 +356,12 @@ func PerformEmptyTypeHawtioCR(testTools *TestTools, ctx context.Context) {
 	}, Timeout, Interval).Should(Succeed())
 }
 
-func PerformCommonResourceTest(testTools *TestTools, ctx context.Context, platform string) {
+// PerformCommonResourceTest tests the reconciler checking the generated resources
+func PerformCommonResourceTest(ctx context.Context, testTools *TestTools) {
 	By("Creating a new Hawtio CR")
-	hawtio := &hawtiov2.Hawtio{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      HawtioName,
-			Namespace: HawtioNamespace,
-		},
-		Spec: hawtiov2.HawtioSpec{
-			Type:    hawtiov2.NamespaceHawtioDeploymentType,
-			Version: "latest",
-		},
-	}
-	Expect(testTools.K8sClient.Create(ctx, hawtio)).Should(Succeed())
+	hawtio := createBasicHawtioCR(ctx, testTools, HawtioName, HawtioNamespace)
 
+	By("Checking the Hawtio Phase has reached Initialized")
 	Eventually(func() hawtiov2.HawtioPhase {
 		fetched := &hawtiov2.Hawtio{}
 		lookupKey := lookupKey(hawtio)
@@ -342,7 +384,7 @@ func PerformCommonResourceTest(testTools *TestTools, ctx context.Context, platfo
 
 	By("Checking the created ConfigMap against expected test data")
 	expConfigMap := &corev1.ConfigMap{}
-	loadExpectedFile("configmap", platform, expConfigMap)
+	loadExpectedFile("configmap", strings.ToLower(testTools.Platform), expConfigMap)
 	compareResource("ConfigMap", configMap.Data, expConfigMap.Data)
 
 	By("Checking if the service account was created")
@@ -379,7 +421,7 @@ func PerformCommonResourceTest(testTools *TestTools, ctx context.Context, platfo
 
 	By("Checking the created Deployment against expected test data")
 	expDeployment := &appsv1.Deployment{}
-	loadExpectedFile("deployment", platform, expDeployment)
+	loadExpectedFile("deployment", strings.ToLower(testTools.Platform), expDeployment)
 	Expect(deployment.Labels).To(HaveKeyWithValue("app", "hawtio"), "Should have expected app label")
 	compareResource("Deployment.Spec", deployment.Spec, expDeployment.Spec)
 
@@ -393,7 +435,54 @@ func PerformCommonResourceTest(testTools *TestTools, ctx context.Context, platfo
 
 	By("Checking the created Service against expected test data")
 	expSvc := &corev1.Service{}
-	loadExpectedFile("service", platform, expSvc)
+	loadExpectedFile("service", strings.ToLower(testTools.Platform), expSvc)
 	Expect(service.Labels).To(HaveKeyWithValue("app", "hawtio"), "Should have expected app label")
 	compareResource("Service", service, expSvc)
+}
+
+// PerformIgnoreNamespaceTest tests that the a namespace and CR are ignored
+func PerformIgnoreNamespaceTest(ctx context.Context, testTools *TestTools) {
+	By("Creating a namespace that will be ignored")
+	ignoredNS := "hawtio-ignored-ns"
+	createNamespaces(ctx, testTools, ignoredNS)
+	ignoredCR := createBasicHawtioCR(ctx, testTools, "hawtio-scoped-ignored", ignoredNS)
+	DeferCleanup(func() {
+		By("Deleting the Hawtio CR in ignored namespace")
+		PerformDeleteHawtioCR(testTools, ignoredCR.Name, ignoredNS)
+	})
+
+	By("Verifying the ignored namespace CR is completely ignored")
+	deployment := &appsv1.Deployment{}
+	Consistently(func() error {
+		return testTools.K8sClient.Get(ctx, types.NamespacedName{Name: ignoredCR.Name, Namespace: ignoredNS}, deployment)
+	}, time.Second*3, Interval).ShouldNot(Succeed(), "Scoped manager MUST ignore CRs outside its target namespace")
+}
+
+// PerformWatchAllNamespacesTest executes the delineation tests for OLMv1 compatibility.
+// It proves the operator can dynamically switch between AllNamespaces and SingleNamespace mode.
+func PerformWatchAllNamespacesTest(ctx context.Context, testTools *TestTools) {
+	otherNS1 := "hawtio-other1-ns"
+	otherNS2 := "hawtio-other2-ns"
+
+	By("Setting up test namespaces")
+	createNamespaces(ctx, testTools, otherNS1, otherNS2)
+
+	hawtioCR := createBasicHawtioCR(ctx, testTools, HawtioName, HawtioNamespace)
+	otherCR1 := createBasicHawtioCR(ctx, testTools, "hawtio-other-1", otherNS1)
+	DeferCleanup(func() {
+		PerformDeleteHawtioCR(testTools, otherCR1.Name, otherNS1)
+	})
+	otherCR2 := createBasicHawtioCR(ctx, testTools, "hawtio-other-2", otherNS2)
+	DeferCleanup(func() {
+		PerformDeleteHawtioCR(testTools, otherCR2.Name, otherNS2)
+	})
+
+	By("Verifying CRs are reconciled globally by checking if a deployment is created")
+	crs := []*hawtiov2.Hawtio{hawtioCR, otherCR1, otherCR2}
+	for _, cr := range crs {
+		deployment := &appsv1.Deployment{}
+		Eventually(func() error {
+			return testTools.K8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, deployment)
+		}, Timeout, Interval).Should(Succeed(), fmt.Sprintf("Global manager should reconcile %s in namespace %s", cr.Name, cr.Namespace))
+	}
 }
