@@ -18,31 +18,24 @@ import (
 var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 	var mgrState *hawtiotest.ManagerState
 
-	Context("on Kubernetes", func() {
+	Context("on Kubernetes in a single namespace", func() {
 
 		BeforeEach(func() {
-			mgrState = hawtiotest.StartManager(testTools)
-
-			// Used in preference to AfterEach since
-			// DeferCleanup executes right at the end of the test
-			// and has a LIFO stack so any other cleanups added
-			// in tests will be executed before this one.
-			DeferCleanup(func() {
-				By("Deleting the Hawtio CR")
-				hawtiotest.PerformDeleteHawtioCR(testTools, hawtiotest.HawtioName, hawtiotest.HawtioNamespace)
-
-				By("Stopping the Kubernetes manager")
-				mgrState.Cancel()  // Signal manager to stop
-				mgrState.Wg.Wait() // Wait for it to shut down
-			})
+			// Confine all tests to the single namespace
+			testTools.WatchNamespaces = hawtiotest.HawtioNamespace
+			mgrState = hawtiotest.SetupManagerWithCleanup(testTools)
 		})
 
 		It("Should handle empty type Hawtio CR", func() {
-			hawtiotest.PerformEmptyTypeHawtioCR(testTools, mgrState.Ctx)
+			hawtiotest.PerformEmptyTypeHawtioCR(mgrState.Ctx, testTools)
+		})
+
+		It("Should ignore CRs in other namespaces", func() {
+			hawtiotest.PerformIgnoreNamespaceTest(mgrState.Ctx, testTools)
 		})
 
 		It("Should create expected common resources", func() {
-			hawtiotest.PerformCommonResourceTest(testTools, mgrState.Ctx, "Kubernetes")
+			hawtiotest.PerformCommonResourceTest(mgrState.Ctx, testTools)
 		})
 
 		It("Should create ingress", func() {
@@ -67,5 +60,19 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 				g.Expect(testTools.K8sClient.Get(mgrState.Ctx, ingressKey, ingress)).To(Succeed())
 			}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
 		})
+	})
+
+	Context("on Kubernetes testing all namespaces watching", func() {
+
+		BeforeEach(func() {
+			// By setting to the empty string, all namespaces will be watched
+			testTools.WatchNamespaces = ""
+			mgrState = hawtiotest.SetupManagerWithCleanup(testTools)
+		})
+
+		It("Should watch CRs in all namespaces and reconcile them", func() {
+			hawtiotest.PerformWatchAllNamespacesTest(mgrState.Ctx, testTools)
+		})
+
 	})
 })

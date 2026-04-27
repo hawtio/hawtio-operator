@@ -80,13 +80,15 @@ var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(30 * time.Second)
 
 	testTools = &hawtiotest.TestTools{
-		Scheme:      scheme,
-		Cancel:      cancel,
-		Cfg:         cfg,
-		Ctx:         ctx,
-		K8sClient:   k8sClient,
-		Logger:      logger,
-		ClientTools: clientTools,
+		Platform:        "OpenShift",
+		Scheme:          scheme,
+		Cancel:          cancel,
+		Cfg:             cfg,
+		Ctx:             ctx,
+		K8sClient:       k8sClient,
+		Logger:          logger,
+		ClientTools:     clientTools,
+		WatchNamespaces: "",
 	}
 })
 
