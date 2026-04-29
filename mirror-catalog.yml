@@ -1,0 +1,9 @@
+apiVersion: config.openshift.io/v1
+kind: ImageTagMirrorSet
+metadata:
+  name: my-tag-mirror
+spec:
+  imageTagMirrors:
+    - source:<registry that cluster requires w/ repository endpoint>
+      mirrors:
+        - <actual registry w/ repository endpoint>
