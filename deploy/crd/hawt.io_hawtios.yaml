@@ -801,6 +801,10 @@ spec:
       jsonPath: .status.image
       name: Image
       type: string
+    - description: Console image
+      jsonPath: .status.gatewayImage
+      name: GatewayImage
+      type: string
     - description: Console phase
       jsonPath: .status.phase
       name: Phase
@@ -1203,6 +1207,9 @@ spec:
             properties:
               URL:
                 description: The Hawtio console route URL
+                type: string
+              gatewayImage:
+                description: The Hawtio console gateway container image
                 type: string
               image:
                 description: The Hawtio console container image

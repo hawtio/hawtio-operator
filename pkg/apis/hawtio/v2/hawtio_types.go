@@ -32,6 +32,7 @@ const (
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`,description="Creation phase"
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.image`,description="Console image"
+// +kubebuilder:printcolumn:name="GatewayImage",type=string,JSONPath=`.status.gatewayImage`,description="Console image"
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`,description="Console phase"
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.status.URL`,description="Console URL"
 
@@ -159,6 +160,8 @@ type HawtioRBAC struct {
 type HawtioStatus struct {
 	// The Hawtio console container image
 	Image string `json:"image,omitempty"`
+	// The Hawtio console gateway container image
+	GatewayImage string `json:"gatewayImage,omitempty"`
 	// The Hawtio deployment phase
 	Phase HawtioPhase `json:"phase,omitempty"`
 	// The Hawtio console route URL
