@@ -119,6 +119,11 @@ var podSpecFieldsToIgnore = []string{
 	"DeprecatedServiceAccount", // Created at runtime for kube backward-compatibility but not required
 }
 
+var saFieldsToIgnore = []string{
+	"Secrets",          // Created at runtime with random hashes
+	"ImagePullSecrets", // Created at runtime with random hashes
+}
+
 // k8sSpecComparator defines reusable options for comparing Kubernetes specs
 var k8sSpecComparator = cmp.Options{
 	// Ignore specific field names anywhere they appear
@@ -126,6 +131,7 @@ var k8sSpecComparator = cmp.Options{
 	cmpopts.IgnoreFields(metav1.ObjectMeta{}, metaObjFieldsToIgnore...),
 	cmpopts.IgnoreFields(corev1.ServiceSpec{}, svcSpecFieldsToIgnore...),
 	cmpopts.IgnoreFields(corev1.PodSpec{}, podSpecFieldsToIgnore...),
+	cmpopts.IgnoreFields(corev1.ServiceAccount{}, saFieldsToIgnore...),
 
 	// Ignore map entries based on key patterns anywhere
 	cmp.FilterPath(func(p cmp.Path) bool {
