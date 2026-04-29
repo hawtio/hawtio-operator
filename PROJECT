@@ -1,6 +1,6 @@
 domain: hawt.io
 layout: go.kubebuilder.io/v4
-projectName: hawtio-operator
+projectName: red-hat-hawtio-operator
 repo: github.com/hawtio/hawtio-operator
 resources:
 - controller: true
