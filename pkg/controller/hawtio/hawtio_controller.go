@@ -430,6 +430,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	newStatus.Replicas = deployment.Status.Replicas
 	// Reconcile Hawtio status image field from deployment container image
 	newStatus.Image = deployment.Spec.Template.Spec.Containers[0].Image
+	newStatus.GatewayImage = deployment.Spec.Template.Spec.Containers[1].Image
 	// Reconcile scale sub-resource labelSelectorPath from deployment spec to CR status
 	if selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector); err == nil {
 	   newStatus.Selector = selector.String()
