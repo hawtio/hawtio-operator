@@ -3,8 +3,11 @@
 package hawtiotest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -41,6 +44,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/yaml"
+
+	"github.com/hawtio/hawtio-operator/pkg/resources"
 )
 
 const (
@@ -69,6 +74,62 @@ type ManagerState struct {
 	Wg      *sync.WaitGroup
 	Ctx     context.Context
 	Cancel  context.CancelFunc
+}
+
+// MockRegistryTransport intercepts HTTP calls and returns fake image digests.
+type MockRegistryTransport struct {
+	mu sync.Mutex
+	// Maps a registry URL path to the sha256 digest we want to return
+	DigestMap  map[string][]string
+	ShouldFail bool
+}
+
+func (m *MockRegistryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if m.ShouldFail {
+		return nil, http.ErrServerClosed // Simulate a hard network/air-gap failure
+	}
+
+	// Intercept the mandatory Docker API version ping
+	if req.URL.Path == "/v2/" {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewBufferString("{}")),
+			Header:     make(http.Header),
+		}, nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	digests, ok := m.DigestMap[req.URL.Path]
+	if !ok || len(digests) == 0 {
+		errMsg := "mock missing path: " + req.URL.Path
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(bytes.NewBufferString(errMsg)),
+			Header:     make(http.Header),
+		}, nil
+	}
+
+	// Get the current digest for this request
+	digest := digests[0]
+
+	// If there's another digest in the sequence, pop it so the next
+	// request gets the new one
+	if len(digests) > 1 {
+		m.DigestMap[req.URL.Path] = digests[1:]
+	}
+
+	// go-containerregistry strictly requires this header to extract the digest
+	header := make(http.Header)
+	header.Set("Docker-Content-Digest", digest)
+	header.Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
+
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewBufferString("{}")),
+		Header:     header,
+	}, nil
 }
 
 var buildVariables = util.BuildVariables{
@@ -235,7 +296,7 @@ func createNamespaces(ctx context.Context, testTools *TestTools, namespaces ...s
 }
 
 // StartManager boots the controller-runtime manager using the configuration defined in TestTools.
-func StartManager(testTools *TestTools) *ManagerState {
+func StartManager(testTools *TestTools, extraOpts ...hawtiomgr.MgrOption) *ManagerState {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
@@ -245,14 +306,17 @@ func StartManager(testTools *TestTools) *ManagerState {
 		BindAddress: "0", // Disable metrics for tests
 	}
 
-	mgr, err := hawtiomgr.New(
+	opts := []hawtiomgr.MgrOption{
 		hawtiomgr.WithRestConfig(testTools.Cfg),
 		hawtiomgr.WithWatchNamespaces(testTools.WatchNamespaces),
 		hawtiomgr.WithPodNamespace(HawtioNamespace),
 		hawtiomgr.WithBuildVariables(buildVariables),
 		hawtiomgr.WithScheme(testTools.Scheme),
 		hawtiomgr.WithClientTools(testTools.ClientTools),
-		hawtiomgr.WithMetrics(metricsOptions))
+		hawtiomgr.WithMetrics(metricsOptions),
+	}
+	opts = append(opts, extraOpts...)
+	mgr, err := hawtiomgr.New(opts...)
 
 	Expect(err).NotTo(HaveOccurred())
 
@@ -491,4 +555,198 @@ func PerformWatchAllNamespacesTest(ctx context.Context, testTools *TestTools) {
 			return testTools.K8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, deployment)
 		}, Timeout, Interval).Should(Succeed(), fmt.Sprintf("Global manager should reconcile %s in namespace %s", cr.Name, cr.Namespace))
 	}
+}
+
+//
+// PerformCommonUpdaterTest tests the updater conducting
+// queries on a mocked registry. The second time it makes
+// a query, the digest is updated and the new update made
+// to the deployment resource
+func PerformCommonUpdaterTest(testTools *TestTools, mgrState *ManagerState, platform string) {
+	By("Stopping the Manager to Configure Mocked Registry")
+	// Stop the default manager started by BeforeEach
+	mgrState.Cancel()
+	mgrState.Wg.Wait()
+
+	By("Configuring the mock registry")
+	onlineHash := "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	updatedOnlineHash := "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	gatewayHash := "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	updatedGatewayHash := "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+
+	// Build the sequenced mock
+	mockTransport := &MockRegistryTransport{
+		DigestMap: map[string][]string{
+			fmt.Sprintf("/v2/hawtio/online/manifests/%s", buildVariables.ImageVersion):                {onlineHash, updatedOnlineHash},
+			fmt.Sprintf("/v2/hawtio/online-gateway/manifests/%s", buildVariables.GatewayImageVersion): {gatewayHash, updatedGatewayHash},
+		},
+	}
+
+	By("Restarting the Manager with the Sequenced Mock Transport")
+	// Restart the manager with the mocked internet by create a new temporary state
+	newMgrState := StartManager(testTools,
+		hawtiomgr.WithRegistryTransport(mockTransport),
+		// Must be > 2 seconds so the Reconciler has time to build the baseline
+		hawtiomgr.WithUpdatePollingInterval(3*time.Second))
+
+	// Dereference BOTH pointers to overwrite the original manager
+	*mgrState = *newMgrState
+
+	By("Creating the Hawtio CR")
+	hawtioName := "hawtio-poller-test"
+	hawtio := &hawtiov2.Hawtio{
+		ObjectMeta: metav1.ObjectMeta{Name: hawtioName, Namespace: HawtioNamespace},
+		Spec: hawtiov2.HawtioSpec{
+			Type: hawtiov2.NamespaceHawtioDeploymentType,
+		},
+	}
+	Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
+
+	DeferCleanup(func() {
+		PerformDeleteHawtioCR(testTools, hawtioName, HawtioNamespace)
+	})
+
+	deploymentKey := types.NamespacedName{Name: hawtioName, Namespace: HawtioNamespace}
+	createdDeployment := &appsv1.Deployment{}
+
+	By("Waiting for the Reconciler to build the Deployment using the baseline digests")
+	Eventually(func(g Gomega) {
+		err := testTools.K8sClient.Get(mgrState.Ctx, deploymentKey, createdDeployment)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		annotations := createdDeployment.Spec.Template.Annotations
+		g.Expect(annotations).NotTo(BeNil())
+		// The Reconciler should have successfully applied the first digest
+		g.Expect(annotations[resources.OnlineDigestAnnotation]).To(Equal(onlineHash))
+		g.Expect(annotations[resources.GatewayDigestAnnotation]).To(Equal(gatewayHash))
+	}, Timeout, Interval).Should(Succeed())
+
+	By("Waiting for the background poller to tick, fire an event, and trigger a dynamic update")
+	Eventually(func(g Gomega) {
+		err := testTools.K8sClient.Get(mgrState.Ctx, deploymentKey, createdDeployment)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		annotations := createdDeployment.Spec.Template.Annotations
+		g.Expect(annotations).NotTo(BeNil())
+		// The Reconciler should have seamlessly swapped to the SECOND digest!
+		g.Expect(annotations[resources.OnlineDigestAnnotation]).To(Equal(updatedOnlineHash))
+		g.Expect(annotations[resources.GatewayDigestAnnotation]).To(Equal(updatedGatewayHash))
+	}, Timeout, Interval).Should(Succeed())
+}
+
+//
+// PerformCommonUpdaterNetworkFailureTest tests the updater failing to
+// query the mocked registry simulating a network failure or air-gapped
+// installation. The updating should retreat from any update and allow
+// the deployment to continue with the original image:tags.
+func PerformCommonUpdaterNetworkFailureTest(testTools *TestTools, mgrState *ManagerState, platform string) {
+	By("Stopping the Manager to Configure Failing Mock Registry")
+	mgrState.Cancel()
+	mgrState.Wg.Wait()
+
+	By("Configuring the mock registry to simulate a complete network outage")
+	mockTransport := &MockRegistryTransport{
+		ShouldFail: true, // Triggers simulated http.ErrServerClosed
+	}
+
+	By("Restarting the Manager with the Failing Transport")
+	newMgrState := StartManager(testTools,
+		hawtiomgr.WithRegistryTransport(mockTransport),
+		// Must be > 2 seconds so the Reconciler has time to build the baseline
+		hawtiomgr.WithUpdatePollingInterval(3*time.Second))
+
+	*mgrState = *newMgrState
+
+	By("Creating the Hawtio CR")
+	hawtioName := "hawtio-network-fail-test"
+	hawtio := &hawtiov2.Hawtio{
+		ObjectMeta: metav1.ObjectMeta{Name: hawtioName, Namespace: HawtioNamespace},
+		Spec:       hawtiov2.HawtioSpec{Type: hawtiov2.NamespaceHawtioDeploymentType},
+	}
+	Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
+
+	DeferCleanup(func() {
+		PerformDeleteHawtioCR(testTools, hawtioName, HawtioNamespace)
+	})
+
+	deploymentKey := types.NamespacedName{Name: hawtioName, Namespace: HawtioNamespace}
+	createdDeployment := &appsv1.Deployment{}
+
+	By("Waiting for the Reconciler to safely fallback to default tags")
+	Eventually(func(g Gomega) {
+		err := testTools.K8sClient.Get(mgrState.Ctx, deploymentKey, createdDeployment)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Ensure the operator didn't inject empty annotations
+		annotations := createdDeployment.Spec.Template.Annotations
+		if annotations != nil {
+			g.Expect(annotations).NotTo(HaveKey(resources.OnlineDigestAnnotation))
+		}
+
+		// Ensure the containers are using the standard tags, NOT digests (@sha256:...)
+		spec := createdDeployment.Spec.Template.Spec
+		g.Expect(spec.Containers).To(HaveLen(2))
+		for _, c := range spec.Containers {
+			g.Expect(c.Image).NotTo(ContainSubstring("@sha256:"))
+			g.Expect(c.Image).To(ContainSubstring(":" + buildVariables.ImageVersion))
+		}
+	}, Timeout, Interval).Should(Succeed())
+}
+
+//
+// PerformCommonUpdaterPartialFailureTest tests the use-case that one
+// image has been updated in the mocked registy but not the other. Both
+// images are required for a successful update so the updater backs off
+// and continues with the original images.
+func PerformCommonUpdaterPartialFailureTest(testTools *TestTools, mgrState *ManagerState, platform string) {
+	By("Stopping the Manager to Configure Partial Mock Registry")
+	mgrState.Cancel()
+	mgrState.Wg.Wait()
+
+	By("Configuring the mock registry to simulate a missing gateway image")
+	validOnlineHash := "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+
+	mockTransport := &MockRegistryTransport{
+		DigestMap: map[string][]string{
+			// The Online image succeeds...
+			fmt.Sprintf("/v2/hawtio/online/manifests/%s", buildVariables.ImageVersion): {validOnlineHash},
+			// ...but the Gateway image is missing from the map! (Will return 404)
+		},
+	}
+
+	By("Restarting the Manager with the Partial Transport")
+	newMgrState := StartManager(testTools,
+		hawtiomgr.WithRegistryTransport(mockTransport),
+		// Must be > 2 seconds so the Reconciler has time to build the baseline
+		hawtiomgr.WithUpdatePollingInterval(3*time.Second))
+
+	*mgrState = *newMgrState
+
+	By("Creating the Hawtio CR")
+	hawtioName := "hawtio-partial-fail-test"
+	hawtio := &hawtiov2.Hawtio{
+		ObjectMeta: metav1.ObjectMeta{Name: hawtioName, Namespace: HawtioNamespace},
+		Spec:       hawtiov2.HawtioSpec{Type: hawtiov2.NamespaceHawtioDeploymentType},
+	}
+	Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
+
+	DeferCleanup(func() {
+		PerformDeleteHawtioCR(testTools, hawtioName, HawtioNamespace)
+	})
+
+	deploymentKey := types.NamespacedName{Name: hawtioName, Namespace: HawtioNamespace}
+	createdDeployment := &appsv1.Deployment{}
+
+	By("Waiting for the Reconciler to reject the split-brain state and fallback to defaults")
+	Eventually(func(g Gomega) {
+		err := testTools.K8sClient.Get(mgrState.Ctx, deploymentKey, createdDeployment)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		spec := createdDeployment.Spec.Template.Spec
+		g.Expect(spec.Containers).To(HaveLen(2))
+		for _, c := range spec.Containers {
+			// Neither container should get a digest because the batch fetch failed
+			g.Expect(c.Image).NotTo(ContainSubstring("@sha256:"))
+		}
+	}, Timeout, Interval).Should(Succeed())
 }
