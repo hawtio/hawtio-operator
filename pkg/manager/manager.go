@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -33,6 +34,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/hawtio/hawtio-operator/pkg/apis"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
@@ -139,6 +142,7 @@ type mgrConfig struct {
 	clientTools           *clients.ClientTools
 	metrics               metricserver.Options
 	updatePollingInterval time.Duration
+	registryTransport     http.RoundTripper
 }
 
 // MgrOption function to populate manager config
@@ -197,6 +201,12 @@ func WithClientTools(tools *clients.ClientTools) MgrOption {
 func WithMetrics(metrics metricserver.Options) MgrOption {
 	return func(c *mgrConfig) {
 		c.metrics = metrics
+	}
+}
+
+func WithRegistryTransport(transport http.RoundTripper) MgrOption {
+	return func(c *mgrConfig) {
+		c.registryTransport = transport
 	}
 }
 
@@ -279,11 +289,16 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 		return nil, fmt.Errorf("unable to construct manager: %w", err)
 	}
 
+	var extraOptions []remote.Option
+	if mc.registryTransport != nil {
+		extraOptions = append(extraOptions, remote.WithTransport(mc.registryTransport))
+	}
+
 	//
 	// Polling interval will be set by default but if the user
 	// has explicitly disabled then don't create the poller or channel
 	//
-	updatePoller, updateChannel, err := createUpdatePoller(mgr, mc.buildVariables, mc.updatePollingInterval)
+	updatePoller, updateChannel, err := createUpdatePoller(mgr, mc.buildVariables, mc.updatePollingInterval, extraOptions)
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct update poller: %w", err)
 	}
@@ -299,7 +314,7 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	return mgr, nil
 }
 
-func createUpdatePoller(mgr manager.Manager, bv util.BuildVariables, updatePollingInterval time.Duration) (*updater.RegistryPoller, chan event.GenericEvent, error) {
+func createUpdatePoller(mgr manager.Manager, bv util.BuildVariables, updatePollingInterval time.Duration, extraOptions []remote.Option) (*updater.RegistryPoller, chan event.GenericEvent, error) {
 	if updatePollingInterval == 0 {
 		log.Info("Update Poller: Image polling is disabled (interval is 0). Background updater will not be started.")
 		return nil, nil, nil
@@ -317,6 +332,7 @@ func createUpdatePoller(mgr manager.Manager, bv util.BuildVariables, updatePolli
 		GatewayImageURL: bv.GatewayImageRepository + ":" + bv.GatewayImageVersion,
 		Trigger:         updateChannel,
 		Logger:          log.WithName("Update Poller"),
+		ExtraOptions:    extraOptions,
 	}
 
 	if err := mgr.Add(poller); err != nil {

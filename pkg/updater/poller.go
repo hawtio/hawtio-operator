@@ -27,9 +27,9 @@ type RegistryPoller struct {
 	gatewayDigest   string
 	lastError       error
 
-	// extraOptions used to inject any extra options into polling
+	// ExtraOptions used to inject any extra options into polling
 	// Used for testing in mocking the HTTP transport.
-	extraOptions []remote.Option
+	ExtraOptions []remote.Option
 }
 
 // RequestDigests is called by the Reconciler to
@@ -73,7 +73,7 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: Polling registry for new digests", "online image", p.OnlineImageURL, "gateway image", p.GatewayImageURL)
 
 	// Check Online Image
-	newOnlineDigest, errOnline := GetLatestDigest(ctx, p.OnlineImageURL, p.extraOptions...)
+	newOnlineDigest, errOnline := GetLatestDigest(ctx, p.OnlineImageURL, p.ExtraOptions...)
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Digest:", "digest", newOnlineDigest)
 
 	if errOnline != nil {
@@ -85,7 +85,7 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 	}
 
 	// Check Gateway Image
-	newGatewayDigest, errGateway := GetLatestDigest(ctx, p.GatewayImageURL, p.extraOptions...)
+	newGatewayDigest, errGateway := GetLatestDigest(ctx, p.GatewayImageURL, p.ExtraOptions...)
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Gateway Digest:", "digest", newGatewayDigest)
 	if errGateway != nil {
 		p.Logger.Error(errGateway, "Update Poller: Failed to check Gateway image registry. Skipping cycle.")

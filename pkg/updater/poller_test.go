@@ -97,7 +97,7 @@ func TestRegistryPoller_ExpectedUpdate(t *testing.T) {
 			Verbosity: 1,
 		}),
 		Trigger: triggerChan,
-		extraOptions: []remote.Option{
+		ExtraOptions: []remote.Option{
 			remote.WithTransport(mockTransport), // Inject the mock!
 		},
 	}
@@ -154,7 +154,7 @@ func TestRegistryPoller_Idempotency(t *testing.T) {
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
 		Trigger:         triggerChan,
 		Logger:          testr.New(t),
-		extraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
+		ExtraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -202,7 +202,7 @@ func TestRegistryPoller_AirGap(t *testing.T) {
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
 		Trigger:         triggerChan,
 		Logger:          testr.New(t),
-		extraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
+		ExtraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -245,7 +245,7 @@ func TestRegistryPoller_PartialFailure(t *testing.T) {
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
 		Trigger:         triggerChan,
 		Logger:          testr.New(t),
-		extraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
+		ExtraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

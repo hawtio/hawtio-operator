@@ -175,6 +175,18 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 				g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtioKey, &routev1.Route{})).To(Succeed())
 			}, "5s", "1s").Should(Succeed())
 		})
+
+		It("Dynamically updating Deployment images when the background poller detects new digests", func() {
+			hawtiotest.PerformCommonUpdaterTest(testTools, mgrState, "OpenShift")
+		})
+
+		It("Updater poller tries to update images but encounters a network failure", func() {
+			hawtiotest.PerformCommonUpdaterNetworkFailureTest(testTools, mgrState, "OpenShift")
+		})
+
+		It("Updater poller tries to update images but encounters only a single updated image", func() {
+			hawtiotest.PerformCommonUpdaterPartialFailureTest(testTools, mgrState, "OpenShift")
+		})
 	})
 
 	Context("on OpenShift testing all namespaces watching", func() {
