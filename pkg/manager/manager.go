@@ -3,8 +3,10 @@ package manager
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	errs "github.com/pkg/errors"
 
@@ -28,14 +30,18 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/hawtio/hawtio-operator/pkg/apis"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/clients"
 	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio"
+	"github.com/hawtio/hawtio-operator/pkg/updater"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -132,9 +138,11 @@ type mgrConfig struct {
 	operatorPodNS   string
 	buildVariables  util.BuildVariables
 	// Optional
-	scheme      *runtime.Scheme
-	clientTools *clients.ClientTools
-	metrics     metricserver.Options
+	scheme                *runtime.Scheme
+	clientTools           *clients.ClientTools
+	metrics               metricserver.Options
+	updatePollingInterval time.Duration
+	registryTransport     http.RoundTripper
 }
 
 // MgrOption function to populate manager config
@@ -158,6 +166,13 @@ func WithWatchNamespaces(nsStr string) MgrOption {
 func WithPodNamespace(ns string) MgrOption {
 	return func(c *mgrConfig) {
 		c.operatorPodNS = ns
+	}
+}
+
+// WithUpdatePollingInterval defines polling interval for updater of disables it
+func WithUpdatePollingInterval(interval time.Duration) MgrOption {
+	return func(c *mgrConfig) {
+		c.updatePollingInterval = interval
 	}
 }
 
@@ -186,6 +201,12 @@ func WithClientTools(tools *clients.ClientTools) MgrOption {
 func WithMetrics(metrics metricserver.Options) MgrOption {
 	return func(c *mgrConfig) {
 		c.metrics = metrics
+	}
+}
+
+func WithRegistryTransport(transport http.RoundTripper) MgrOption {
+	return func(c *mgrConfig) {
+		c.registryTransport = transport
 	}
 }
 
@@ -268,12 +289,56 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 		return nil, fmt.Errorf("unable to construct manager: %w", err)
 	}
 
+	var extraOptions []remote.Option
+	if mc.registryTransport != nil {
+		extraOptions = append(extraOptions, remote.WithTransport(mc.registryTransport))
+	}
+
+	//
+	// Polling interval will be set by default but if the user
+	// has explicitly disabled then don't create the poller or channel
+	//
+	updatePoller, updateChannel, err := createUpdatePoller(mgr, mc.buildVariables, mc.updatePollingInterval, extraOptions)
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct update poller: %w", err)
+	}
+
 	// Register the hawtio controller with the manager
 	if err := hawtio.Add(
 		mgr, operatorPod, mc.clientTools,
-		apiSpec, mc.buildVariables); err != nil {
+		apiSpec, mc.buildVariables,
+		updatePoller, updateChannel); err != nil {
 		return nil, err
 	}
 
 	return mgr, nil
+}
+
+func createUpdatePoller(mgr manager.Manager, bv util.BuildVariables, updatePollingInterval time.Duration, extraOptions []remote.Option) (*updater.RegistryPoller, chan event.GenericEvent, error) {
+	if updatePollingInterval == 0 {
+		log.Info("Update Poller: Image polling is disabled (interval is 0). Background updater will not be started.")
+		return nil, nil, nil
+	}
+
+	//
+	// Creates a bi-directional channel but with downgrade
+	// to receive-only when assigned to ReconcileHawtio
+	//
+	updateChannel := make(chan event.GenericEvent)
+
+	poller := &updater.RegistryPoller{
+		Interval:        updatePollingInterval,
+		OnlineImageURL:  bv.ImageRepository + ":" + bv.ImageVersion,
+		GatewayImageURL: bv.GatewayImageRepository + ":" + bv.GatewayImageVersion,
+		Trigger:         updateChannel,
+		Logger:          log.WithName("Update Poller"),
+		ExtraOptions:    extraOptions,
+	}
+
+	if err := mgr.Add(poller); err != nil {
+		log.Error(err, "Update Poller: failed to add registry poller to manager")
+		return nil, nil, err
+	}
+
+	return poller, updateChannel, nil
 }
