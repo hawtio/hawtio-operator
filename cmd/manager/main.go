@@ -75,9 +75,9 @@ func printVersion() {
 func printBuildVars(bv util.BuildVariables, watchNamespaces string) {
 	log.Info(fmt.Sprintf("Hawtio Operator Version: %s", bv.OperatorVersion))
 	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.ImageRepository))
-	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.ImageVersion))
+	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.GetOnlineVersion()))
 	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Repository: %s", bv.GatewayImageRepository))
-	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Version: %s", bv.GatewayImageVersion))
+	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Version: %s", bv.GetGatewayVersion()))
 
 	if watchNamespaces == "" {
 		log.Info("Operator: Watching ALL namespaces (Cluster Scoped)")

@@ -2,7 +2,6 @@ package resources
 
 import (
 	"fmt"
-	"os"
 	"path"
 
 	"github.com/Masterminds/semver"
@@ -95,12 +94,12 @@ func newDeployment(hawtio *hawtiov2.Hawtio, replicas *int32, pts corev1.PodTempl
 func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables, log logr.Logger) (corev1.PodTemplateSpec, error) {
 	log.V(util.DebugLogLevel).Info("New Pod Template Spec")
 
-	hawtioVersion := getOnlineVersion(buildVariables)
+	hawtioVersion := buildVariables.GetOnlineVersion()
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Image Version: %s", hawtioVersion))
 
 	hawtioContainer := newHawtioContainer(hawtio, apiSpec, openShiftConsoleURL, hawtioVersion, buildVariables.ImageRepository, log)
 
-	gatewayVersion := getGatewayVersion(buildVariables)
+	gatewayVersion := buildVariables.GetGatewayVersion()
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Gateway Image Version: %s", gatewayVersion))
 
 	gatewayContainer := newGatewayContainer(hawtio, apiSpec, gatewayVersion, buildVariables.GatewayImageRepository, log)
@@ -294,32 +293,4 @@ func getServingCertificateMountPath(version string, legacyServingCertificateMoun
 		}
 	}
 	return serviceSigningSecretVolumeMountPath, nil
-}
-
-func getOnlineVersion(buildVariables util.BuildVariables) string {
-	fmt.Println("Getting version from IMAGE_VERSION environment variable ...")
-	version := os.Getenv("IMAGE_VERSION")
-	if version == "" {
-		fmt.Println("Getting version from build variable ImageVersion")
-		version = buildVariables.ImageVersion
-		if len(version) == 0 {
-			fmt.Println("Defaulting to version being latest")
-			version = "latest"
-		}
-	}
-	return version
-}
-
-func getGatewayVersion(buildVariables util.BuildVariables) string {
-	fmt.Println("Getting version from GATEWAY_IMAGE_VERSION environment variable ...")
-	version := os.Getenv("GATEWAY_IMAGE_VERSION")
-	if version == "" {
-		fmt.Println("Getting version from build variable GatewayImageVersion")
-		version = buildVariables.GatewayImageVersion
-		if len(version) == 0 {
-			fmt.Println("Defaulting to online version")
-			version = getOnlineVersion(buildVariables)
-		}
-	}
-	return version
 }
