@@ -102,6 +102,11 @@ spec:
                           The image displayed in the page.
                           It can be a path, relative to the Hawtio status URL, or an absolute URL.
                         type: string
+                      imgDarkModeSrc:
+                        description: |-
+                          The image displayed in the page when browser dark mode is used.
+                          It can be a path, relative to the Hawtio status URL, or an absolute URL.
+                        type: string
                       productInfo:
                         description: List of product information
                         items:
@@ -131,9 +136,18 @@ spec:
                           The URL of the logo, that displays in the navigation bar.
                           It can be a path, relative to the Hawtio status URL, or an absolute URL.
                         type: string
+                      appLogoDarkModeUrl:
+                        description: |-
+                          The URL of the logo to be used in dark-mode, that displays in the navigation bar.
+                          It can be a path, relative to the Hawtio status URL, or an absolute URL.
+                        type: string
                       appName:
                         description: The application title, that usually displays
                           in the Web browser tab.
+                        type: string
+                      showAppName:
+                        description: |-
+                          Whether to show the application name next to the logo.
                         type: string
                       css:
                         description: |-
