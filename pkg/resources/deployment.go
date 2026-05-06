@@ -31,6 +31,8 @@ const (
 	configVersionAnnotation                   = "hawtio.hawt.io/configversion"
 	clientCertSecretVersionAnnotation         = "hawtio.hawt.io/certversion"
 	serverRootDirectory                       = "/usr/share/nginx/html"
+	OnlineDigestAnnotation                    = "hawtio.io/online-digest"
+	GatewayDigestAnnotation                   = "hawtio.io/gateway-digest"
 )
 
 func NewDefaultDeployment(hawtio *hawtiov2.Hawtio) *appsv1.Deployment {
