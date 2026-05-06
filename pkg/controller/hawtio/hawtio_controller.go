@@ -918,8 +918,8 @@ func (r *ReconcileHawtio) reconcileServiceAccount(ctx context.Context, hawtio *h
 			return err
 		}
 
-		serviceAccount.SetLabels(crServiceAccount.GetLabels())
-		serviceAccount.SetAnnotations(crServiceAccount.GetAnnotations())
+		serviceAccount.Labels = util.MergeMap(serviceAccount.Labels, crServiceAccount.GetLabels())
+		serviceAccount.Annotations = util.MergeMap(serviceAccount.Annotations, crServiceAccount.GetAnnotations())
 
 		// Report any known differences to the log (only if in debug log level)
 		util.ReportDiff("ServiceAccount", liveSnapshot, serviceAccount)
@@ -962,8 +962,8 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccountRole", hawtio.Name))
 		crRole := resources.NewServiceAccountRole(hawtio, reqLogger)
 
-		role.SetLabels(crRole.GetLabels())
-		role.SetAnnotations(crRole.GetAnnotations())
+		role.Labels = util.MergeMap(role.Labels, crRole.GetLabels())
+		role.Annotations = util.MergeMap(role.Annotations, crRole.GetAnnotations())
 		role.Rules = crRole.Rules
 
 		// Report any known differences to the log (only if in debug log level)
@@ -1006,8 +1006,8 @@ func (r *ReconcileHawtio) reconcileServiceAccountRole(ctx context.Context, hawti
 		reqLogger := log.WithName(fmt.Sprintf("%s-reconcileServiceAccountRoleBinding", hawtio.Name))
 		crRoleBinding := resources.NewServiceAccountRoleBinding(hawtio, reqLogger)
 
-		roleBinding.SetLabels(crRoleBinding.GetLabels())
-		roleBinding.SetAnnotations(crRoleBinding.GetAnnotations())
+		roleBinding.Labels = util.MergeMap(roleBinding.Labels, crRoleBinding.GetLabels())
+		roleBinding.Annotations = util.MergeMap(roleBinding.Annotations, crRoleBinding.GetAnnotations())
 		roleBinding.RoleRef = crRoleBinding.RoleRef
 		roleBinding.Subjects = crRoleBinding.Subjects
 
