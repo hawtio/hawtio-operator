@@ -868,14 +868,28 @@ spec:
                     description: The information to be displayed in the About page
                     properties:
                       additionalInfo:
-                        description: The text for the description section
+                        description: |-
+                          Deprecated: Use Description instead. This field is retained for backwards
+                          compatibility but will be removed in a future release.
+                        type: string
+                      backgroundImgSrc:
+                        description: The background image to display on the About
+                          dialog
                         type: string
                       copyright:
                         description: The text for the copyright section
                         type: string
+                      description:
+                        description: The text for the description section.
+                        type: string
+                      imgDarkModeSrc:
+                        description: |-
+                          The image displayed in the page if the theme is dark mode.
+                          It can be a path, relative to the Hawtio status URL, or an absolute URL.
+                        type: string
                       imgSrc:
                         description: |-
-                          The image displayed in the page.
+                          The image displayed in the page, by default.
                           It can be a path, relative to the Hawtio status URL, or an absolute URL.
                         type: string
                       productInfo:
@@ -902,9 +916,14 @@ spec:
                   branding:
                     description: The UI branding
                     properties:
+                      appLogoDarkModeUrl:
+                        description: |-
+                          The URL of the logo, that displays in the navigation bar in dark mode.
+                          It can be a path, relative to the Hawtio status URL, or an absolute URL.
+                        type: string
                       appLogoUrl:
                         description: |-
-                          The URL of the logo, that displays in the navigation bar.
+                          The URL of the logo, that displays in the navigation bar, by default.
                           It can be a path, relative to the Hawtio status URL, or an absolute URL.
                         type: string
                       appName:
@@ -921,6 +940,10 @@ spec:
                           The URL of the favicon, that usually displays in the Web browser tab.
                           It can be a path, relative to the Hawtio status URL, or an absolute URL.
                         type: string
+                      showAppName:
+                        description: Whether to display the application name in the
+                          header bar.
+                        type: boolean
                     type: object
                   disabledRoutes:
                     description: Disables UI components with matching routes
