@@ -1,11 +1,13 @@
 # Used for testing only
 about:
   title: Hawtio Console
-  additionalInfo: The Hawtio console eases the discovery and management of hawtio-enabled
+  description: The Hawtio console eases the discovery and management of hawtio-enabled
     applications deployed on OpenShift.
 branding:
   appName: Hawtio Console
   appLogoUrl: img/hawtio-logo.svg
+  appLogoDarkModeUrl: img/hawtio-logo.svg
+  showAppName: true
 online:
   consoleLink:
     text: Hawtio Console
