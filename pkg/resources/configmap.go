@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	hawtioConfigPath = "config/config.yaml"
-	hawtioConfigKey  = "hawtconfig.json"
+	hawtioConfigKey         = "hawtconfig.json"
+	hawtioDefaultConfigPath = "config/config.yaml"
 )
 
 // GetHawtioConfig reads the console configuration from the config map
@@ -52,7 +52,7 @@ func NewDefaultConfigMap(hawtio *hawtiov2.Hawtio) *corev1.ConfigMap {
 func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, log logr.Logger) (*corev1.ConfigMap, error) {
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Reconciling config map %s", hawtio.Name))
 
-	config, err := configForHawtio(hawtio)
+	config, err := configForHawtio(hawtio, hawtioDefaultConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, 
 	return configMap, nil
 }
 
-func configForHawtio(hawtio *hawtiov2.Hawtio) (string, error) {
+func configForHawtio(hawtio *hawtiov2.Hawtio, hawtioConfigPath string) (string, error) {
 	data, err := util.LoadConfigFromFile(hawtioConfigPath)
 	if err != nil {
 		return "", err
@@ -88,7 +88,42 @@ func configForHawtio(hawtio *hawtiov2.Hawtio) (string, error) {
 		return "", err
 	}
 
-	data, err = json.Marshal(hawtio.Spec.Config)
+	// Create a working copy of the config so don't mutate the
+	// actual cached pointer coming from the Kubernetes client.
+	workingConfig := hawtio.Spec.Config.DeepCopy()
+
+	//
+	// Handle the deprecation of the additionalInfo field and its
+	// replacement with description
+	//
+
+	// If they used the old field, and haven't migrated to the new one yet...
+	if workingConfig.About.Description == "" && workingConfig.About.AdditionalInfo != "" {
+		workingConfig.About.Description = workingConfig.About.AdditionalInfo
+	}
+
+	// Wipe the old field so it doesn't get marshalled
+	workingConfig.About.AdditionalInfo = ""
+
+	//
+	// Handle app logos if the dark mode logo has not been specified
+	//
+	// If a standard logo is provided, but no dark mode logo exists,
+	// override the upstream UI's default by cloning the standard logo.
+	if workingConfig.About.ImgSrc != "" && workingConfig.About.ImgDarkModeSrc == "" {
+		workingConfig.About.ImgDarkModeSrc = workingConfig.About.ImgSrc
+	}
+
+	//
+	// Handle app logos if the dark mode logo has not been specified
+	//
+	// If a standard logo is provided, but no dark mode logo exists,
+	// override the upstream UI's default by cloning the standard logo.
+	if workingConfig.Branding.AppLogoURL != "" && workingConfig.Branding.AppLogoDarkModeURL == "" {
+		workingConfig.Branding.AppLogoDarkModeURL = workingConfig.Branding.AppLogoURL
+	}
+
+	data, err = json.Marshal(workingConfig)
 	if err != nil {
 		return "", err
 	}

@@ -1,6 +1,6 @@
 apiVersion: v1
 data:
-  hawtconfig.json: '{"about":{"additionalInfo":"The Hawtio console eases the discovery and management of hawtio-enabled applications deployed on Kubernetes.","title":"Hawtio Console"},"branding":{"appLogoUrl":"img/hawtio-logo.svg","appName":"Hawtio Console"},"online":{"consoleLink":{"imageRelativePath":"/online/img/favicon.ico","section":"Hawtio","text":"Hawtio Console"}}}'
+  hawtconfig.json: '{"about":{"description":"The Hawtio console eases the discovery and management of hawtio-enabled applications deployed on Kubernetes.","title":"Hawtio Console"},"branding":{"appLogoDarkModeUrl":"img/hawtio-logo.svg","appLogoUrl":"img/hawtio-logo.svg","appName":"Hawtio Console","showAppName":true},"online":{"consoleLink":{"imageRelativePath":"/online/img/favicon.ico","section":"Hawtio","text":"Hawtio Console"}}}'
 kind: ConfigMap
 metadata:
   creationTimestamp: "2025-10-21T09:24:03Z"

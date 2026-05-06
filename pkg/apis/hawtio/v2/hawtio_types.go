@@ -208,9 +208,14 @@ type HawtioConfig struct {
 type HawtioBranding struct {
 	// The application title, that usually displays in the Web browser tab.
 	AppName string `json:"appName,omitempty"`
-	// The URL of the logo, that displays in the navigation bar.
+	// Whether to display the application name in the header bar.
+	ShowAppName bool `json:"showAppName,omitempty"`
+	// The URL of the logo, that displays in the navigation bar, by default.
 	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
 	AppLogoURL string `json:"appLogoUrl,omitempty"`
+	// The URL of the logo, that displays in the navigation bar in dark mode.
+	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
+	AppLogoDarkModeURL string `json:"appLogoDarkModeUrl,omitempty"`
 	// The URL of an external CSS stylesheet, that can be used to style the application.
 	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
 	CSS string `json:"css,omitempty"`
@@ -225,13 +230,21 @@ type HawtioAbout struct {
 	Title string `json:"title,omitempty"`
 	// List of product information
 	ProductInfos []HawtioProductInfo `json:"productInfo,omitempty"`
-	// The text for the description section
+	// Deprecated: Use Description instead. This field is retained for backwards
+	// compatibility but will be removed in a future release.
 	AdditionalInfo string `json:"additionalInfo,omitempty"`
+	// The text for the description section.
+	Description string `json:"description,omitempty"`
 	// The text for the copyright section
 	Copyright string `json:"copyright,omitempty"`
-	// The image displayed in the page.
+	// The image displayed in the page, by default.
 	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
 	ImgSrc string `json:"imgSrc,omitempty"`
+	// The image displayed in the page if the theme is dark mode.
+	// It can be a path, relative to the Hawtio status URL, or an absolute URL.
+	ImgDarkModeSrc string `json:"imgDarkModeSrc,omitempty"`
+	// The background image to display on the About dialog
+	BackgroundImgSrc string `json:"backgroundImgSrc,omitempty"`
 }
 
 // The product information displayed in the About page

@@ -259,12 +259,14 @@ func TestHawtioController_Reconcile(t *testing.T) {
 
 					assert.Equal(t, config, &hawtiov2.HawtioConfig{
 						About: hawtiov2.HawtioAbout{
-							AdditionalInfo: "The Hawtio console eases the discovery and management of hawtio-enabled applications deployed on Kubernetes.",
-							Title:          "Hawtio Console",
+							Description: "The Hawtio console eases the discovery and management of hawtio-enabled applications deployed on Kubernetes.",
+							Title:       "Hawtio Console",
 						},
 						Branding: hawtiov2.HawtioBranding{
-							AppLogoURL: "img/hawtio-logo.svg",
-							AppName:    "Hawtio Console",
+							AppLogoURL:         "img/hawtio-logo.svg",
+							AppLogoDarkModeURL: "img/hawtio-logo.svg",
+							AppName:            "Hawtio Console",
+							ShowAppName:        true,
 						},
 						Online: hawtiov2.HawtioOnline{
 							ConsoleLink: hawtiov2.HawtioConsoleLink{
