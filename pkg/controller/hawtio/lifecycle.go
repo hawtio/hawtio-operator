@@ -2,24 +2,63 @@ package hawtio
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	consolev1 "github.com/openshift/api/console/v1"
+	oauthv1 "github.com/openshift/api/oauth/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	oauthv1 "github.com/openshift/api/oauth/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
-
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
+
+// RequeueError is a custom error type used to signal that the controller
+// should gracefully requeue the reconciliation after a specific duration,
+// without treating it as a crash or failure.
+type RequeueError struct {
+	Message      string
+	RequeueAfter time.Duration
+}
+
+func (e *RequeueError) Error() string {
+	return e.Message
+}
+
+// handleResultAndError
+// If error is the Sentinel legacy adopted resource error
+// then signal for a requeue. Otherwise, just return the error
+func handleResultAndError(err error) (reconcile.Result, error) {
+	if err == nil {
+		return reconcile.Result{}, nil
+	}
+
+	// Check for custom delayed requeue error
+	var reqErr *RequeueError
+	if errors.As(err, &reqErr) {
+		// Return the delay, but return a NIL error so Kubernetes
+		// respects the timer instead of triggering exponential backoff
+		return reconcile.Result{RequeueAfter: reqErr.RequeueAfter}, nil
+	}
+
+	// Check for your existing legacy adoption
+	if err == ErrLegacyResourceAdopted {
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// Fallback for actual system failures
+	return reconcile.Result{}, err
+}
 
 func (r *ReconcileHawtio) fetchHawtio(ctx context.Context, namespacedName client.ObjectKey) (*hawtiov2.Hawtio, error) {
 	r.logger.V(util.DebugLogLevel).Info("Fetching the Hawtio custom resource")

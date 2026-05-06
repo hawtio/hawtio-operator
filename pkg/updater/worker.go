@@ -18,7 +18,7 @@ var ErrRegistryUnavailable = errors.New("registry connection failed or timed out
 // GetLatestDigest fetches the latest digest of the image
 // url from the container registry.
 // TODO: Handle authentication using a pullSecrets array
-func GetLatestDigest(ctx context.Context, imageURL string) (string, error) {
+func GetLatestDigest(ctx context.Context, imageURL string, extraOpts ...remote.Option) (string, error) {
 	// Parse the image string into a structured reference
 	ref, err := name.ParseReference(imageURL)
 	if err != nil {
@@ -32,6 +32,10 @@ func GetLatestDigest(ctx context.Context, imageURL string) (string, error) {
 	options := []remote.Option{
 		remote.WithContext(timeoutCtx),
 	}
+
+	// Append any injected extra options
+	// Used in testing
+	options = append(options, extraOpts...)
 
 	// Perform a HEAD request
 	descriptor, err := remote.Head(ref, options...)

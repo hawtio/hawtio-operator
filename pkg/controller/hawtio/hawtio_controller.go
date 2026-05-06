@@ -42,6 +42,7 @@ import (
 	oresources "github.com/hawtio/hawtio-operator/pkg/resources/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 	"github.com/hawtio/hawtio-operator/pkg/clients"
+	"github.com/hawtio/hawtio-operator/pkg/updater"
 )
 
 var hawtioLogger = logf.Log.WithName("controller_hawtio")
@@ -53,13 +54,32 @@ const (
 
 var ErrLegacyResourceAdopted = errs.New("A legacy resource has been adopted, requeue required")
 
+// ReconcileHawtio reconciles a Hawtio object
+type ReconcileHawtio struct {
+	util.BuildVariables
+	// This client, initialized using mgr.Client() above, is a split client
+	// that reads objects from the cache and writes to the API server
+	client        client.Client
+	scheme        *runtime.Scheme
+	apiReader     client.Reader
+	coreClient    corev1client.CoreV1Interface
+	oauthClient   oauthclient.Interface
+	configClient  configclient.Interface
+	apiClient     kclient.Interface
+	apiSpec       *capabilities.ApiServerSpec
+	logger        logr.Logger
+	operatorPod   types.NamespacedName
+	updatePoller  *updater.RegistryPoller
+	updateChannel <-chan event.GenericEvent // only receives events
+}
+
 func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedEventHandler[T, reconcile.Request] {
 	return handler.TypedEnqueueRequestForOwner[T](mgr.GetScheme(), mgr.GetRESTMapper(), hawtiov2.NewHawtio(), handler.OnlyControllerOwner())
 }
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *clients.ClientTools, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables) error {
+func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *clients.ClientTools, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables, updatePoller *updater.RegistryPoller, updateChannel chan event.GenericEvent) error {
 	r := &ReconcileHawtio{
 		BuildVariables: bv,
 		client:         mgr.GetClient(),
@@ -71,6 +91,8 @@ func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *cli
 		apiClient:      clientTools.ApiClient,
 		apiSpec:        apiSpec,
 		operatorPod:    operatorPod,
+		updatePoller:   updatePoller,
+		updateChannel:  updateChannel,
 	}
 
 	if r.apiSpec.IsOpenShift4 {
@@ -164,39 +186,46 @@ func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *cli
 		return errs.Wrap(err, "Failed to create watch for Secret resource")
 	}
 
+	//
+	// Watch for changes to the update channel if it has been defined
+	//
+	if r.updateChannel != nil {
+		err = c.Watch(
+			source.Channel(
+				r.updateChannel,
+				handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+					// When the poller fires an event, list all Hawtio CRs
+					// and queue a reconcile for every single one of them.
+					hawtioList := &hawtiov2.HawtioList{}
+
+					listErr := r.client.List(ctx, hawtioList)
+					if listErr != nil {
+						hawtioLogger.Error(listErr, "CRITICAL: Failed to list Hawtio CRs during update event")
+						return nil
+					}
+
+					var requests []reconcile.Request
+					for _, h := range hawtioList.Items {
+						requests = append(requests, reconcile.Request{
+							NamespacedName: types.NamespacedName{
+								Name:      h.Name,
+								Namespace: h.Namespace,
+							},
+						})
+					}
+					return requests
+				}),
+			),
+		)
+		if err != nil {
+			return errs.Wrap(err, "Failed to create watch for updater")
+		}
+	}
+
 	return nil
 }
 
-// handleResultAndError
-// If error is the Sentinel legacy adopted resource error
-// then signal for a requeue. Otherwise, just return the error
-func handleResultAndError(err error) (reconcile.Result, error) {
-	if err == ErrLegacyResourceAdopted {
-		// Adoption occurred so requeue
-		return reconcile.Result{Requeue: true}, err
-	}
-
-	return reconcile.Result{}, err
-}
-
 var _ reconcile.Reconciler = &ReconcileHawtio{}
-
-// ReconcileHawtio reconciles a Hawtio object
-type ReconcileHawtio struct {
-	util.BuildVariables
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the API server
-	client       client.Client
-	scheme       *runtime.Scheme
-	apiReader    client.Reader
-	coreClient   corev1client.CoreV1Interface
-	oauthClient  oauthclient.Interface
-	configClient configclient.Interface
-	apiClient    kclient.Interface
-	apiSpec      *capabilities.ApiServerSpec
-	logger       logr.Logger
-	operatorPod   types.NamespacedName
-}
 
 // DeploymentConfiguration acquires properties used in deployment
 type DeploymentConfiguration struct {
@@ -469,7 +498,8 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			"Phase", newStatus.Phase,
 			"URL", newStatus.URL,
 			"Replicas", newStatus.Replicas,
-			"Image", newStatus.Image)
+			"Image", newStatus.Image,
+			"Gateway Image", newStatus.GatewayImage)
 		if err := r.client.Status().Update(ctx, hawtio); err != nil {
 			r.logger.Error(err, "Failed to update Hawtio status")
 			return reconcile.Result{}, err
