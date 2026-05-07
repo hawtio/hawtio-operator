@@ -9,18 +9,38 @@ import (
 	"time"
 )
 
+const fetchAttempts = 3
+
+func retryGetDigest(imageURL string) (string, error) {
+	var digest string
+	var err error
+
+	// Retry up to 3 times
+	for i := 0; i < fetchAttempts; i++ {
+		// Use a generous timeout for CI
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+
+		digest, err = GetLatestDigest(ctx, imageURL)
+		cancel()
+
+		if err == nil {
+			return digest, nil // Success!
+		}
+
+		time.Sleep(2 * time.Second) // Small backoff before retrying
+	}
+
+	return digest, err
+}
+
 func TestGetLatestDigest_PublicQuayImage(t *testing.T) {
 	// Public hawtio image of quay
 	imageURL := "quay.io/hawtio/online:2.4.0"
 
-	// Create a context with a timeout to simulate the operator environment
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	// Call our function with nil secrets
-	digest, err := GetLatestDigest(ctx, imageURL)
+	digest, err := retryGetDigest(imageURL)
 	if err != nil {
-		t.Fatalf("Failed to fetch digest: %v", err)
+		t.Fatalf("Failed to fetch digest after %d attempts: %v", fetchAttempts, err)
 	}
 
 	// Basic validation
@@ -40,9 +60,7 @@ func TestGetLatestDigest_AirGappedSimulation(t *testing.T) {
 	// Simulates a disconnected/air-gapped cluster trying to reach the outside world.
 	imageURL := "quay.invalid/hawtio/online:latest"
 
-	ctx := context.Background()
-
-	digest, err := GetLatestDigest(ctx, imageURL)
+	digest, err := retryGetDigest(imageURL)
 
 	if err == nil {
 		t.Fatalf("Expected a network error for an unreachable registry, but got nil with digest: %s", digest)
@@ -61,9 +79,7 @@ func TestGetLatestDigest_InvalidImageReference(t *testing.T) {
 	// OCI conventions state that container urls cannot contain capitals
 	imageURL := "quay.io/HAWTIO/online:latest"
 
-	ctx := context.Background()
-
-	_, err := GetLatestDigest(ctx, imageURL)
+	_, err := retryGetDigest(imageURL)
 
 	if err == nil {
 		t.Fatal("Expected an error for an invalid image string, but got nil")
