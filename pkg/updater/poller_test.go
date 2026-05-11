@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr/testr"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -90,11 +91,13 @@ func TestRegistryPoller_ExpectedUpdate(t *testing.T) {
 	}
 
 	triggerChan := make(chan event.GenericEvent, 1) // Buffer of 1 so it doesn't block
+	anonKeyChain := &DockerConfigKeychain{Auths: make(map[string]authn.AuthConfig)}
 
 	poller := &RegistryPoller{
 		Interval:        10 * time.Millisecond, // Run almost instantly
 		OnlineImageURL:  "quay.io/hawtio/online:latest",
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
+		AuthKeychain:    anonKeyChain,
 		Logger: testr.NewWithOptions(t, testr.Options{
 			Verbosity: 1,
 		}),
@@ -150,10 +153,12 @@ func TestRegistryPoller_Idempotency(t *testing.T) {
 	}
 
 	triggerChan := make(chan event.GenericEvent, 1)
+	anonKeyChain := &DockerConfigKeychain{Auths: make(map[string]authn.AuthConfig)}
 	poller := &RegistryPoller{
 		Interval:        10 * time.Millisecond,
 		OnlineImageURL:  "quay.io/hawtio/online:latest",
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
+		AuthKeychain:    anonKeyChain,
 		Trigger:         triggerChan,
 		Logger:          testr.New(t),
 		ExtraOptions:    []remote.Option{remote.WithTransport(mockTransport)},

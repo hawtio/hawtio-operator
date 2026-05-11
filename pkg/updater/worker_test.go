@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-containerregistry/pkg/authn"
 )
 
 const fetchAttempts = 3
@@ -14,13 +16,14 @@ const fetchAttempts = 3
 func retryGetDigest(imageURL string) (string, error) {
 	var digest string
 	var err error
+	anonKeyChain := &DockerConfigKeychain{Auths: make(map[string]authn.AuthConfig)}
 
 	// Retry up to 3 times
 	for i := 0; i < fetchAttempts; i++ {
 		// Use a generous timeout for CI
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 
-		digest, err = GetLatestDigest(ctx, imageURL)
+		digest, err = GetLatestDigest(ctx, imageURL, anonKeyChain)
 		cancel()
 
 		if err == nil {

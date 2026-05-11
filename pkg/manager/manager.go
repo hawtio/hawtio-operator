@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -35,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/hawtio/hawtio-operator/pkg/apis"
@@ -148,6 +150,22 @@ type mgrConfig struct {
 // MgrOption function to populate manager config
 type MgrOption func(*mgrConfig)
 
+// PollerConfig provides config parameters for creation
+// of the RegistryPoller (see createUpdatePoller)
+type PollerConfig struct {
+	Manager         manager.Manager
+	Namespace       string
+	BuildVars       util.BuildVariables
+	PollingInterval time.Duration
+	ExtraOptions    []remote.Option
+}
+
+// customPullSecretNameEnvVar is the constant for env variable CUSTOM_PULL_SECRET_NAME
+// can specify the name of a custom pull secret in the operator's namespace
+// An empty value means the operator will either try and find a global pull secret
+// (only if on OpenShift) or poll the image registry with no authentication.
+const customPullSecretNameEnvVar = "CUSTOM_PULL_SECRET_NAME"
+
 // WithRestConfig allows an external rest config to be defined
 func WithRestConfig(cfg *rest.Config) MgrOption {
 	return func(c *mgrConfig) {
@@ -204,6 +222,7 @@ func WithMetrics(metrics metricserver.Options) MgrOption {
 	}
 }
 
+// WithRegistryTransport allows an external transport for accessing a registry
 func WithRegistryTransport(transport http.RoundTripper) MgrOption {
 	return func(c *mgrConfig) {
 		c.registryTransport = transport
@@ -257,8 +276,10 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 
 	// mc.metrics can be empty
 
+	ctx := context.Background()
+
 	// Identify cluster capabilities
-	apiSpec, err := capabilities.APICapabilities(context.TODO(), mc.clientTools.ApiClient, mc.clientTools.ConfigClient)
+	apiSpec, err := capabilities.APICapabilities(ctx, mc.clientTools.ApiClient, mc.clientTools.ConfigClient)
 	if err != nil {
 		return nil, errs.Wrap(err, "Cluster API capability discovery failed")
 	}
@@ -298,9 +319,20 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	// Polling interval will be set by default but if the user
 	// has explicitly disabled then don't create the poller or channel
 	//
-	updatePoller, updateChannel, err := createUpdatePoller(mgr, mc.buildVariables, mc.updatePollingInterval, extraOptions)
+	cfg := PollerConfig{
+		Manager:         mgr,
+		Namespace:       operatorPod.Namespace,
+		BuildVars:       mc.buildVariables,
+		PollingInterval: mc.updatePollingInterval,
+		ExtraOptions:    extraOptions,
+	}
+
+	updatePoller, updateChannel, err := createUpdatePoller(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("unable to construct update poller: %w", err)
+		// Force the poller and channel to nil to ensure they are disabled.
+		log.Error(err, "Unable to construct update poller. Auto-updates will be disabled.")
+		updatePoller = nil
+		updateChannel = nil
 	}
 
 	// Register the hawtio controller with the manager
@@ -314,10 +346,20 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	return mgr, nil
 }
 
-func createUpdatePoller(mgr manager.Manager, bv util.BuildVariables, updatePollingInterval time.Duration, extraOptions []remote.Option) (*updater.RegistryPoller, chan event.GenericEvent, error) {
-	if updatePollingInterval == 0 {
+func createUpdatePoller(ctx context.Context, cfg PollerConfig) (*updater.RegistryPoller, chan event.GenericEvent, error) {
+	if cfg.PollingInterval == 0 {
 		log.Info("Update Poller: Image polling is disabled (interval is 0). Background updater will not be started.")
 		return nil, nil, nil
+	}
+
+	registryCreds, err := discoverRegistryCredentials(ctx, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pollerKeychain, err := parseKeychain(registryCreds)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	//
@@ -327,18 +369,63 @@ func createUpdatePoller(mgr manager.Manager, bv util.BuildVariables, updatePolli
 	updateChannel := make(chan event.GenericEvent)
 
 	poller := &updater.RegistryPoller{
-		Interval:        updatePollingInterval,
-		OnlineImageURL:  bv.ImageRepository + ":" + bv.ImageVersion,
-		GatewayImageURL: bv.GatewayImageRepository + ":" + bv.GatewayImageVersion,
+		Interval:        cfg.PollingInterval,
+		OnlineImageURL:  cfg.BuildVars.ImageRepository + ":" + cfg.BuildVars.ImageVersion,
+		GatewayImageURL: cfg.BuildVars.GatewayImageRepository + ":" + cfg.BuildVars.GatewayImageVersion,
 		Trigger:         updateChannel,
+		AuthKeychain:    pollerKeychain,
 		Logger:          log.WithName("Update Poller"),
-		ExtraOptions:    extraOptions,
+		ExtraOptions:    cfg.ExtraOptions,
 	}
 
-	if err := mgr.Add(poller); err != nil {
+	if err := cfg.Manager.Add(poller); err != nil {
 		log.Error(err, "Update Poller: failed to add registry poller to manager")
 		return nil, nil, err
 	}
 
 	return poller, updateChannel, nil
+}
+
+func discoverRegistryCredentials(ctx context.Context, cfg PollerConfig) ([]byte, error) {
+	secret := &corev1.Secret{}
+
+	// Try the custom secret in the Operator's namespace
+	customSecretName := os.Getenv(customPullSecretNameEnvVar)
+	if customSecretName != "" {
+		err := cfg.Manager.GetAPIReader().Get(ctx, client.ObjectKey{Namespace: cfg.Namespace, Name: customSecretName}, secret)
+		if err != nil {
+			// Fail on all errors as user specified CUSTOM_PULL_SECRET_NAME
+			return nil, fmt.Errorf("CUSTOM_PULL_SECRET_NAME was specified but the secret could not be retained: %w", err)
+		}
+
+		log.V(util.DebugLogLevel).Info("Secret obtained from CUSTOM_PULL_SECRET_NAME")
+
+		dockerConfigJSON, exists := secret.Data[corev1.DockerConfigJsonKey]
+		if !exists {
+			return nil, fmt.Errorf("(CUSTOM_PULL_SECRET_NAME) Secret %s exists but does not contain a %s key; is it a valid docker-registry secret?", customSecretName, corev1.DockerConfigJsonKey)
+		}
+
+		return dockerConfigJSON, nil
+	}
+
+	// Nothing found, proceed anonymously
+	return nil, nil
+}
+
+func parseKeychain(configBytes []byte) (authn.Keychain, error) {
+	// If no secret was found, return an empty keychain that always resolves to Anonymous
+	if len(configBytes) == 0 {
+		return &updater.DockerConfigKeychain{Auths: make(map[string]authn.AuthConfig)}, nil
+	}
+
+	var config struct {
+		Auths map[string]authn.AuthConfig `json:"auths"`
+	}
+
+	if err := json.Unmarshal(configBytes, &config); err != nil {
+		// If JSON parsing fails, return the error
+		return nil, err
+	}
+
+	return &updater.DockerConfigKeychain{Auths: config.Auths}, nil
 }
