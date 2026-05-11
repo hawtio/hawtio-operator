@@ -109,13 +109,15 @@ spec:
 > The `version` property present in previous versions of the CRD is no longer applicable
 > and any CRs applied to the cluster, containing this property, will have it automatically removed.
 
-### Overriding configuration of `Hawtio-Online`
+### Overriding configuration of `Hawtio-Operator` and `Hawtio-Online`
 Unlike previous versions of the operator, the version of the `Hawtio-Online` operand is now specified during the building of the operator. Therefore, it should be unnecessary to specify this version of the container image. However, should an override be required then it is possible to add extra environment variables to the deployment resource of this operator. Specifically:
 - IMAGE_VERSION: Adding this environment variable will override the version / tag of the `Hawtio-Online` container image, eg. `2.1.0-20240725`;
 - IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online` container image, eg. `quay.io/hawtio/online`;
 - GATEWAY_IMAGE_VERSION: Adding this environment variable will override the version / tag of the 'Hawtio-Online-Gateway' container image, eg. `2.1.0-20240725`;
 - GATEWAY_IMAGE_REPOSITORY: Adding this environment variable will override the image name / repository of the `Hawtio-Online-Gateway` container image, eg. `quay.io/hawtio/gateway`.
 - IMAGE_PULL_POLICY: Adding this environment variable will override the default pull policy (Always) of the deployed hawtio-online images. Accepted values are 'Always', 'IfNotPresent' and 'Never'.
+- OPERATOR_LOG_LEVEL: Adding this environment variable will override the level of logging that the operator performs. Current options are either `info` (default) or `debug`.
+- CUSTOM_PULL_SECRET_NAME: The name of a pull secret used by the updater for checking the image registry for new versions of the hawtio-online images.
 
 ## Features
 
@@ -192,6 +194,23 @@ All the routes to annotate can be listed in the `externalRoutes` field in the cu
     - second-route
     - third-route
 ```
+
+### Updating of `hawtio-online` images
+If the operator has already installed a hawtio-online instance and new versions of images are
+published to the same floating tag then the operator is capable of signalling an update to
+that installed version of hawtio-online.
+An updater routine can poll the registry which sourced the hawtio-online images and check
+whether new images are available. If there are new images then the operator's reconciler is
+triggered and the image properties of the hawtio-online deployment are updated. This leads to
+the hawtio-online deployment being restarted and a new instance of the pod is spun-up to
+replace the old one. Should there be no new versions then the updater returns to a quiet state
+until the next scheduled polling is due.
+
+#### Environment Variables
+The updater can be controlled with the following environment variable:
+- UPDATE_POLLING_INTERVAL: specifies the duration between checks for the updater to determine if new hawtio-online images are available for the operator to upgrade to. Values should be in the form of a duration, ie. `6h`, `12h`. The update is disabled with the default value set to `0`.
+- CUSTOM_PULL_SECRET_NAME: in the event that `hawtio-online` images are being pulled from a registry protected by authentication, it is necessary to provide the updater with the necessary credentials. The [pull secret](https://docs.okd.io/4.21/openshift_images/managing_images/using-image-pull-secrets.html) should be created in the operator's installed namespace and its name specified by this environment variable in the operator's deployment resource. The pull secret will then be extracted and the credentials used for authentication by the updater to the image registry. By default, if this environment variable is not provided, the updater will attempt an anonymous and unauthenticated connection to the image registry - this would be sufficient for public registries, eg. quay.io.
+
 ## Deploy
 
 To create the required resources by the operator (e.g. CRD, service account, roles, role binding, deployment, ...), run the following command:

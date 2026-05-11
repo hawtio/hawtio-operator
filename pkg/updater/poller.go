@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,7 @@ type RegistryPoller struct {
 	Interval        time.Duration
 	OnlineImageURL  string
 	GatewayImageURL string
+	AuthKeychain    authn.Keychain
 	Logger          logr.Logger
 	Trigger         chan event.GenericEvent // bi-directional channel
 	mu              sync.RWMutex
@@ -73,7 +75,7 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: Polling registry for new digests", "online image", p.OnlineImageURL, "gateway image", p.GatewayImageURL)
 
 	// Check Online Image
-	newOnlineDigest, errOnline := GetLatestDigest(ctx, p.OnlineImageURL, p.ExtraOptions...)
+	newOnlineDigest, errOnline := GetLatestDigest(ctx, p.OnlineImageURL, p.AuthKeychain, p.ExtraOptions...)
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Digest:", "digest", newOnlineDigest)
 
 	if errOnline != nil {
@@ -85,7 +87,7 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 	}
 
 	// Check Gateway Image
-	newGatewayDigest, errGateway := GetLatestDigest(ctx, p.GatewayImageURL, p.ExtraOptions...)
+	newGatewayDigest, errGateway := GetLatestDigest(ctx, p.GatewayImageURL, p.AuthKeychain, p.ExtraOptions...)
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Gateway Digest:", "digest", newGatewayDigest)
 	if errGateway != nil {
 		p.Logger.Error(errGateway, "Update Poller: Failed to check Gateway image registry. Skipping cycle.")

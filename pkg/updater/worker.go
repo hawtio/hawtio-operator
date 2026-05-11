@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
@@ -17,8 +18,7 @@ var ErrRegistryUnavailable = errors.New("registry connection failed or timed out
 
 // GetLatestDigest fetches the latest digest of the image
 // url from the container registry.
-// TODO: Handle authentication using a pullSecrets array
-func GetLatestDigest(ctx context.Context, imageURL string, extraOpts ...remote.Option) (string, error) {
+func GetLatestDigest(ctx context.Context, imageURL string, authKeychain authn.Keychain, extraOpts ...remote.Option) (string, error) {
 	// Parse the image string into a structured reference
 	ref, err := name.ParseReference(imageURL)
 	if err != nil {
@@ -31,6 +31,7 @@ func GetLatestDigest(ctx context.Context, imageURL string, extraOpts ...remote.O
 	// Setup remote options, injecting timeout context
 	options := []remote.Option{
 		remote.WithContext(timeoutCtx),
+		remote.WithAuthFromKeychain(authKeychain),
 	}
 
 	// Append any injected extra options
