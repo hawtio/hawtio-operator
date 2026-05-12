@@ -8,10 +8,11 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
-	"fmt"
 	"math/big"
 	rand2 "math/rand"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +39,7 @@ func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace s
 	var err error
 
 	if caSecret != nil {
-		caCertFile := caSecret.Data["tls.crt"]
+		caCertFile := caSecret.Data[corev1.TLSCertKey]
 		pemBlock, _ := pem.Decode(caCertFile)
 		if pemBlock == nil {
 			return nil, errors.New("failed to decode CA certificate")
@@ -48,7 +49,7 @@ func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace s
 			return nil, err
 		}
 
-		caKey := caSecret.Data["tls.key"]
+		caKey := caSecret.Data[corev1.TLSPrivateKeyKey]
 		pemBlock, _ = pem.Decode(caKey)
 		if pemBlock == nil {
 			return nil, errors.New("failed to decode CA certificate signing key")
@@ -113,7 +114,7 @@ func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace s
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Labels: 	 labels,
+			Labels:    labels,
 		}, Data: map[string][]byte{
 			corev1.TLSCertKey:       certPEM,
 			corev1.TLSPrivateKeyKey: privateKeyPem,
@@ -121,21 +122,41 @@ func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace s
 	}, nil
 }
 
-func ValidateCertificate(caSecret corev1.Secret, validAtLeastForHours float64) (bool, error) {
-	block, _ := pem.Decode(caSecret.Data[corev1.TLSCertKey])
+func certificateExpiryPeriod(hawtio *hawtiov2.Hawtio) time.Duration {
+	periodHours := hawtio.Spec.Auth.ClientCertExpirationPeriod
+	if periodHours == 0 {
+		periodHours = 24
+	}
+
+	return time.Duration(periodHours)
+}
+
+// checkCertificateExpiry evaluates the client certificate.
+// Returns: (nextCheck time.Duration) where 0 is rotate immediately
+func checkCertificateExpiry(hawtio *hawtiov2.Hawtio, secret *corev1.Secret, log logr.Logger) time.Duration {
+	certData, exists := secret.Data[corev1.TLSCertKey]
+	if !exists {
+		return 0 // Malformed secret, overwrite it
+	}
+
+	block, _ := pem.Decode(certData)
+	if block == nil {
+		return 0
+	}
+
 	cert, err := x509.ParseCertificate(block.Bytes)
-
 	if err != nil {
-		hawtioLogger.Error(err, "certificate reading error")
-		return false, err
+		return 0
 	}
 
-	diff := cert.NotAfter.Sub(time.Now()).Hours()
-	// if cert is valid longer than certain amount of hours
-	if diff > validAtLeastForHours {
-		hawtioLogger.Info(fmt.Sprintf("Certificate is valid for %.0f days", diff/24))
-		return true, nil
+	periodHours := certificateExpiryPeriod(hawtio)
+	threshold := periodHours * time.Hour
+	timeUntilExpiry := time.Until(cert.NotAfter)
+	if timeUntilExpiry <= threshold {
+		log.Info("Certificate expired or expiring soon. In-place rotation required.")
+		return 0
 	}
-	//if is valid
-	return false, nil
+
+	sleepDuration := timeUntilExpiry - threshold
+	return sleepDuration
 }

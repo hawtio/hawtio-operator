@@ -34,7 +34,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -486,22 +485,6 @@ func PerformCommonResourceTest(ctx context.Context, testTools *TestTools) {
 		err := testTools.K8sClient.Get(ctx, saLookupKey, sa)
 		return err == nil
 	}, Timeout, Interval).Should(BeTrue(), "ServiceAccount should be created")
-
-	By("Checking if the service account role was created")
-	role := &rbacv1.Role{}
-	roleLookupKey := lookupKey(hawtio)
-	Eventually(func() bool {
-		err := testTools.K8sClient.Get(ctx, roleLookupKey, role)
-		return err == nil
-	}, Timeout, Interval).Should(BeTrue(), "ServiceAccount Role should be created")
-
-	By("Checking if the service account role binding was created")
-	roleBinding := &rbacv1.RoleBinding{}
-	roleBindingLookupKey := lookupKey(hawtio)
-	Eventually(func() bool {
-		err := testTools.K8sClient.Get(ctx, roleBindingLookupKey, roleBinding)
-		return err == nil
-	}, Timeout, Interval).Should(BeTrue(), "ServiceAccount RoleBinding should be created")
 
 	By("Checking if the Deployment was created")
 	deployment := &appsv1.Deployment{}

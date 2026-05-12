@@ -205,7 +205,8 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			// Deployed phase
 			res, err = r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
-			assert.Equal(t, reconcile.Result{Requeue: false}, res)
+			// Requeue for ensure that certificates are rechecked
+			assert.Equal(t, reconcile.Result{Requeue: false, RequeueAfter: 24}, res)
 
 			t.Run("hawtio-online", func(t *testing.T) {
 				t.Run("check if the Hawtio has been created", func(t *testing.T) {

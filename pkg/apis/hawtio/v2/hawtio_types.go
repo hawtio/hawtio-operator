@@ -122,8 +122,9 @@ type HawtioAuth struct {
 	ClientCertCommonName string `json:"clientCertCommonName,omitempty"`
 	// The generated client certificate expiration date
 	ClientCertExpirationDate *metav1.Time `json:"clientCertExpirationDate,omitempty"`
-	// CronJob schedule that defines how often the expiry of the certificate will be checked.
-	// Client rotation isn't enabled if the schedule isn't set.
+	// Deprecated: ClientCertCheckSchedule is ignored in v2.0.0. The Operator now
+	// uses native Kubernetes event timers to schedule certificate rotation.
+	// +kubebuilder:validation:Optional
 	ClientCertCheckSchedule string `json:"clientCertCheckSchedule,omitempty"`
 	// The duration in hours before the expiration date, during which the certification can be rotated.
 	// The default is set to 24 hours.

@@ -1,21 +1,26 @@
 package hawtio
 
 import (
-  "context"
-  "fmt"
-  "time"
+	"context"
+	"fmt"
+	"time"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
-  corev1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-  "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-  hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
+
+// Cap the maximum requeue time to 24 hours
+// Maximum time to sleep before a requeue should take place
+var maxRequeueTime = 24 * time.Hour
 
 func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
 	if len(hawtio.Spec.Type) == 0 {
@@ -49,83 +54,208 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 	return false, nil // CR was not update and spec type checked out
 }
 
-func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey) (DeploymentConfiguration, error) {
+func (r *ReconcileHawtio) findConsoleURL(ctx context.Context) (string, error) {
+	if ! r.apiSpec.IsOpenShift4 {
+		return "", nil
+	}
+
+	//
+	// === Find the OCP Console Public URL ===
+	//
+	cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
+	if err != nil {
+		if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
+			r.logger.Error(err, "Error getting OpenShift managed configuration")
+			return "", err
+		}
+	}
+
+	return cm.Data["consoleURL"], nil
+}
+
+//
+// resolveProxyClientCertificate determines existence and validity
+// of the proxy certificate.
+// Returns (certificate secret, time before rotation required, error)
+//
+func (r *ReconcileHawtio) resolveProxyClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
+	if ! r.apiSpec.IsOpenShift4 {
+		return nil, 0, nil // not required on Kubernetes
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Resolving OpenShift proxying certificate")
+
+	//
+	// Create -proxying certificate - only applicable for OCP
+	//
+	clientCertSecret, expiryIn, err := osCreateClientCertificate(ctx, r, hawtio)
+	if err != nil {
+		if err == ErrLegacyResourceAdopted {
+			r.logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
+		} else {
+			r.logger.Error(err, "Failed to create OpenShift proxying certificate")
+		}
+		return nil, 0, err
+	}
+
+	// Can be nil in tests
+	if clientCertSecret != nil {
+		// Set the owner reference for garbage collection.
+		err = controllerutil.SetControllerReference(hawtio, clientCertSecret, r.scheme)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return clientCertSecret, expiryIn, nil
+}
+
+func (r *ReconcileHawtio) resolveServingClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
+	if r.apiSpec.IsOpenShift4 {
+		// -serving certificate is automatically created on OCP
+		return nil, 0, nil // not required on OCP
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Resolving Kubernetes serving certificate")
+
+	// Create -serving certificate
+	servingCertSecret, expiryIn, err := kubeCreateServingCertificate(ctx, r, hawtio)
+	if err != nil {
+		if err == ErrLegacyResourceAdopted {
+			r.logger.Error(err, "Kube serving certificate exists but need to adopt")
+		} else {
+			r.logger.Error(err, "Failed to create serving certificate")
+		}
+		return nil, 0, err
+	}
+
+	// Can be nil in tests
+	if servingCertSecret != nil {
+		// Set the owner reference for garbage collection.
+		err = controllerutil.SetControllerReference(hawtio, servingCertSecret, r.scheme)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return servingCertSecret, expiryIn, nil
+}
+
+func (r *ReconcileHawtio) resolveRouteCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, error) {
+	secretName := hawtio.Spec.Route.CertSecret.Name
+	if secretName == "" {
+		return nil, nil // no secret specified
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route certificate secret to deployment")
+
+	tlsRouteSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Structural Validation
+	if len(tlsRouteSecret.Data[corev1.TLSPrivateKeyKey]) == 0 || len(tlsRouteSecret.Data[corev1.TLSCertKey]) == 0 {
+		err := fmt.Errorf("custom route secret %s is missing required keys: tls.crt and/or tls.key", secretName)
+		r.logger.Error(err, "Invalid custom certificate secret")
+		return nil, err
+	}
+
+	// User mounted certificate so should NOT be adopted as a legacy resource or operator owned
+	return tlsRouteSecret, nil
+}
+
+func (r *ReconcileHawtio) resolveRouteCACertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, error) {
+	caCertSecretName := hawtio.Spec.Route.CaCert.Name
+	if caCertSecretName == "" {
+		return nil, nil // no secret specified
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA certificate secret to deployment")
+
+	caRouteSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, caCertSecretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Structural Validation
+	if len(caRouteSecret.Data[corev1.TLSPrivateKeyKey]) == 0 || len(caRouteSecret.Data[corev1.TLSCertKey]) == 0 {
+		err := fmt.Errorf("custom route secret %s is missing required keys: tls.crt and/or tls.key", caCertSecretName)
+		r.logger.Error(err, "Invalid custom certificate secret")
+		return nil, err
+	}
+
+	// User mounted certificate so should NOT be adopted as a legacy resource or operator owned
+	return caRouteSecret, nil
+}
+
+func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawtio *hawtiov2.Hawtio) (DeploymentConfiguration, error) {
 	deploymentConfiguration := DeploymentConfiguration{}
 
-	if r.apiSpec.IsOpenShift4 {
-		//
-		// === Find the OCP Console Public URL ===
-		//
-		r.logger.V(util.DebugLogLevel).Info("Setting console URL on deployment")
+	//
+	// Find the OpenShift Console URL if appropriate
+	//
+	r.logger.V(util.DebugLogLevel).Info("Setting console URL on deployment")
+	url, err := r.findConsoleURL(ctx)
+	if err != nil {
+		return deploymentConfiguration, err
+	}
+	deploymentConfiguration.openShiftConsoleURL = url
 
-		cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
-		if err != nil {
-			if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
-				r.logger.Error(err, "Error getting OpenShift managed configuration")
-				return deploymentConfiguration, err
-			}
-		} else {
-			deploymentConfiguration.openShiftConsoleURL = cm.Data["consoleURL"]
-		}
-
-		r.logger.V(util.DebugLogLevel).Info("Creating OpenShift proxying certificate")
-
-		//
-		// === Create -proxying certificate - only applicable for OCP ===
-		// === -serving certificate is automatically created on OCP ===
-		//
-		clientCertSecret, err := osCreateClientCertificate(ctx, r, hawtio, namespacedName.Name, namespacedName.Namespace)
-		if err != nil {
-			if err == ErrLegacyResourceAdopted {
-				r.logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
-			} else {
-				r.logger.Error(err, "Failed to create OpenShift proxying certificate")
-			}
-			return deploymentConfiguration, err
-		}
-		deploymentConfiguration.clientCertSecret = clientCertSecret
-	} else {
-		//
-		// === Create the Kubernetes serving certificate ===
-		//
-		r.logger.V(util.DebugLogLevel).Info("Creating Kubernetes serving certificate")
-
-		// Create -serving certificate
-		servingCertSecret, err := kubeCreateServingCertificate(ctx, r, hawtio, namespacedName.Name, namespacedName.Namespace)
-		if err != nil {
-			if err == ErrLegacyResourceAdopted {
-				r.logger.Error(err, "Kube serving certificate exists but need to adopt")
-			} else {
-				r.logger.Error(err, "Failed to create serving certificate")
-			}
-			return deploymentConfiguration, err
-		}
-		deploymentConfiguration.servingCertSecret = servingCertSecret
+	//
+	// Log if deprecated clientCertCheckSchedule still used in CR
+	//
+	if hawtio.Spec.Auth.ClientCertCheckSchedule != "" {
+		r.logger.Info("Notice: clientCertCheckSchedule is deprecated in v2+ and is being ignored. " +
+			"Certificate rotation is now handled natively by the controller.")
 	}
 
 	//
-	// === Custom Route certificate defined in Hawtio CR ===
+	// Create, find or update a proxy client certificate if appropriate
 	//
-	if secretName := hawtio.Spec.Route.CertSecret.Name; secretName != "" {
-		r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route certificate secret to deployment")
-		deploymentConfiguration.tlsRouteSecret = &corev1.Secret{}
-		err := r.client.Get(ctx, client.ObjectKey{Namespace: namespacedName.Namespace, Name: secretName}, deploymentConfiguration.tlsRouteSecret)
-		if err != nil {
-			return deploymentConfiguration, err
+	proxySecret, expiryIn, err := r.resolveProxyClientCertificate(ctx, hawtio)
+	if err != nil {
+		return deploymentConfiguration, err
+	}
+	deploymentConfiguration.clientCertSecret = proxySecret
+	// Sleep for a maximum of maxRequeueTime
+	deploymentConfiguration.requeueAfter = min(expiryIn, maxRequeueTime)
+
+	//
+	// Create, find or update a serving client certificate if appropriate
+	//
+	servingSecret, expiryIn, err := r.resolveServingClientCertificate(ctx, hawtio)
+	if err != nil {
+		return deploymentConfiguration, err
+	}
+	deploymentConfiguration.servingCertSecret = servingSecret
+
+	// If the serving cert has a valid expiration timer...
+	if expiryIn > 0 {
+		// Adopt it IF no timer yet, OR if it's shorter than the current timer
+		if deploymentConfiguration.requeueAfter == 0 || expiryIn < deploymentConfiguration.requeueAfter {
+			// Sleep for a maximum of maxRequeueTime
+			deploymentConfiguration.requeueAfter = min(expiryIn, maxRequeueTime)
 		}
 	}
 
 	//
-	// === Custom Route CA certificate defined in Hawtio CR ===
+	// Custom Route certificate defined in Hawtio CR
 	//
-	if caCertSecretName := hawtio.Spec.Route.CaCert.Name; caCertSecretName != "" {
-		r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA secret to deploment")
-		deploymentConfiguration.caCertRouteSecret = &corev1.Secret{}
-		err := r.client.Get(ctx, client.ObjectKey{Namespace: namespacedName.Namespace, Name: caCertSecretName}, deploymentConfiguration.caCertRouteSecret)
-		if err != nil {
-			return deploymentConfiguration, err
-		}
+	tlsRouteSecret, err := r.resolveRouteCertificate(ctx, hawtio)
+	if err != nil {
+		return deploymentConfiguration, err
 	}
+	deploymentConfiguration.tlsRouteSecret = tlsRouteSecret
+
+	//
+	// Custom Route CA certificate defined in Hawtio CR
+	//
+	caCertRouteSecret, err := r.resolveRouteCACertificate(ctx, hawtio)
+	if err != nil {
+		return deploymentConfiguration, err
+	}
+	deploymentConfiguration.caCertRouteSecret = caCertRouteSecret
 
 	return deploymentConfiguration, nil
 }
@@ -172,5 +302,5 @@ func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, blue
 		ensureSpecIntegrity(blueprint, obj)
 	}
 
-  return obj, nil
+	return obj, nil
 }
