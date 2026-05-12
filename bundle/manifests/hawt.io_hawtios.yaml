@@ -843,8 +843,8 @@ spec:
                 properties:
                   clientCertCheckSchedule:
                     description: |-
-                      CronJob schedule that defines how often the expiry of the certificate will be checked.
-                      Client rotation isn't enabled if the schedule isn't set.
+                      Deprecated: ClientCertCheckSchedule is ignored in v2.0.0. The Operator now
+                      uses native Kubernetes event timers to schedule certificate rotation.
                     type: string
                   clientCertCommonName:
                     description: The generated client certificate CN

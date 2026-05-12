@@ -235,6 +235,7 @@ type DeploymentConfiguration struct {
 	tlsRouteSecret      *corev1.Secret // custom route certificate secret
 	caCertRouteSecret   *corev1.Secret // custom CA certificate secret
 	servingCertSecret   *corev1.Secret // -serving certificate secret
+	requeueAfter        time.Duration  // time until next required requeuing of reconciler
 }
 
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
@@ -249,7 +250,6 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
 
 	crNamespacedName := request.NamespacedName
-	opNamespacedName := r.operatorPod
 
 	// =====================================================================
 	// PHASE 1: SETUP & FETCH
@@ -337,16 +337,9 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return handleResultAndError(err)
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account Role and Binding ===")
-	opResult, err = r.reconcileServiceAccountRole(ctx, hawtio)
-	r.logOperationResult("ServiceAccountRole", opResult)
-	if err != nil {
-		return handleResultAndError(err)
-	}
-
 	// Intialize the deployment inputs required for the deployment resources
 	r.logger.V(util.DebugLogLevel).Info("=== Initializing Deployment Configuration ===")
-	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, crNamespacedName)
+	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio)
 	if err != nil {
 		return handleResultAndError(err)
 	}
@@ -424,14 +417,6 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return handleResultAndError(err)
 	}
 
-	// Reconcile the Certificate cronjob resource, if applicable
-	r.logger.V(util.DebugLogLevel).Info("=== Reconciling CronJob ===")
-	opResult, err = r.reconcileCronJob(ctx, hawtio, crNamespacedName, opNamespacedName, deploymentConfig)
-	r.logOperationResult("ConsoleLink", opResult)
-	if err != nil {
-		return handleResultAndError(err)
-	}
-
 	// =====================================================================
 	// PHASE 5: UPDATE PHASE
 	// =====================================================================
@@ -504,6 +489,11 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			r.logger.Error(err, "Failed to update Hawtio status")
 			return reconcile.Result{}, err
 		}
+	}
+
+	if deploymentConfig.requeueAfter > 0 {
+		r.logger.Info("Reconciliation complete. Scheduling next cert rotation check.", "WakeUpIn", deploymentConfig.requeueAfter.String())
+		return reconcile.Result{RequeueAfter: deploymentConfig.requeueAfter}, nil
 	}
 
 	return reconcile.Result{}, nil
