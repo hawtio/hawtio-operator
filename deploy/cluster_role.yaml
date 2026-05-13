@@ -3,55 +3,95 @@ kind: ClusterRole
 metadata:
   name: hawtio-operator
 rules:
+
+#
 # --- SECRETS (Isolated) ---
+#
+
+# Required for management of the hawtio-online proxy
+# certificate on OpenShift
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["create", "get", "list", "update", "watch"]
 
+#
 # --- CORE RESOURCES (High Privilege) ---
+#
+
+# Required for direct administration of hawtio-online resources
 - apiGroups: [""]
   resources: ["configmaps", "serviceaccounts", "services"]
-  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  verbs: ["create", "get", "list", "patch", "update", "watch"]
 
+#
 # --- APPS (High Privilege) ---
+#
+
+# Required for direct administration of the hawtio-online deployments
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["create", "get", "list", "patch", "update", "watch"]
 
+#
 # --- NETWORKING ---
+#
+
+# Required for administration of routes on OpenShift
 - apiGroups: ["route.openshift.io"]
   resources: ["routes"]
   verbs: ["create", "delete", "get", "list", "update", "patch", "watch"]
 - apiGroups: ["route.openshift.io"]
   resources: ["routes/custom-host"]
   verbs: ["create"]
+
+# Required for administration of ingresses on Kubernetes
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses"]
   verbs: ["create", "get", "list", "update", "patch", "watch"]
 
+#
 # --- OPENSHIFT ---
+#
+
+# Required for creating, modifying, deleting
+# console links and console yaml samples
 - apiGroups: ["console.openshift.io"]
   resources: ["consolelinks", "consoleyamlsamples"]
   verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
-- apiGroups: ["template.openshift.io"]
-  resources: ["processedtemplates"]
-  verbs: ["create", "get", "list", "update", "patch"]
+
+# Required for creating, modifying oauthclient
+# resources for authentication access
 - apiGroups: ["oauth.openshift.io"]
   resources: ["oauthclients"]
   verbs: ["create", "get", "list", "update", "watch"]
 
+#
 # --- READ-ONLY METADATA ---
+#
+
+# Required for operator leader election
 - apiGroups: [""]
   resources: ["nodes", "pods"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get"]
+
+# Required for operator being able to read
+# the Hawtio CR schema (CRD)
 - apiGroups: ["apiextensions.k8s.io"]
   resources: ["customresourcedefinitions"]
   verbs: ["get", "list", "watch"]
+
+# Required to determine the version of the
+# OCP cluster (see capabilites package)
 - apiGroups: ["config.openshift.io"]
   resources: ["clusterversions"]
   verbs: ["get"]
 
-# --- HAWTIO CUSTOM RESOURCE ACCESS ---
+#
+# --- HAWTIO CUSTOM RESOURCE ---
+#
+
+# Required to read, write, delete the
+# Hawtio Custom Resources
 - apiGroups: ["hawt.io"]
   resources: ["*"]
   verbs: ["*"]
