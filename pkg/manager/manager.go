@@ -310,30 +310,43 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 		return nil, fmt.Errorf("unable to construct manager: %w", err)
 	}
 
-	var extraOptions []remote.Option
-	if mc.registryTransport != nil {
-		extraOptions = append(extraOptions, remote.WithTransport(mc.registryTransport))
-	}
+	//
+	// DISABLES USE OF THE UPDATER
+	// (temporarily!)
+	//
+	// var extraOptions []remote.Option
+	// if mc.registryTransport != nil {
+	// 	extraOptions = append(extraOptions, remote.WithTransport(mc.registryTransport))
+	// }
 
+	//
+	// DISABLES USE OF THE UPDATER
+	// (temporarily!)
 	//
 	// Polling interval will be set by default but if the user
 	// has explicitly disabled then don't create the poller or channel
 	//
-	cfg := PollerConfig{
-		Manager:         mgr,
-		Namespace:       operatorPod.Namespace,
-		BuildVars:       mc.buildVariables,
-		PollingInterval: mc.updatePollingInterval,
-		ExtraOptions:    extraOptions,
-	}
+	// cfg := PollerConfig{
+	// 	Manager:         mgr,
+	// 	Namespace:       operatorPod.Namespace,
+	// 	BuildVars:       mc.buildVariables,
+	// 	PollingInterval: mc.updatePollingInterval,
+	// 	ExtraOptions:    extraOptions,
+	// }
 
-	updatePoller, updateChannel, err := createUpdatePoller(ctx, cfg)
-	if err != nil {
-		// Force the poller and channel to nil to ensure they are disabled.
-		log.Error(err, "Unable to construct update poller. Auto-updates will be disabled.")
-		updatePoller = nil
-		updateChannel = nil
-	}
+	//
+	// DISABLES USE OF THE UPDATER
+	// (temporarily!)
+	//
+	var updatePoller *updater.RegistryPoller
+	var updateChannel chan event.GenericEvent
+	// updatePoller, updateChannel, err := createUpdatePoller(ctx, cfg)
+	// if err != nil {
+	// 	// Force the poller and channel to nil to ensure they are disabled.
+	// 	log.Error(err, "Unable to construct update poller. Auto-updates will be disabled.")
+	// 	updatePoller = nil
+	// 	updateChannel = nil
+	// }
 
 	// Register the hawtio controller with the manager
 	if err := hawtio.Add(

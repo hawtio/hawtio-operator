@@ -176,16 +176,22 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 			}, "5s", "1s").Should(Succeed())
 		})
 
-		It("Dynamically updating Deployment images when the background poller detects new digests", func() {
-			hawtiotest.PerformCommonUpdaterTest(testTools, mgrState, "OpenShift")
-		})
+		//
+		// SKIPPED DUE TO UPDATER DISABLED
+		// (temporarily!)
+		//
+		XContext("targetting the Image Updater", func() {
+			It("Dynamically updating Deployment images when the background poller detects new digests", func() {
+				hawtiotest.PerformCommonUpdaterTest(testTools, mgrState, "OpenShift")
+			})
 
-		It("Updater poller tries to update images but encounters a network failure", func() {
-			hawtiotest.PerformCommonUpdaterNetworkFailureTest(testTools, mgrState, "OpenShift")
-		})
+			It("Updater poller tries to update images but encounters a network failure", func() {
+				hawtiotest.PerformCommonUpdaterNetworkFailureTest(testTools, mgrState, "OpenShift")
+			})
 
-		It("Updater poller tries to update images but encounters only a single updated image", func() {
-			hawtiotest.PerformCommonUpdaterPartialFailureTest(testTools, mgrState, "OpenShift")
+			It("Updater poller tries to update images but encounters only a single updated image", func() {
+				hawtiotest.PerformCommonUpdaterPartialFailureTest(testTools, mgrState, "OpenShift")
+			})
 		})
 	})
 
