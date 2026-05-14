@@ -10,6 +10,12 @@ rules:
 
 # Required for management of the hawtio-online proxy
 # certificate on OpenShift
+#
+# Note: the broad reading of secret is mitigate by the
+#       cache options placed on the manager
+#       (see createCacheOptions#manager.go)
+#       in that only those with hawtio labels are cached
+#       and watched.
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["create", "get", "list", "update", "watch"]
