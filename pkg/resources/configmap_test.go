@@ -111,6 +111,24 @@ func TestConfigForHawtio(t *testing.T) {
 			expectErr:    false,
 		},
 		{
+			name: "About Config - Dark mode background should fallback to standard background",
+			hawtio: &hawtiov2.Hawtio{
+				ObjectMeta: metav1.ObjectMeta{Name: "about-hawtio"},
+				Spec: hawtiov2.HawtioSpec{
+					Config: hawtiov2.HawtioConfig{
+						About: hawtiov2.HawtioAbout{
+							Title:            "My Corp Console",
+							BackgroundImgSrc: "https://mycorp.com/background.png",
+							// BackgroundDarkModeImgSrc is intentionally left blank
+						},
+					},
+				},
+			},
+			// Expects the dark mode logo to be automatically populated with the standard logo URL
+			expectedJSON: `{"about": {"title": "Hawtio Console"}, "about": {"title": "My Corp Console",  "backgroundImgSrc": "https://mycorp.com/background.png", "backgroundDarkModeImgSrc": "https://mycorp.com/background.png"}, "branding": {"appName":"Hawtio"}, "online": {"consoleLink": {}}}`,
+			expectErr:    false,
+		},
+		{
 			name: "Branding Config - Dark mode logo should fallback to standard logo",
 			hawtio: &hawtiov2.Hawtio{
 				ObjectMeta: metav1.ObjectMeta{Name: "branding-hawtio"},

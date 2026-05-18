@@ -249,6 +249,8 @@ type HawtioAbout struct {
 	ImgDarkModeSrc string `json:"imgDarkModeSrc,omitempty"`
 	// The background image to display on the About dialog
 	BackgroundImgSrc string `json:"backgroundImgSrc,omitempty"`
+	// The background image to display in dark mode on the About dialog
+	BackgroundDarkModeImgSrc string `json:"backgroundDarkModeImgSrc,omitempty"`
 }
 
 // The product information displayed in the About page
