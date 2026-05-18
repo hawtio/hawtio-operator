@@ -876,6 +876,10 @@ spec:
                           Deprecated: Use Description instead. This field is retained for backwards
                           compatibility but will be removed in a future release.
                         type: string
+                      backgroundDarkModeImgSrc:
+                        description: The background image to display in dark mode
+                          on the About dialog
+                        type: string
                       backgroundImgSrc:
                         description: The background image to display on the About
                           dialog

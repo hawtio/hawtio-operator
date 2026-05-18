@@ -123,6 +123,15 @@ func configForHawtio(hawtio *hawtiov2.Hawtio, hawtioConfigPath string) (string, 
 		workingConfig.Branding.AppLogoDarkModeURL = workingConfig.Branding.AppLogoURL
 	}
 
+	//
+	// Handle background image if the dark mode image has not been specified
+	//
+	// If a standard background is provided, but no dark mode background exists,
+	// override the upstream UI's default by cloning the standard background.
+	if workingConfig.About.BackgroundImgSrc != "" && workingConfig.About.BackgroundDarkModeImgSrc == "" {
+		workingConfig.About.BackgroundDarkModeImgSrc = workingConfig.About.BackgroundImgSrc
+	}
+
 	data, err = json.Marshal(workingConfig)
 	if err != nil {
 		return "", err

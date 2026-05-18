@@ -8,6 +8,7 @@ branding:
   appLogoDarkModeUrl: img/hawtio-logo.svg
   appLogoUrl: img/hawtio-logo.svg
   showAppName: true
+  backgroundImgSrc: img/background.svg
 online:
   consoleLink:
     text: Hawtio Console
