@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        go: ["1.25.9"]
+        go: ["1.26.2"]
     steps:
       - name: Install Go
         uses: actions/setup-go@v6
