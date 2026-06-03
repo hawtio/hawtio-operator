@@ -14,6 +14,12 @@ LAST_RELEASED_VERSION ?= 1.3.1
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 FORCE_TOOL_UPDATE ?= false
 
+# The supported architectures
+ARCHS ?= amd64 arm64
+
+# Destination registry prefix when pushing
+DESTINATION_PREFIX = docker://
+
 # Is this build part of an automated CI pipeline
 CI_BUILD ?= false
 
@@ -53,6 +59,23 @@ GEN_SUFFIX := gen.yaml
 #
 KOPTIONS := --load-restrictor LoadRestrictionsNone
 
+# Locate container binary (Priority: Podman > Docker)
+CONTAINER_BUILDER := $(shell command -v podman 2> /dev/null || command -v docker 2> /dev/null)
+
+#
+# When not being built inside a container
+# Safety check: Error out immediately if neither exists
+#
+ifneq ($(CI_BUILD),true)
+ifeq ($(CONTAINER_BUILDER),)
+	$(error Neither podman nor docker found in PATH. Please install and re-run.)
+endif
+endif
+
+# Boolean flag for Podman-specific logic
+# Checks if 'podman' is a substring of the path found
+IS_PODMAN := $(findstring podman,$(CONTAINER_BUILDER))
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -79,22 +102,11 @@ define set-kvars
 	$(KUSTOMIZE) edit set image $(DEFAULT_IMAGE)=$(IMAGE):$(VERSION)
 endef
 
-container-builder:
-ifeq (, $(shell command -v podman 2> /dev/null))
-ifeq (, $(shell command -v docker 2> /dev/null))
-	$(error "No podman or docker found in PATH. Please install and re-run")
-else
-CONTAINER_BUILDER=$(shell command -v docker 2> /dev/null)
-endif
-else
-CONTAINER_BUILDER=$(shell command -v podman 2> /dev/null)
-endif
-
 #---
 #
 #@ image
 #
-#== Compile the operator as a docker image
+#== Compile the operator as a set of architecture suffixed images
 #
 #* PARAMETERS:
 #** IMAGE:                            Set a custom image for the container image
@@ -105,32 +117,76 @@ endif
 #** HAWTIO_ONLINE_GATEWAY_VERSION:    Set the operator's target hawtio-online-gateway image version
 #
 #---
-image: container-builder
-	$(CONTAINER_BUILDER) build -t $(IMAGE):$(VERSION) \
-	--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
-	--build-arg HAWTIO_ONLINE_GATEWAY_IMAGE_NAME=$(HAWTIO_ONLINE_GATEWAY_IMAGE_NAME) \
-	--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
-	--build-arg HAWTIO_ONLINE_GATEWAY_VERSION=$(HAWTIO_ONLINE_GATEWAY_VERSION) \
-	--build-arg HAWTIO_OPERATOR_VERSION=$(VERSION) \
-	.
+image:
+	@echo "####### Building Hawtio Online container image..."
+	for arch in $(ARCHS); do \
+		echo "--- Building for $$arch ---"; \
+		$(CONTAINER_BUILDER) build --platform linux/$$arch \
+		-t $(IMAGE):$(VERSION)-$$arch \
+		--build-arg HAWTIO_ONLINE_IMAGE_NAME=$(HAWTIO_ONLINE_IMAGE_NAME) \
+		--build-arg HAWTIO_ONLINE_GATEWAY_IMAGE_NAME=$(HAWTIO_ONLINE_GATEWAY_IMAGE_NAME) \
+		--build-arg HAWTIO_ONLINE_VERSION=$(HAWTIO_ONLINE_VERSION) \
+		--build-arg HAWTIO_ONLINE_GATEWAY_VERSION=$(HAWTIO_ONLINE_GATEWAY_VERSION) \
+		--build-arg HAWTIO_OPERATOR_VERSION=$(VERSION) \
+		.; \
+	done
 
 #---
 #
-#@ publish-image
+#@ image-manifest
 #
-#== Compile the operator as a docker image then push the image to the repository
+#== Create a manifest image of the operator's archtecture child images
 #
 #* PARAMETERS:
 #** IMAGE:                            Set a custom image for the container image
 #** VERSION:                          Set a custom version for the container image tag
-#** HAWTIO_ONLINE_IMAGE_NAME:         Set the operator's target hawtio-online image name
-#** HAWTIO_ONLINE_GATEWAY_IMAGE_NAME: Set the operator's target hawtio-online-gateway image name
-#** HAWTIO_ONLINE_VERSION:            Set the operator's target hawtio-online image version
-#** HAWTIO_ONLINE_GATEWAY_VERSION:    Set the operator's target hawtio-online-gateway image version
 #
 #---
-publish-image: image
-	$(CONTAINER_BUILDER) push $(IMAGE):$(VERSION)
+image-manifest:
+ifndef IS_PODMAN
+	$(error Manifest creation and pushing requires Podman. Current engine: $(CONTAINER_BUILDER))
+endif
+	@echo "####### Creating Manifest Image ..."
+	-podman manifest rm $(IMAGE):$(VERSION)
+	podman manifest create $(IMAGE):$(VERSION)
+	for arch in $(ARCHS); do \
+		podman manifest add $(IMAGE):$(VERSION) $(IMAGE):$(VERSION)-$$arch; \
+	done
+	@echo "####### Manifest created. Tagging latest..."
+	podman tag $(IMAGE):$(VERSION) $(IMAGE):latest
+
+#---
+#
+#@ image-manifest-push
+#
+#== Publish the image to its tagged registry
+#
+#* PARAMETERS:
+#** IMAGE:                            Set a custom image for the container image
+#** VERSION:                          Set a custom version for the container image tag
+#
+#---
+image-manifest-push:
+ifndef IS_PODMAN
+	$(error Manifest creation and pushing requires Podman. Current engine: $(CONTAINER_BUILDER))
+endif
+	$(CONTAINER_BUILDER) manifest push --all $(IMAGE):$(VERSION) $(DESTINATION_PREFIX)$(IMAGE):$(VERSION)
+
+#---
+#
+#@ image-manifest-push-latest
+#
+#== Publish the 'latest' tag of the image to its registry
+#
+#* PARAMETERS:
+#** IMAGE:                            Set a custom image for the container image
+#
+#---
+image-manifest-push-latest:
+ifndef IS_PODMAN
+	$(error Manifest creation and pushing requires Podman. Current engine: $(CONTAINER_BUILDER))
+endif
+	$(CONTAINER_BUILDER) manifest push --all $(IMAGE):latest $(DESTINATION_PREFIX)$(IMAGE):latest
 
 #---
 #
@@ -144,7 +200,7 @@ publish-image: image
 build: generate compile test
 
 compile:
-	CGO_ENABLED=0 go build $(GOFLAGS) -o hawtio-operator ./cmd/manager/main.go
+	CGO_ENABLED=0 GOARCH=$(GOARCH) go build $(GOFLAGS) -o hawtio-operator ./cmd/manager/main.go
 
 # Generate Go code
 go-generate:
@@ -159,9 +215,9 @@ ifeq ($(CI_BUILD), false)
 ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v gotestfmt 2> /dev/null)))
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 endif
-	CGO_ENABLED=0 $(TEST_ENV_VARS) go test $(TEST_FLAGS) -count=1 -json ./... 2>&1 | gotestfmt
+	CGO_ENABLED=0 GOARCH=$(GOARCH) $(TEST_ENV_VARS) go test $(TEST_FLAGS) -count=1 -json ./... 2>&1 | gotestfmt
 else
-	CGO_ENABLED=0 $(TEST_ENV_VARS) go test $(TEST_FLAGS) -v -count=1 ./...
+	CGO_ENABLED=0 GOARCH=$(GOARCH) $(TEST_ENV_VARS) go test $(TEST_FLAGS) -v -count=1 ./...
 endif
 
 # Only instigate re-generation of manifests in non-production builds
@@ -329,7 +385,7 @@ validate-bundle: operator-sdk
 #** VERSION: Set the custom version for the bundle image
 #
 #---
-bundle-build: bundle container-builder
+bundle-build: bundle
 	$(CONTAINER_BUILDER) build -f bundle.Dockerfile -t $(BUNDLE_IMAGE_NAME):$(VERSION) .
 
 #---
@@ -344,7 +400,7 @@ bundle-build: bundle container-builder
 #** CSV_VERSION: Set the CSV version if different from the OPERATOR_VERSION / TAG
 #
 #---
-bundle-index: opm yq container-builder
+bundle-index: opm yq
 	BUNDLE_INDEX=$(BUNDLE_INDEX) INDEX_DIR=$(INDEX_DIR) PACKAGE=$(PACKAGE) YQ=$(YQ) \
 	OPM=$(OPM) BUNDLE_IMAGE=$(BUNDLE_IMAGE_NAME):$(VERSION) CSV_NAME=$(CSV_NAME) \
 	CSV_SKIPS="$(CSV_SKIP_RANGE)" CSV_REPLACES=$(CSV_REPLACES) CHANNELS="$(CHANNELS)" \

@@ -1,5 +1,6 @@
-FROM golang:1.26.2-alpine3.23 AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.26.2-alpine3.23 AS builder
 
+ARG TARGETARCH
 ARG HAWTIO_ONLINE_VERSION=latest
 ARG HAWTIO_ONLINE_IMAGE_NAME=quay.io/hawtio/online
 ARG HAWTIO_ONLINE_GATEWAY_VERSION=latest
@@ -21,7 +22,7 @@ WORKDIR /hawtio-operator
 
 COPY . .
 
-RUN GOLDFLAGS=${GOLDFLAGS} CI_BUILD=true make build
+RUN GOARCH=${TARGETARCH} GOLDFLAGS=${GOLDFLAGS} CI_BUILD=true make build
 
 FROM alpine:3.23
 
