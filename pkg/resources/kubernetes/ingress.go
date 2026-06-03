@@ -53,7 +53,7 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 		ingressTLS.SecretName = servingSecret.Name
 	}
 
-	pathPrefix := networkingv1.PathTypePrefix
+	pathPrefix := networkingv1.PathTypeImplementationSpecific
 
 	ingress := NewDefaultIngress(hawtio)
 	ingress.SetLabels(labels)
