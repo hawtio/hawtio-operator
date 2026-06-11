@@ -192,6 +192,9 @@ ifndef IS_PODMAN
 endif
 	$(CONTAINER_BUILDER) manifest push --all $(IMAGE):latest $(DESTINATION_PREFIX)$(IMAGE):latest
 
+list-images:
+	$(CONTAINER_BUILDER) images | grep hawtio
+
 #---
 #
 #@ build
