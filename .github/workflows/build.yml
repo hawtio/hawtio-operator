@@ -19,11 +19,16 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         go: ["1.26.2"]
+        arch: [ amd64, arm64 ]
     steps:
+      - name: Install QEMU static binaries for Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -41,11 +46,12 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Build
-        run: make build
-      - name: Build image
+      - name: Build on ${{matrix.arch}}
         run: |
-          make image
+          ARCHS=${{matrix.arch}} make build
+      - name: Build image on ${{matrix.arch}}
+        run: |
+          ARCHS=${{matrix.arch}} make image
       - name: Display image
         run: |
-          docker images
+          make list-images
