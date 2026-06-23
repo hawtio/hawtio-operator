@@ -68,7 +68,7 @@ func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace s
 		},
 		NotBefore:   time.Now(),
 		NotAfter:    expirationDate,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 	}
 
