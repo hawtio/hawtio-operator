@@ -6,5 +6,7 @@ namespace: hawtio
 resources:
 - cluster_role_binding.yaml
 - cluster_role.yaml
+- operator_role_binding.yaml
+- operator_role.yaml
 - service_account.yaml
 - operator.yaml
