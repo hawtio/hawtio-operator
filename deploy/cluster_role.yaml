@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: hawtio-operator
+  name: hawtio-operator-cluster-role
 rules:
 
 #
@@ -10,9 +10,10 @@ rules:
 
 # Required for management of the hawtio-online proxy
 # certificate on OpenShift
+#
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["create", "get", "list", "update", "watch"]
+  verbs: ["create", "delete"]
 
 #
 # --- CORE RESOURCES (High Privilege) ---

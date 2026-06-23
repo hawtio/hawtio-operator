@@ -190,10 +190,7 @@ spec:
           - secrets
           verbs:
           - create
-          - get
-          - list
-          - update
-          - watch
+          - delete
         - apiGroups:
           - ""
           resources:
@@ -343,6 +340,21 @@ spec:
                     cpu: 250m
                     memory: 100Mi
               serviceAccountName: hawtio-operator
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        serviceAccountName: hawtio-operator
     strategy: deployment
   installModes:
   - supported: true

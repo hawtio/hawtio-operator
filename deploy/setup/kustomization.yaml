@@ -8,4 +8,6 @@ resources:
 - ../cluster_role.yaml
 - ../cluster_role_binding.yaml
 - ../service_account.yaml
+- ../operator_role.yaml
+- ../operator_role_binding.yaml
 - hawtio-aggregation-rules.yaml
