@@ -15,6 +15,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
+	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
@@ -41,7 +42,7 @@ func (r *ReconcileHawtio) removeConsoleLink(ctx context.Context, consoleLinkName
 	return controllerutil.OperationResultUpdated, nil
 }
 
-func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig DeploymentConfiguration, route *routev1.Route) (controllerutil.OperationResult, error) {
+func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawtiov2.Hawtio, namespacedName client.ObjectKey, deploymentConfig cfg.DeploymentConfiguration, route *routev1.Route) (controllerutil.OperationResult, error) {
 	// If not OpenShift 4, ConsoleLink is irrelevant. Do nothing.
 	if !r.apiSpec.IsOpenShift4 {
 		r.logger.V(util.DebugLogLevel).Info("Not an OpenShift 4 cluster, skipping ConsoleLink reconciliation.")
@@ -64,7 +65,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 	}
 
 	r.logger.V(util.DebugLogLevel).Info("Reconcile ConsoleLink - Retrieving HawtConfig")
-	hawtconfig, err := resources.GetHawtioConfig(deploymentConfig.configMap)
+	hawtconfig, err := resources.GetHawtioConfig(deploymentConfig.ConfigMap)
 	if err != nil {
 		r.logger.Error(err, "Failed to get hawtconfig")
 		return controllerutil.OperationResultNone, err

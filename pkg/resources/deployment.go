@@ -15,6 +15,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -44,10 +45,10 @@ func NewDefaultDeployment(hawtio *hawtiov2.Hawtio) *appsv1.Deployment {
 	}
 }
 
-func NewDeployment(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables, log logr.Logger) (*appsv1.Deployment, error) {
+func NewDeployment(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, config cfg.DeploymentConfiguration, buildVariables util.BuildVariables, log logr.Logger) (*appsv1.Deployment, error) {
 	log.V(util.DebugLogLevel).Info("Reconciling deployment")
 
-	podTemplateSpec, err := newPodTemplateSpec(hawtio, apiSpec, openShiftConsoleURL, configMapVersion, clientCertSecretVersion, buildVariables, log)
+	podTemplateSpec, err := newPodTemplateSpec(hawtio, apiSpec, config, buildVariables, log)
 	if err != nil {
 		return nil, err
 	}
@@ -89,17 +90,17 @@ func newDeployment(hawtio *hawtiov2.Hawtio, replicas *int32, pts corev1.PodTempl
  *
  * Creates a new pod template comprising 2 constainers:
  * - The hawtio container is the main Hawtio-Online application image
- * - The gteway container is the auxiliary image that provides useful javascript functions to
+ * - The gateway container is the auxiliary image that provides useful javascript functions to
  *   the Hawtio-Online web server, inc. jolokia connection API and cluster URI checking
  *
  */
-func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, configMapVersion string, clientCertSecretVersion string, buildVariables util.BuildVariables, log logr.Logger) (corev1.PodTemplateSpec, error) {
+func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, config cfg.DeploymentConfiguration, buildVariables util.BuildVariables, log logr.Logger) (corev1.PodTemplateSpec, error) {
 	log.V(util.DebugLogLevel).Info("New Pod Template Spec")
 
 	hawtioVersion := buildVariables.GetOnlineVersion()
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Image Version: %s", hawtioVersion))
 
-	hawtioContainer := newHawtioContainer(hawtio, apiSpec, openShiftConsoleURL, hawtioVersion, buildVariables.ImageRepository, log)
+	hawtioContainer := newHawtioContainer(hawtio, apiSpec, config.OpenShiftConsoleURL, hawtioVersion, buildVariables.ImageRepository, log)
 
 	gatewayVersion := buildVariables.GetGatewayVersion()
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Gateway Image Version: %s", gatewayVersion))
@@ -107,11 +108,9 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	gatewayContainer := newGatewayContainer(hawtio, apiSpec, gatewayVersion, buildVariables.GatewayImageRepository, log)
 
 	annotations := map[string]string{
-		configVersionAnnotation: configMapVersion,
+		configVersionAnnotation: config.ConfigMap.GetResourceVersion(),
 	}
-	if clientCertSecretVersion != "" {
-		annotations[clientCertSecretVersionAnnotation] = clientCertSecretVersion
-	}
+
 	PropagateAnnotations(hawtio, annotations, log)
 
 	volumeMounts, err := newVolumeMounts(hawtio, apiSpec, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables, log)
@@ -149,7 +148,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 			gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
 		}
 	}
-	volumes := newVolumes(hawtio, apiSpec, log)
+	volumes := newVolumes(hawtio, apiSpec, config, log)
 
 	labels := LabelsForHawtio(hawtio.Name)
 	additionalLabels, err := labelUtils.ConvertSelectorToLabelsMap(buildVariables.AdditionalLabels)
@@ -183,7 +182,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	return pod, err
 }
 
-func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, log logr.Logger) []corev1.Volume {
+func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, config cfg.DeploymentConfiguration, log logr.Logger) []corev1.Volume {
 	log.V(util.DebugLogLevel).Info("Creating new volumes")
 
 	var volumes []corev1.Volume
@@ -194,9 +193,9 @@ func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, lo
 		volumes = append(volumes, volume)
 	}
 
-	if apiSpec.IsOpenShift4 {
-		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding secret volume for proxying certificate %s-tls-proxying at %s", hawtio.Name, clientCertificateSecretVolumeName))
-		volume := newSecretVolume(hawtio.Name+"-tls-proxying", clientCertificateSecretVolumeName)
+	if apiSpec.IsOpenShift4 && config.ClientCertSecret != nil {
+		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding secret volume for proxying certificate %s-tls-proxying at %s", config.ClientCertSecret.Name, clientCertificateSecretVolumeName))
+		volume := newSecretVolume(config.ClientCertSecret.Name, clientCertificateSecretVolumeName)
 		volumes = append(volumes, volume)
 	}
 

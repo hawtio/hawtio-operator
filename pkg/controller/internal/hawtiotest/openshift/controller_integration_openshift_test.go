@@ -4,6 +4,7 @@ package hawtiotest
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -136,6 +137,56 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 
 		It("Should create expected common resources", func() {
 			hawtiotest.PerformCommonResourceTest(mgrState.Ctx, testTools)
+
+			// =====================================================================
+			// TESTING THE TLS PROXY CERTIFICATES (MASTER & SLAVE)
+			// =====================================================================
+			By("Checking if the Hawtio Status has been updated with the Active Certificate name")
+			hawtio := &hawtiov2.Hawtio{}
+			Eventually(func() string {
+				err := testTools.K8sClient.Get(mgrState.Ctx, types.NamespacedName{Name: hawtiotest.HawtioName, Namespace: hawtiotest.HawtioNamespace}, hawtio)
+				if err != nil {
+					return ""
+				}
+				return hawtio.Status.ClientCertificate.Active
+			}, hawtiotest.Timeout, hawtiotest.Interval).Should(Not(BeEmpty()), "Hawtio status should eventually track the active slave secret name")
+
+			By("Checking if the Master Certificate Secret exists in the Operator namespace")
+			masterSecret := &corev1.Secret{}
+			// Adjust 'testTools.OperatorNamespace' or wherever your operator holds its master key
+			masterSecretKey := types.NamespacedName{
+				Name:      fmt.Sprintf("%s-tls-proxying", hawtio.Name),
+				Namespace: hawtiotest.OperatorPodNS,
+			}
+			Eventually(func() bool {
+				err := testTools.K8sClient.Get(mgrState.Ctx, masterSecretKey, masterSecret)
+				return err == nil
+			}, hawtiotest.Timeout, hawtiotest.Interval).Should(BeTrue(), "Master TLS Secret must exist in operator namespace")
+
+			Expect(masterSecret.Data).To(HaveKey("tls.crt"), "Master secret should contain a tls.crt payload")
+
+			// Capture the hashed runtime name from the status block
+			slaveSecretName := hawtio.Status.ClientCertificate.Active
+
+			By("Checking if the Slave Certificate Secret was created in the Operand namespace")
+			slaveSecret := &corev1.Secret{}
+			slaveSecretKey := types.NamespacedName{
+				Name:      slaveSecretName,
+				Namespace: hawtio.Namespace,
+			}
+			Eventually(func() bool {
+				err := testTools.K8sClient.Get(mgrState.Ctx, slaveSecretKey, slaveSecret)
+				return err == nil
+			}, hawtiotest.Timeout, hawtiotest.Interval).Should(BeTrue(), "Slave TLS Secret should be created in operand namespace")
+
+			By("Verifying the Slave Secret matches the Master data")
+			Expect(slaveSecret.Data["tls.crt"]).To(Equal(masterSecret.Data["tls.crt"]), "Slave secret data must match master data payload")
+			Expect(slaveSecret.Type).To(Equal(masterSecret.Type), "Slave secret should retain master secret type configuration")
+
+			By("Verifying the Slave Secret OwnerReference points directly to the Hawtio CR")
+			Expect(slaveSecret.OwnerReferences).To(HaveLen(1), "Slave secret must have exactly one owner reference")
+			Expect(slaveSecret.OwnerReferences[0].Name).To(Equal(hawtio.Name), "Owner name should point to the matching Hawtio CR name")
+			Expect(slaveSecret.OwnerReferences[0].UID).To(Equal(hawtio.UID), "Owner UID must map perfectly to avoid garbage collection errors")
 		})
 
 		It("Should ignore CRs in other namespaces", func() {
