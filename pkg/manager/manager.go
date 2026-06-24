@@ -89,7 +89,7 @@ func ConfigureScheme() (*runtime.Scheme, error) {
 
 // createCacheOptions
 // Restrict resource watching to only those resources with the app/hawtio label
-func createCacheOptions(watchNamespaces string, apiSpec *capabilities.ApiServerSpec) cache.Options {
+func createCacheOptions(watchNamespaces string, operatorNS string, apiSpec *capabilities.ApiServerSpec) cache.Options {
 	lblReq, _ := labels.NewRequirement("app", selection.Equals, []string{"hawtio"})
 	selector := labels.NewSelector().Add(*lblReq)
 
@@ -106,15 +106,29 @@ func createCacheOptions(watchNamespaces string, apiSpec *capabilities.ApiServerS
 				namespaces[cleanNs] = cache.Config{}
 			}
 		}
+
+		// Include the operator's own namespace in the cache
+		if operatorNS != "" {
+			namespaces[operatorNS] = cache.Config{}
+		}
 	}
+
+	secretNamespaces := make(map[string]cache.Config)
+	secretNamespaces[operatorNS] = cache.Config{}
 
 	cacheOptions := cache.Options{
 		DefaultNamespaces: namespaces,
 		ByObject: map[client.Object]cache.ByObject{
 			&appsv1.Deployment{}:    {Label: selector},
 			&corev1.ConfigMap{}:     {Label: selector},
-			&corev1.Secret{}:        {Label: selector},
 			&networkingv1.Ingress{}: {Label: selector},
+			// Secrets are limited to the operator's own namespace
+			// Since this cache is used by the controller watches, only
+			// these secrets will be watched.
+			&corev1.Secret{}: {
+				Label:      selector,
+				Namespaces: secretNamespaces,
+			},
 		},
 	}
 
@@ -289,7 +303,7 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	// Initialise the manager
 	//
 
-	cacheOptions := createCacheOptions(mc.watchNamespaces, apiSpec)
+	cacheOptions := createCacheOptions(mc.watchNamespaces, mc.operatorPodNS, apiSpec)
 
 	podName, found := os.LookupEnv("POD_NAME")
 	if !found {

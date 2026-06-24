@@ -1230,11 +1230,19 @@ spec:
                 type: string
             type: object
           status:
-            description: Reports the observed state of Hawtio
+            description: HawtioStatus reports the observed state of Hawtio
             properties:
               URL:
                 description: The Hawtio console route URL
                 type: string
+              clientCert:
+                description: Client Certificate
+                properties:
+                  active:
+                    type: string
+                  pending:
+                    type: string
+                type: object
               gatewayImage:
                 description: The Hawtio console gateway container image
                 type: string
