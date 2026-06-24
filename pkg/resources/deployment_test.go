@@ -10,6 +10,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 	"github.com/stretchr/testify/assert"
 )
@@ -51,9 +52,15 @@ func TestNewDeploymentLogging(t *testing.T) {
 	apiSpec := &capabilities.ApiServerSpec{
 		IsOpenShift4: true,
 	}
-	openShiftConsoleURL := ""
-	configMapVersion := ""
-	clientCertSecretVersion := ""
+	config := cfg.DeploymentConfiguration{
+		OpenShiftConsoleURL: "",
+		ConfigMap: &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				// Fake the resource version string that the deployment expects
+				ResourceVersion: "123456",
+			},
+		},
+	}
 	buildVariables := util.BuildVariables{
 		ImageRepository:        "quay.io/hawtio/online",
 		GatewayImageRepository: "quay.io/hawtio/online-gateway",
@@ -123,8 +130,7 @@ func TestNewDeploymentLogging(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
-			deployment, err := NewDeployment(tc.hawtio, apiSpec, openShiftConsoleURL, configMapVersion, clientCertSecretVersion, buildVariables, log)
+			deployment, err := NewDeployment(tc.hawtio, apiSpec, config, buildVariables, log)
 			assert.NoError(t, err)
 
 			onlineEnv := deployment.Spec.Template.Spec.Containers[0].Env
@@ -144,9 +150,15 @@ func TestNewDeploymentMaskIP(t *testing.T) {
 	apiSpec := &capabilities.ApiServerSpec{
 		IsOpenShift4: true,
 	}
-	openShiftConsoleURL := ""
-	configMapVersion := ""
-	clientCertSecretVersion := ""
+	config := cfg.DeploymentConfiguration{
+		OpenShiftConsoleURL: "",
+		ConfigMap: &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				// Fake the resource version string that the deployment expects
+				ResourceVersion: "123456",
+			},
+		},
+	}
 	buildVariables := util.BuildVariables{
 		ImageRepository:        "quay.io/hawtio/online",
 		GatewayImageRepository: "quay.io/hawtio/online-gateway",
@@ -212,7 +224,7 @@ func TestNewDeploymentMaskIP(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			deployment, err := NewDeployment(tc.hawtio, apiSpec, openShiftConsoleURL, configMapVersion, clientCertSecretVersion, buildVariables, log)
+			deployment, err := NewDeployment(tc.hawtio, apiSpec, config, buildVariables, log)
 			assert.NoError(t, err)
 
 			gatewayEnv := deployment.Spec.Template.Spec.Containers[1].Env
@@ -227,9 +239,15 @@ func TestNewDeploymentMasterBurstSize(t *testing.T) {
 	apiSpec := &capabilities.ApiServerSpec{
 		IsOpenShift4: true,
 	}
-	openShiftConsoleURL := ""
-	configMapVersion := ""
-	clientCertSecretVersion := ""
+	config := cfg.DeploymentConfiguration{
+		OpenShiftConsoleURL: "",
+		ConfigMap: &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				// Fake the resource version string that the deployment expects
+				ResourceVersion: "123456",
+			},
+		},
+	}
 	buildVariables := util.BuildVariables{
 		ImageRepository:        "quay.io/hawtio/online",
 		GatewayImageRepository: "quay.io/hawtio/online-gateway",
@@ -295,7 +313,7 @@ func TestNewDeploymentMasterBurstSize(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			deployment, err := NewDeployment(tc.hawtio, apiSpec, openShiftConsoleURL, configMapVersion, clientCertSecretVersion, buildVariables, log)
+			deployment, err := NewDeployment(tc.hawtio, apiSpec, config, buildVariables, log)
 			assert.NoError(t, err)
 
 			onlineEnv := deployment.Spec.Template.Spec.Containers[0].Env
