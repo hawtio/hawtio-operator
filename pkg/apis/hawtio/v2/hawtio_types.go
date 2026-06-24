@@ -157,7 +157,13 @@ type HawtioRBAC struct {
 	DisableRBACRegistry *bool `json:"disableRBACRegistry,omitempty"`
 }
 
-// Reports the observed state of Hawtio
+// HawtioClientCertificate provides the identifiers of the client certificate
+type HawtioClientCertificate struct {
+	Active  string `json:"active,omitempty"`
+	Pending string `json:"pending,omitempty"`
+}
+
+// HawtioStatus reports the observed state of Hawtio
 type HawtioStatus struct {
 	// The Hawtio console container image
 	Image string `json:"image,omitempty"`
@@ -171,9 +177,11 @@ type HawtioStatus struct {
 	Replicas int32 `json:"replicas,omitempty"`
 	// The label selector for the Hawtio pods
 	Selector string `json:"selector,omitempty"`
+	// Client Certificate
+	ClientCertificate HawtioClientCertificate `json:"clientCert,omitempty"`
 }
 
-// The Hawtio deployment phase
+// HawtioPhase is the Hawtio deployment phase
 // +kubebuilder:validation:Enum=Initialized;Deployed;Failed
 type HawtioPhase string
 

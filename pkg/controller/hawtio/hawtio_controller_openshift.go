@@ -12,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -45,19 +44,12 @@ func newSignedCertificateSecret(ctx context.Context, r *ReconcileHawtio, hawtio 
 	return clientCertSecret, nil
 }
 
-func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
-	// If we're in test mode, don't try to create a real cert.
-	// Just log it and return 'nil' to signal "no error, nothing to do".
-	if os.Getenv(HawtioUnderTestEnvVar) == "true" {
-		r.logger.Info(fmt.Sprintf("%s: Skipping OpenShift proxying certificate creation", HawtioUnderTestEnvVar))
-		return nil, 0, nil
-	}
+func (r *ReconcileHawtio) osCreateClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio, clientSecretName string) (*corev1.Secret, time.Duration, error) {
+	// Secret should be in the operator's own namespace
+	namespace := r.operatorPod.Namespace
 
-	// This secret name should be the same as used in deployment.go
-	clientSecretName := hawtio.Name + "-tls-proxying"
-
-	// Check whether client certificate secret exists
-	clientCertSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, clientSecretName, metav1.GetOptions{})
+	// Check whether client certificate secret exists in operator namespace
+	clientCertSecret, err := r.coreClient.Secrets(namespace).Get(ctx, clientSecretName, metav1.GetOptions{})
 	if err == nil {
 		// Found the secret
 
@@ -79,8 +71,8 @@ func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *
 		// Is the secret certificate invalid (expired).
 		// If so they need to update it with a new certificate.
 		//
-		expiryIn := checkCertificateExpiry(hawtio, clientCertSecret, r.logger)
-		if expiryIn == 0 {
+		nextCheckIn := checkCertificateExpiry(hawtio, clientCertSecret, r.logger)
+		if nextCheckIn == 0 {
 			// certificate is invalid or close to expiring
 			// create a new one and update the secret
 			newSecret, err := newSignedCertificateSecret(ctx, r, hawtio, clientCertSecret.Name, clientCertSecret.Namespace)
@@ -102,26 +94,33 @@ func osCreateClientCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *
 				return nil, 0, err
 			}
 
-			// reset expiryIn to maximum as new certificate
-			expiryIn = certificateExpiryPeriod(hawtio)
+			// reset nextCheckIn to maximum as new certificate
+			nextCheckIn = certificateExpiryPeriod(hawtio)
 		}
 
-		return clientCertSecret, expiryIn, nil
+		return clientCertSecret, nextCheckIn, nil
 	}
 
 	if kerrors.IsNotFound(err) {
 		conOsLog.Info("Client certificate secret not found, creating a new one", "secret", clientSecretName)
 
-		clientCertSecret, err := newSignedCertificateSecret(ctx, r, hawtio, clientSecretName, hawtio.Namespace)
-		if err != nil {
-			return nil, 0, err
+		var clientCertSecret *corev1.Secret
+		// If we're in test mode, don't try to create a real cert.
+		// Just log it and return 'nil' to signal "no error, nothing to do".
+		if os.Getenv(HawtioUnderTestEnvVar) == "true" {
+			r.logger.Info(fmt.Sprintf("%s: Creating OpenShift self-signed mock proxying certificate", HawtioUnderTestEnvVar))
+			clientCertSecret, err = newSelfCertificateSecret(ctx, r, hawtio, clientSecretName, namespace)
+			if err != nil {
+				return nil, 0, err
+			}
+		} else {
+			clientCertSecret, err = newSignedCertificateSecret(ctx, r, hawtio, clientSecretName, namespace)
+			if err != nil {
+				return nil, 0, err
+			}
 		}
 
-		err = controllerutil.SetControllerReference(hawtio, clientCertSecret, r.scheme)
-		if err != nil {
-			return nil, 0, err
-		}
-		clientCertSecret, err = r.coreClient.Secrets(hawtio.Namespace).Create(ctx, clientCertSecret, metav1.CreateOptions{})
+		clientCertSecret, err = r.coreClient.Secrets(namespace).Create(ctx, clientCertSecret, metav1.CreateOptions{})
 		conOsLog.Info("Client certificate created successfully", "secret", clientSecretName, "Resource Version", clientCertSecret.GetResourceVersion())
 		if err != nil {
 			return nil, 0, errs.Wrap(err, "Creating the client certificate secret failed")

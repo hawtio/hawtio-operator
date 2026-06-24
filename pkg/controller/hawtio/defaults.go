@@ -7,6 +7,7 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -15,12 +16,166 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
+	"github.com/hawtio/hawtio-operator/pkg/cfg"
+	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 // Cap the maximum requeue time to 24 hours
 // Maximum time to sleep before a requeue should take place
 var maxRequeueTime = 24 * time.Hour
+
+func (r *ReconcileHawtio) getOperatorOwner(ctx context.Context) (metav1.Object, error) {
+	r.logger.V(util.DebugLogLevel).Info("Getting operator owner ...")
+
+	// Get the Operator Pod using r.operatorPod
+	pod := &corev1.Pod{}
+	err := r.apiReader.Get(ctx, r.operatorPod, pod)
+	if err != nil {
+		return nil, err
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Found Operator Pod", "Pod", pod.Name, "Namespace", r.operatorPod.Namespace)
+
+	// Get the ReplicaSet Name from the Pod's OwnerReferences
+	podOwner := metav1.GetControllerOf(pod)
+	if podOwner == nil || podOwner.Kind != "ReplicaSet" {
+		// Fallback to owning Pod if not managed by a ReplicaSet (e.g., local testing)
+		return pod, nil
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Operator Pod Owner", "Owner", podOwner.Name, "Namespace", r.operatorPod.Namespace)
+
+	// Fetch the ReplicaSet
+	replicaSet := &appsv1.ReplicaSet{}
+	err = r.apiReader.Get(ctx, client.ObjectKey{Namespace: r.operatorPod.Namespace, Name: podOwner.Name}, replicaSet)
+	if err != nil {
+		return nil, err
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Found Operator ReplicaSet", "ReplicaSet", replicaSet.Name, "Namespace", r.operatorPod.Namespace)
+
+	// Get the Deployment Name from the ReplicaSet's OwnerReferences
+	rsOwner := metav1.GetControllerOf(replicaSet)
+	if rsOwner == nil || rsOwner.Kind != "Deployment" {
+		// Fallback to ReplicaSet if no Deployment owner exists
+		return replicaSet, nil
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Operator ReplicaSet Owner", "Owner", rsOwner.Name, "Namespace", r.operatorPod.Namespace)
+
+	// Fetch the Deployment struct
+	deployment := &appsv1.Deployment{}
+	err = r.apiReader.Get(ctx, client.ObjectKey{Namespace: r.operatorPod.Namespace, Name: rsOwner.Name}, deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	r.logger.V(util.DebugLogLevel).Info("Found Operator Deployment", "Deployment", deployment.Name, "Namespace", r.operatorPod.Namespace)
+	return deployment, nil
+}
+
+//
+// reconcileMasterClientCertificate determines existence and validity
+// of the proxy master client certificate.
+// Returns (certificate secret, time before next check required, error)
+//
+func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
+	if ! r.apiSpec.IsOpenShift4 {
+		return nil, 0, nil // not required on Kubernetes
+	}
+
+	clientSecretName := fmt.Sprintf("%s-tls-proxying", hawtio.Name)
+
+	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift master proxying certificate in Operator Namespace %s", r.operatorPod.Namespace))
+
+	//
+	// Create proxying certificate in operator namespace - only applicable for OCP
+	// Check if operator's master proxy secret is created
+	//
+	clientCertSecret, nextCheckIn, err := r.osCreateClientCertificate(ctx, hawtio, clientSecretName)
+	if err != nil {
+		if err == ErrLegacyResourceAdopted {
+			r.logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
+		} else {
+			r.logger.Error(err, "Failed to create OpenShift proxying certificate")
+		}
+		return nil, 0, err
+	}
+
+	if clientCertSecret != nil {
+		r.logger.V(util.DebugLogLevel).Info("Setting owner of client secret", "Secret Name" , clientCertSecret.Name, "Secret Namespace", clientCertSecret.Namespace)
+
+		// Set the owner reference for garbage collection.
+		owner, err := r.getOperatorOwner(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		r.logger.V(util.DebugLogLevel).Info("Client Secret", "Owner", owner.GetName(), "Namespace", owner.GetNamespace())
+
+		err = controllerutil.SetControllerReference(owner, clientCertSecret, r.scheme)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return clientCertSecret, nextCheckIn, nil
+}
+
+//
+// resolveSlaveClientCertificate determines existence and validity
+// of the proxy slave client certificate.
+// Returns (certificate secret, error)
+//
+func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio, masterSecret *corev1.Secret, targetName *string) (*corev1.Secret, error) {
+	if ! r.apiSpec.IsOpenShift4 || targetName == nil {
+		return nil, nil // not required on Kubernetes
+	}
+
+	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift proxying certificate %s", *targetName))
+
+	// Instantiate the new structure for the slave secret
+	slaveSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      *targetName,
+			Namespace: hawtio.Namespace,
+		},
+		// Duplicate the raw payload maps explicitly
+		Type: masterSecret.Type,
+		Data: make(map[string][]byte),
+	}
+
+	labels := resources.LabelsForHawtio(hawtio.Name)
+	resources.PropagateLabels(hawtio, labels, r.logger)
+	slaveSecret.SetLabels(labels)
+
+	// Deep copy the key/value data pairs from the master secret
+	for key, value := range masterSecret.Data {
+		newValue := make([]byte, len(value))
+		copy(newValue, value)
+		slaveSecret.Data[key] = newValue
+	}
+
+	err := controllerutil.SetControllerReference(hawtio, slaveSecret, r.scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	// Execute atomic blind creation
+	err = r.client.Create(ctx, slaveSecret)
+	if err != nil {
+		// If the API server says it's already there, our blind self-healing/staging logic is satisfied.
+		if kerrors.IsAlreadyExists(err) {
+			r.logger.Info("Target secret already exists in Hawtio CR namespace. Skipping creation.", "Namespace", hawtio.Namespace, "Name", targetName)
+			return slaveSecret, nil
+		}
+		// Bubble up genuine cluster or RBAC errors
+		return nil, err
+	}
+
+	r.logger.Info("Successfully duplicated secret to Hawtio CR namespace.", "Namespace", hawtio.Namespace, "Name", targetName)
+	return slaveSecret, nil
+}
 
 func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
 	if len(hawtio.Spec.Type) == 0 {
@@ -71,43 +226,6 @@ func (r *ReconcileHawtio) findConsoleURL(ctx context.Context) (string, error) {
 	}
 
 	return cm.Data["consoleURL"], nil
-}
-
-//
-// resolveProxyClientCertificate determines existence and validity
-// of the proxy certificate.
-// Returns (certificate secret, time before rotation required, error)
-//
-func (r *ReconcileHawtio) resolveProxyClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
-	if ! r.apiSpec.IsOpenShift4 {
-		return nil, 0, nil // not required on Kubernetes
-	}
-
-	r.logger.V(util.DebugLogLevel).Info("Resolving OpenShift proxying certificate")
-
-	//
-	// Create -proxying certificate - only applicable for OCP
-	//
-	clientCertSecret, expiryIn, err := osCreateClientCertificate(ctx, r, hawtio)
-	if err != nil {
-		if err == ErrLegacyResourceAdopted {
-			r.logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
-		} else {
-			r.logger.Error(err, "Failed to create OpenShift proxying certificate")
-		}
-		return nil, 0, err
-	}
-
-	// Can be nil in tests
-	if clientCertSecret != nil {
-		// Set the owner reference for garbage collection.
-		err = controllerutil.SetControllerReference(hawtio, clientCertSecret, r.scheme)
-		if err != nil {
-			return nil, 0, err
-		}
-	}
-
-	return clientCertSecret, expiryIn, nil
 }
 
 func (r *ReconcileHawtio) resolveServingClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
@@ -189,8 +307,18 @@ func (r *ReconcileHawtio) resolveRouteCACertificate(ctx context.Context, hawtio 
 	return caRouteSecret, nil
 }
 
-func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawtio *hawtiov2.Hawtio) (DeploymentConfiguration, error) {
-	deploymentConfiguration := DeploymentConfiguration{}
+func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawtio *hawtiov2.Hawtio, slaveClientSecret *corev1.Secret, nextCheckIn time.Duration) (cfg.DeploymentConfiguration, error) {
+	deploymentConfiguration := cfg.DeploymentConfiguration{}
+
+	//
+	// Assign the slaveClientSecret which may be nil if not applicable
+	//
+	deploymentConfiguration.ClientCertSecret = slaveClientSecret
+
+	//
+	// Assign the nextCheckIn as the RequeueAfter property
+	//
+	deploymentConfiguration.RequeueAfter = nextCheckIn
 
 	//
 	// Find the OpenShift Console URL if appropriate
@@ -200,7 +328,7 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	if err != nil {
 		return deploymentConfiguration, err
 	}
-	deploymentConfiguration.openShiftConsoleURL = url
+	deploymentConfiguration.OpenShiftConsoleURL = url
 
 	//
 	// Log if deprecated clientCertCheckSchedule still used in CR
@@ -211,31 +339,20 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	}
 
 	//
-	// Create, find or update a proxy client certificate if appropriate
-	//
-	proxySecret, expiryIn, err := r.resolveProxyClientCertificate(ctx, hawtio)
-	if err != nil {
-		return deploymentConfiguration, err
-	}
-	deploymentConfiguration.clientCertSecret = proxySecret
-	// Sleep for a maximum of maxRequeueTime
-	deploymentConfiguration.requeueAfter = min(expiryIn, maxRequeueTime)
-
-	//
 	// Create, find or update a serving client certificate if appropriate
 	//
 	servingSecret, expiryIn, err := r.resolveServingClientCertificate(ctx, hawtio)
 	if err != nil {
 		return deploymentConfiguration, err
 	}
-	deploymentConfiguration.servingCertSecret = servingSecret
+	deploymentConfiguration.ServingCertSecret = servingSecret
 
 	// If the serving cert has a valid expiration timer...
 	if expiryIn > 0 {
 		// Adopt it IF no timer yet, OR if it's shorter than the current timer
-		if deploymentConfiguration.requeueAfter == 0 || expiryIn < deploymentConfiguration.requeueAfter {
+		if deploymentConfiguration.RequeueAfter == 0 || expiryIn < deploymentConfiguration.RequeueAfter {
 			// Sleep for a maximum of maxRequeueTime
-			deploymentConfiguration.requeueAfter = min(expiryIn, maxRequeueTime)
+			deploymentConfiguration.RequeueAfter = min(expiryIn, maxRequeueTime)
 		}
 	}
 
@@ -246,7 +363,7 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	if err != nil {
 		return deploymentConfiguration, err
 	}
-	deploymentConfiguration.tlsRouteSecret = tlsRouteSecret
+	deploymentConfiguration.TLSRouteSecret = tlsRouteSecret
 
 	//
 	// Custom Route CA certificate defined in Hawtio CR
@@ -255,7 +372,7 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	if err != nil {
 		return deploymentConfiguration, err
 	}
-	deploymentConfiguration.caCertRouteSecret = caCertRouteSecret
+	deploymentConfiguration.CACertRouteSecret = caCertRouteSecret
 
 	return deploymentConfiguration, nil
 }

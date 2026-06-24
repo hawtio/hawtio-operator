@@ -11,6 +11,7 @@ import (
 
 	consolev1 "github.com/openshift/api/console/v1"
 	oauthv1 "github.com/openshift/api/oauth/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -51,7 +52,7 @@ func handleResultAndError(err error) (reconcile.Result, error) {
 		return reconcile.Result{RequeueAfter: reqErr.RequeueAfter}, nil
 	}
 
-	// Check for your existing legacy adoption
+	// Check for existing legacy adoption
 	if err == ErrLegacyResourceAdopted {
 		return reconcile.Result{Requeue: true}, nil
 	}
@@ -172,4 +173,31 @@ func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Haw
 
 	r.logger.V(util.DebugLogLevel).Info("Completed finalizer")
 	return true, nil
+}
+
+//
+// Excecutes a deletion of the secret with given name
+// from the hawtio CR namespace
+//
+func (r *ReconcileHawtio) deleteSecret(ctx context.Context, hawtio *hawtiov2.Hawtio, secretName string) error {
+	if len(secretName) == 0 {
+		return nil
+	}
+
+	r.logger.Info("Executing deletion of old client secret", "Name", secretName)
+
+	oldSlaveSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: hawtio.Namespace,
+		},
+	}
+
+	err := r.client.Delete(ctx, oldSlaveSecret)
+	if err != nil && !kerrors.IsNotFound(err) {
+		// Log but don't fail the loop; garbage collection handles leaks on CR deletion
+		r.logger.Error(err, "Failed to remove old active secret during tidy-up", "Name", secretName)
+	}
+
+	return nil
 }

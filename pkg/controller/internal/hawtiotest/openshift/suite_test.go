@@ -34,6 +34,7 @@ func TestIntegrationController(t *testing.T) {
 
 // BeforeSuite runs once before any tests in the suite.
 var _ = BeforeSuite(func() {
+
 	// Ensure the controller is placed under test mode
 	os.Setenv("HAWTIO_UNDER_TEST", "true")
 	os.Setenv("POD_NAME", hawtiotest.OperatorPodName)

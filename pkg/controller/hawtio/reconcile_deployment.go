@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"github.com/go-logr/logr"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 	appsv1 "k8s.io/api/apps/v1"
 )
 
-func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (controllerutil.OperationResult, error) {
+func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig cfg.DeploymentConfiguration) (controllerutil.OperationResult, error) {
 	// The object the K8s client fetches into, and ultimately saves.
 	targetDeployment := resources.NewDefaultDeployment(hawtio)
 	reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileDeployment", hawtio.Name))
@@ -51,17 +52,9 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			return err
 		}
 
-		clientCertSecretVersion := ""
-		if deploymentConfig.clientCertSecret != nil {
-			reqLogger.V(util.DebugLogLevel).Info("Assigning to deployment client certificate secret", "Resource Version", deploymentConfig.clientCertSecret.GetResourceVersion())
-			clientCertSecretVersion = deploymentConfig.clientCertSecret.GetResourceVersion()
-		}
-
 		// Local, ideal state generated from the Hawtio CR
-		blueprint, err := resources.NewDeployment(hawtio, r.apiSpec,
-			deploymentConfig.openShiftConsoleURL,
-			deploymentConfig.configMap.GetResourceVersion(),
-			clientCertSecretVersion,
+		blueprint, err := resources.NewDeployment(
+			hawtio, r.apiSpec, deploymentConfig,
 			r.BuildVariables, reqLogger)
 		if err != nil {
 			reqLogger.Error(err, "Error reconciling deployment")

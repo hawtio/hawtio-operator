@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	kresources "github.com/hawtio/hawtio-operator/pkg/resources/kubernetes"
 	oresources "github.com/hawtio/hawtio-operator/pkg/resources/openshift"
@@ -97,7 +98,7 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 	return opResult, nil
 }
 
-func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*routev1.Route, controllerutil.OperationResult, error) {
+func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig cfg.DeploymentConfiguration) (*routev1.Route, controllerutil.OperationResult, error) {
 	// Only create a route if confirmed as Openshift and supports routes
 	if !r.apiSpec.IsOpenShift4 || !r.apiSpec.Routes {
 		return nil, controllerutil.OperationResultNone, nil
@@ -149,7 +150,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		}
 
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
-		blueprint := oresources.NewRoute(hawtio, deploymentConfig.tlsRouteSecret, deploymentConfig.caCertRouteSecret, reqLogger)
+		blueprint := oresources.NewRoute(hawtio, deploymentConfig.TLSRouteSecret, deploymentConfig.CACertRouteSecret, reqLogger)
 
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *routev1.Route) {
 			// If hydration stripped required fields, patch them directly back from source
@@ -211,7 +212,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 	return targetRoute, opResult, nil
 }
 
-func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig DeploymentConfiguration) (*networkingv1.Ingress, controllerutil.OperationResult, error) {
+func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig cfg.DeploymentConfiguration) (*networkingv1.Ingress, controllerutil.OperationResult, error) {
 	// Only create an ingress if confirmed as not a route version of Openshift
 	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes {
 		return nil, controllerutil.OperationResultNone, nil
@@ -229,7 +230,7 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 		}
 
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
-		blueprint := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.servingCertSecret, reqLogger)
+		blueprint := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.ServingCertSecret, reqLogger)
 
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *networkingv1.Ingress) {
 			// If hydration stripped required fields, patch them directly back from source

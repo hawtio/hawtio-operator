@@ -3,6 +3,7 @@ package hawtio
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
 
@@ -26,6 +27,29 @@ func (r *ReconcileHawtio) setHawtioPhase(ctx context.Context, hawtio *hawtiov2.H
 	}
 
 	return nil
+}
+
+func (r *ReconcileHawtio) updateHawtioStatus(ctx context.Context, hawtio *hawtiov2.Hawtio, newStatus *hawtiov2.HawtioStatus) (bool, error) {
+	// Only send an update to the API server if the status has actually changed.
+	// This prevents empty updates and reduces load on the API server.
+	if !reflect.DeepEqual(hawtio.Status, newStatus) {
+		hawtio.Status = *newStatus
+		r.logger.Info("Status has changed, updating Hawtio CR",
+			"Phase", newStatus.Phase,
+			"URL", newStatus.URL,
+			"Replicas", newStatus.Replicas,
+			"Image", newStatus.Image,
+			"Gateway Image", newStatus.GatewayImage,
+			"Client Certificate", newStatus.ClientCertificate)
+		if err := r.client.Status().Update(ctx, hawtio); err != nil {
+			r.logger.Error(err, "Failed to update Hawtio status")
+			return true, err
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // isDeploymentFailed checks if the Deployment has exceeded its progress deadline.

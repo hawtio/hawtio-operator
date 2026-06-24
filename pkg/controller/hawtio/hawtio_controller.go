@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"time"
 
 	errs "github.com/pkg/errors"
@@ -227,17 +226,6 @@ func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *cli
 
 var _ reconcile.Reconciler = &ReconcileHawtio{}
 
-// DeploymentConfiguration acquires properties used in deployment
-type DeploymentConfiguration struct {
-	openShiftConsoleURL string
-	configMap           *corev1.ConfigMap
-	clientCertSecret    *corev1.Secret // -proxying certificate secret
-	tlsRouteSecret      *corev1.Secret // custom route certificate secret
-	caCertRouteSecret   *corev1.Secret // custom CA certificate secret
-	servingCertSecret   *corev1.Secret // -serving certificate secret
-	requeueAfter        time.Duration  // time until next required requeuing of reconciler
-}
-
 // Reconcile reads that state of the cluster for a Hawtio object and makes changes based on the state read
 // and what is in the Hawtio.Spec
 // Note:
@@ -314,6 +302,35 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 	}
 
+	// Resolve the master client proxy certificate (if applicable)
+	masterClientSecret, nextMasterCertCheckIn, err := r.resolveMasterClientCertificate(ctx, hawtio)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Can be nil if no slave client certificate required
+	var slaveClientCertName *string
+	if masterClientSecret != nil {
+		// Calculate the hash of the secret's payload and suffix the value
+		// to the name of the CR's copy / slave certificate
+		masterCertHash := r.calculateSecretHash(masterClientSecret)
+		slaveName := fmt.Sprintf("%s-%s", masterClientSecret.Name, masterCertHash)
+
+		if hawtio.Status.ClientCertificate.Active != slaveName && hawtio.Status.ClientCertificate.Pending != slaveName {
+			// Brand new hash detected. Stage it in Pending and short-circuit.
+			newStatus := hawtio.Status.DeepCopy()
+			newStatus.ClientCertificate.Pending = slaveName
+			updated, err := r.updateHawtioStatus(ctx, hawtio, newStatus)
+			if err != nil {
+				return reconcile.Result{}, err
+			} else if updated {
+				return reconcile.Result{Requeue: true}, nil
+			}
+		}
+
+		slaveClientCertName = &slaveName
+	}
+
 	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov2.HawtioPhaseFailed {
 		r.logger.V(util.DebugLogLevel).Info("Hawtio.Status.Phase is zero or failed. Setting to initialized.")
 		err := r.setHawtioPhase(ctx, hawtio, hawtiov2.HawtioPhaseInitialized)
@@ -337,9 +354,19 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return handleResultAndError(err)
 	}
 
+	// Reconcile the slave client secret if applicable
+	var slaveClientSecret *corev1.Secret
+	if slaveClientCertName != nil {
+		r.logger.V(util.DebugLogLevel).Info("=== Reconciling Client Slave Secret ===")
+		slaveClientSecret, err = r.resolveSlaveClientCertificate(ctx, hawtio, masterClientSecret, slaveClientCertName)
+		if err != nil {
+			return handleResultAndError(err)
+		}
+	}
+
 	// Intialize the deployment inputs required for the deployment resources
 	r.logger.V(util.DebugLogLevel).Info("=== Initializing Deployment Configuration ===")
-	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio)
+	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, slaveClientSecret, nextMasterCertCheckIn)
 	if err != nil {
 		return handleResultAndError(err)
 	}
@@ -354,7 +381,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Makes the configMap available to the deployment
 	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Assigning reconciled config map %s to deployment", crNamespacedName.Name))
-	deploymentConfig.configMap = configMap
+	deploymentConfig.ConfigMap = configMap
 
 	// Reconcile the deployment resource
 	r.logger.V(util.DebugLogLevel).Info("=== Reconciling Deployment ===")
@@ -475,25 +502,37 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		}
 	}
 
-	// Only send an update to the API server if the status has actually changed.
-	// This prevents empty updates and reduces load on the API server.
-	if !reflect.DeepEqual(hawtio.Status, *newStatus) {
-		hawtio.Status = *newStatus
-		r.logger.Info("Status has changed, updating Hawtio CR",
-			"Phase", newStatus.Phase,
-			"URL", newStatus.URL,
-			"Replicas", newStatus.Replicas,
-			"Image", newStatus.Image,
-			"Gateway Image", newStatus.GatewayImage)
-		if err := r.client.Status().Update(ctx, hawtio); err != nil {
-			r.logger.Error(err, "Failed to update Hawtio status")
-			return reconcile.Result{}, err
-		}
+	// Update the status.Certificate.active and status.Certificate.pending
+	// If the current deployment configuration name doesn't match Active,
+	// it means just finished a rollout using a fresh master certificate generation.
+	var secretNameToDelete string
+	if slaveClientCertName != nil && hawtio.Status.ClientCertificate.Active != *slaveClientCertName {
+		r.logger.Info("Deployment reconciled with new certificate. Updating the CR Status.")
+
+		secretNameToDelete = hawtio.Status.ClientCertificate.Active
+		newStatus.ClientCertificate.Active = *slaveClientCertName
+		newStatus.ClientCertificate.Pending = "" // Clear the pending staging field
 	}
 
-	if deploymentConfig.requeueAfter > 0 {
-		r.logger.Info("Reconciliation complete. Scheduling next cert rotation check.", "WakeUpIn", deploymentConfig.requeueAfter.String())
-		return reconcile.Result{RequeueAfter: deploymentConfig.requeueAfter}, nil
+	// Only send an update to the API server if the status has actually changed.
+	// This prevents empty updates and reduces load on the API server.
+	// Don't worry about updated result since requeueing straight after this update
+	updated, err = r.updateHawtioStatus(ctx, hawtio, newStatus)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if updated && len(secretNameToDelete) > 0 {
+		//
+		// Status has been updated and a secret to delete has been suggested
+		// Remove the old secret as no longer necessary
+		//
+		r.deleteSecret(ctx, hawtio, secretNameToDelete)
+	}
+
+	if deploymentConfig.RequeueAfter > 0 {
+		r.logger.Info("Reconciliation complete. Scheduling next cert rotation check.", "WakeUpIn", deploymentConfig.RequeueAfter.String())
+		return reconcile.Result{RequeueAfter: deploymentConfig.RequeueAfter}, nil
 	}
 
 	return reconcile.Result{}, nil
