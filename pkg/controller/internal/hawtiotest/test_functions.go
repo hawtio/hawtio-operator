@@ -48,10 +48,10 @@ import (
 )
 
 const (
-	HawtioName      = "hawtio-online"
-	HawtioNamespace = "default"
 	OperatorPodNS   = "hawtio-dev-test"
 	OperatorPodName = "hawtio-operator-test-pod"
+	HawtioName      = "hawtio-online"
+	HawtioNamespace = "default"
 
 	Timeout  = time.Second * 10
 	Interval = time.Millisecond * 250
@@ -186,6 +186,10 @@ var saFieldsToIgnore = []string{
 	"ImagePullSecrets", // Created at runtime with random hashes
 }
 
+var secretVolumeSrcFieldsToIgnore = []string{
+	"SecretName", // Has a hash suffix identifying it with the master secret
+}
+
 // k8sSpecComparator defines reusable options for comparing Kubernetes specs
 var k8sSpecComparator = cmp.Options{
 	// Ignore specific field names anywhere they appear
@@ -194,6 +198,7 @@ var k8sSpecComparator = cmp.Options{
 	cmpopts.IgnoreFields(corev1.ServiceSpec{}, svcSpecFieldsToIgnore...),
 	cmpopts.IgnoreFields(corev1.PodSpec{}, podSpecFieldsToIgnore...),
 	cmpopts.IgnoreFields(corev1.ServiceAccount{}, saFieldsToIgnore...),
+	cmpopts.IgnoreFields(corev1.SecretVolumeSource{}, secretVolumeSrcFieldsToIgnore...),
 
 	// Ignore map entries based on key patterns anywhere
 	cmp.FilterPath(func(p cmp.Path) bool {
