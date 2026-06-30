@@ -193,9 +193,9 @@ func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, co
 		volumes = append(volumes, volume)
 	}
 
-	if apiSpec.IsOpenShift4 && config.ClientCertSecret != nil {
-		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding secret volume for proxying certificate %s-tls-proxying at %s", config.ClientCertSecret.Name, clientCertificateSecretVolumeName))
-		volume := newSecretVolume(config.ClientCertSecret.Name, clientCertificateSecretVolumeName)
+	if apiSpec.IsOpenShift4 && config.ClientCertSecretName != nil {
+		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding secret volume for proxying certificate %s-tls-proxying at %s", *config.ClientCertSecretName, clientCertificateSecretVolumeName))
+		volume := newSecretVolume(*config.ClientCertSecretName, clientCertificateSecretVolumeName)
 		volumes = append(volumes, volume)
 	}
 

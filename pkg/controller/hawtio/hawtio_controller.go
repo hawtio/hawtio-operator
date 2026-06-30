@@ -309,12 +309,19 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Can be nil if no slave client certificate required
-	var slaveClientCertName *string
+	var slaveClientSecretName *string
 	if masterClientSecret != nil {
-		// Calculate the hash of the secret's payload and suffix the value
-		// to the name of the CR's copy / slave certificate
-		masterCertHash := r.calculateSecretHash(masterClientSecret)
-		slaveName := fmt.Sprintf("%s-%s", masterClientSecret.Name, masterCertHash)
+		var slaveName string
+		if r.usingCustomClientSecret(hawtio) {
+			// slaveClientSecretName for a custom secret has no hash
+			// so is labelled up the same as the master certificate
+			slaveName = r.getMasterClientSecretName(hawtio)
+		} else {
+			// Calculate the hash of the secret's payload and suffix the value
+			// to the name of the CR's copy / slave certificate
+			masterCertHash := r.calculateSecretHash(masterClientSecret)
+			slaveName = fmt.Sprintf("%s-%s", masterClientSecret.Name, masterCertHash)
+		}
 
 		if hawtio.Status.ClientCertificate.Active != slaveName && hawtio.Status.ClientCertificate.Pending != slaveName {
 			// Brand new hash detected. Stage it in Pending and short-circuit.
@@ -328,7 +335,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 			}
 		}
 
-		slaveClientCertName = &slaveName
+		slaveClientSecretName = &slaveName
 	}
 
 	if len(hawtio.Status.Phase) == 0 || hawtio.Status.Phase == hawtiov2.HawtioPhaseFailed {
@@ -355,10 +362,9 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Reconcile the slave client secret if applicable
-	var slaveClientSecret *corev1.Secret
-	if slaveClientCertName != nil {
+	if slaveClientSecretName != nil {
 		r.logger.V(util.DebugLogLevel).Info("=== Reconciling Client Slave Secret ===")
-		slaveClientSecret, err = r.resolveSlaveClientCertificate(ctx, hawtio, masterClientSecret, slaveClientCertName)
+		err = r.resolveSlaveClientCertificate(ctx, hawtio, masterClientSecret, slaveClientSecretName)
 		if err != nil {
 			return handleResultAndError(err)
 		}
@@ -366,7 +372,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Intialize the deployment inputs required for the deployment resources
 	r.logger.V(util.DebugLogLevel).Info("=== Initializing Deployment Configuration ===")
-	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, slaveClientSecret, nextMasterCertCheckIn)
+	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtio, slaveClientSecretName, nextMasterCertCheckIn)
 	if err != nil {
 		return handleResultAndError(err)
 	}
@@ -506,11 +512,11 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	// If the current deployment configuration name doesn't match Active,
 	// it means just finished a rollout using a fresh master certificate generation.
 	var secretNameToDelete string
-	if slaveClientCertName != nil && hawtio.Status.ClientCertificate.Active != *slaveClientCertName {
+	if slaveClientSecretName != nil && hawtio.Status.ClientCertificate.Active != *slaveClientSecretName {
 		r.logger.Info("Deployment reconciled with new certificate. Updating the CR Status.")
 
 		secretNameToDelete = hawtio.Status.ClientCertificate.Active
-		newStatus.ClientCertificate.Active = *slaveClientCertName
+		newStatus.ClientCertificate.Active = *slaveClientSecretName
 		newStatus.ClientCertificate.Pending = "" // Clear the pending staging field
 	}
 
