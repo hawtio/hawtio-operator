@@ -8,6 +8,26 @@ resources:
 - ../cluster_role.yaml
 - ../cluster_role_binding.yaml
 - ../service_account.yaml
+- ../operator_signer_key_reader_role.yaml
 - ../operator_role.yaml
 - ../operator_role_binding.yaml
 - hawtio-aggregation-rules.yaml
+
+#
+# Patch to ensure the namespace of the signer-key role
+# is not overwritten by kustomize. By making it a transformer
+# it is performed at the end of the kustomize process.
+#
+transformers:
+- |
+  apiVersion: builtin
+  kind: PatchTransformer
+  metadata:
+    name: fix-service-ca-namespace
+  patch: |-
+    - op: replace
+      path: /metadata/namespace
+      value: openshift-service-ca
+  target:
+    kind: Role
+    name: hawtio-operator-signing-key-reader

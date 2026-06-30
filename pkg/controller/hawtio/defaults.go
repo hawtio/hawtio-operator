@@ -10,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -24,6 +25,45 @@ import (
 // Cap the maximum requeue time to 24 hours
 // Maximum time to sleep before a requeue should take place
 var maxRequeueTime = 24 * time.Hour
+
+func (r *ReconcileHawtio) ensureSigningKeyAccess(ctx context.Context) error {
+	// Get the operator's current runtime namespace
+	namespace := r.operatorPod.Namespace
+	bindingName := fmt.Sprintf("hawtio-operator-signing-key-binding-%s", namespace)
+
+	// Define the localized binding manifest
+	binding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bindingName,
+			Namespace: "openshift-service-ca",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "hawtio-operator",
+				Namespace: namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     "Role",
+			Name:     "hawtio-operator-signing-key-reader",
+			APIGroup: "rbac.authorization.k8s.io",
+		},
+	}
+
+	// Create and quietly backoff if already exists
+	err := r.client.Create(ctx, binding)
+	if err != nil {
+		if kerrors.IsAlreadyExists(err) {
+			return nil // Already bound, safe to proceed
+		}
+		// If it fails due to lack of permissions to create bindings, bubble it up
+		return fmt.Errorf("failed to create role-binding for key signing: %w", err)
+	}
+
+	return nil
+}
+
 
 func (r *ReconcileHawtio) getOperatorOwner(ctx context.Context) (metav1.Object, error) {
 	r.logger.V(util.DebugLogLevel).Info("Getting operator owner ...")
@@ -75,6 +115,15 @@ func (r *ReconcileHawtio) getOperatorOwner(ctx context.Context) (metav1.Object, 
 	return deployment, nil
 }
 
+func (r *ReconcileHawtio) usingCustomClientSecret(hawtio *hawtiov2.Hawtio) bool {
+	commonName := hawtio.Spec.Auth.ClientCertCommonName
+	return len(commonName) > 0 && commonName != HAWTIO_CERT_COMMON_NAME
+}
+
+func (r *ReconcileHawtio) getMasterClientSecretName(hawtio *hawtiov2.Hawtio) string {
+	return fmt.Sprintf("%s-tls-proxying", hawtio.Name)
+}
+
 //
 // reconcileMasterClientCertificate determines existence and validity
 // of the proxy master client certificate.
@@ -85,7 +134,13 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 		return nil, 0, nil // not required on Kubernetes
 	}
 
-	clientSecretName := fmt.Sprintf("%s-tls-proxying", hawtio.Name)
+	// Ensure the operator has access to the key-signer in openshift-service-ca
+	err := r.ensureSigningKeyAccess(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	clientSecretName := r.getMasterClientSecretName(hawtio)
 
 	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift master proxying certificate in Operator Namespace %s", r.operatorPod.Namespace))
 
@@ -127,12 +182,19 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 // of the proxy slave client certificate.
 // Returns (certificate secret, error)
 //
-func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio, masterSecret *corev1.Secret, targetName *string) (*corev1.Secret, error) {
+func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio, masterSecret *corev1.Secret, targetName *string) error {
 	if ! r.apiSpec.IsOpenShift4 || targetName == nil {
-		return nil, nil // not required on Kubernetes
+		return nil // not required on Kubernetes
 	}
 
 	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift proxying certificate %s", *targetName))
+
+	if r.usingCustomClientSecret(hawtio) {
+		// User-specified common name means custom certificate is provided
+		// custom secret should be named ${hawtio.Name}-tls-proxy
+		r.logger.Info(fmt.Sprintf("Custom proxying common name specified. Expecting secret '%s' in CR namespace %s", *targetName, hawtio.Namespace))
+		return nil
+	}
 
 	// Instantiate the new structure for the slave secret
 	slaveSecret := &corev1.Secret{
@@ -158,7 +220,7 @@ func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, haw
 
 	err := controllerutil.SetControllerReference(hawtio, slaveSecret, r.scheme)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Execute atomic blind creation
@@ -167,14 +229,14 @@ func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, haw
 		// If the API server says it's already there, our blind self-healing/staging logic is satisfied.
 		if kerrors.IsAlreadyExists(err) {
 			r.logger.Info("Target secret already exists in Hawtio CR namespace. Skipping creation.", "Namespace", hawtio.Namespace, "Name", targetName)
-			return slaveSecret, nil
+			return nil
 		}
 		// Bubble up genuine cluster or RBAC errors
-		return nil, err
+		return err
 	}
 
 	r.logger.Info("Successfully duplicated secret to Hawtio CR namespace.", "Namespace", hawtio.Namespace, "Name", targetName)
-	return slaveSecret, nil
+	return nil
 }
 
 func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
@@ -312,13 +374,13 @@ func (r *ReconcileHawtio) resolveRouteCACertificate(ctx context.Context, hawtio 
 	return caRouteSecret, nil
 }
 
-func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawtio *hawtiov2.Hawtio, slaveClientSecret *corev1.Secret, nextCheckIn time.Duration) (cfg.DeploymentConfiguration, error) {
+func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawtio *hawtiov2.Hawtio, slaveClientSecretName *string, nextCheckIn time.Duration) (cfg.DeploymentConfiguration, error) {
 	deploymentConfiguration := cfg.DeploymentConfiguration{}
 
 	//
 	// Assign the slaveClientSecret which may be nil if not applicable
 	//
-	deploymentConfiguration.ClientCertSecret = slaveClientSecret
+	deploymentConfiguration.ClientCertSecretName = slaveClientSecretName
 
 	//
 	// Assign the nextCheckIn as the RequeueAfter property
