@@ -8,5 +8,6 @@ resources:
 - cluster_role.yaml
 - operator_role_binding.yaml
 - operator_role.yaml
+- operator_signer_key_reader_role.yaml
 - service_account.yaml
 - operator.yaml

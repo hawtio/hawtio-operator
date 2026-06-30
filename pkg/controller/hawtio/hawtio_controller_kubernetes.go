@@ -17,20 +17,12 @@ import (
 var conKLog = logf.Log.WithName("controller_hawtio_kubernetes")
 
 func newSelfCertificateSecret(ctx context.Context, r *ReconcileHawtio, hawtio *hawtiov2.Hawtio, name string, namespace string) (*corev1.Secret, error) {
-	commonName := hawtio.Spec.Auth.ClientCertCommonName
-	if commonName == "" {
-		if r.ClientCertCommonName == "" {
-			commonName = "hawtio-online.hawtio.svc"
-		} else {
-			commonName = r.ClientCertCommonName
-		}
-	}
 	// Let's default to one year validity period
 	expirationDate := time.Now().AddDate(1, 0, 0)
 	if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
 		expirationDate = date.Time
 	}
-	servingCertSecret, err := generateSelfSignedCertSecret(hawtio, name, namespace, commonName, expirationDate)
+	servingCertSecret, err := generateSelfSignedCertSecret(hawtio, name, namespace, HAWTIO_CERT_COMMON_NAME, expirationDate)
 	if err != nil {
 		return nil, errs.Wrap(err, "Generating the serving certificate failed")
 	}
