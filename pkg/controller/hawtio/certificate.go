@@ -21,6 +21,8 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 )
 
+const HAWTIO_CERT_COMMON_NAME = "hawtio-online.hawtio.svc"
+
 func generateSelfSignedCertSecret(hawtio *hawtiov2.Hawtio, name string, namespace string, commonName string, expirationDate time.Time) (*corev1.Secret, error) {
 	return generateCertificateSecret(hawtio, name, namespace, nil, commonName, expirationDate)
 }

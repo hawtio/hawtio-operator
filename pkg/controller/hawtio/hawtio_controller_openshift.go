@@ -23,20 +23,12 @@ func newSignedCertificateSecret(ctx context.Context, r *ReconcileHawtio, hawtio 
 		return nil, errs.Wrap(err, "Reading certificate authority signing key failed")
 	}
 
-	commonName := hawtio.Spec.Auth.ClientCertCommonName
-	if commonName == "" {
-		if r.ClientCertCommonName == "" {
-			commonName = "hawtio-online.hawtio.svc"
-		} else {
-			commonName = r.ClientCertCommonName
-		}
-	}
 	// Let's default to one year validity period
 	expirationDate := time.Now().AddDate(1, 0, 0)
 	if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
 		expirationDate = date.Time
 	}
-	clientCertSecret, err := generateCASignedCertSecret(hawtio, name, namespace, caSecret, commonName, expirationDate)
+	clientCertSecret, err := generateCASignedCertSecret(hawtio, name, namespace, caSecret, HAWTIO_CERT_COMMON_NAME, expirationDate)
 	if err != nil {
 		return nil, errs.Wrap(err, "Generating the client certificate failed")
 	}

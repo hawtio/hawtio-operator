@@ -4,16 +4,29 @@ metadata:
   name: hawtio-operator-cluster-role
 rules:
 
+# Adds permission to bind to the dynamic target Role once its created
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles"]
+  resourceNames: ["hawtio-operator-signing-key-reader"]
+  verbs: ["bind"]
+
 #
 # --- SECRETS (Isolated) ---
 #
 
 # Required for management of the hawtio-online proxy
-# certificate on OpenShift
+# certificate in tenant namespaces on OpenShift
 #
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["create", "delete"]
+
+# Required to create a role-binding for access to
+# the key signer on OpenShift
+#
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["rolebindings"]
+  verbs: ["create"]
 
 #
 # --- CORE RESOURCES (High Privilege) ---
