@@ -8,11 +8,11 @@ import (
 
 // DeploymentConfiguration acquires properties used in deployment
 type DeploymentConfiguration struct {
-	OpenShiftConsoleURL string
-	ConfigMap           *corev1.ConfigMap
-	ClientCertSecret    *corev1.Secret // -proxying certificate secret
-	TLSRouteSecret      *corev1.Secret // custom route certificate secret
-	CACertRouteSecret   *corev1.Secret // custom CA certificate secret
-	ServingCertSecret   *corev1.Secret // -serving certificate secret
-	RequeueAfter        time.Duration  // time until next required requeuing of reconciler
+	OpenShiftConsoleURL  string
+	ConfigMap            *corev1.ConfigMap
+	ClientCertSecretName *string        // -proxying certificate secret name
+	TLSRouteSecret       *corev1.Secret // custom route certificate secret
+	CACertRouteSecret    *corev1.Secret // custom CA certificate secret
+	ServingCertSecret    *corev1.Secret // -serving certificate secret
+	RequeueAfter         time.Duration  // time until next required requeuing of reconciler
 }
