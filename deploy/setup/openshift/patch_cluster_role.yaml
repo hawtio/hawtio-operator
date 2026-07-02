@@ -26,3 +26,48 @@
     apiGroups: [""]
     resources: ["secrets"]
     verbs: ["create", "delete"]
+
+# Required for administration of routes on OpenShift
+#
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["create", "delete", "get", "list", "update", "patch", "watch"]
+
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["route.openshift.io"]
+    resources: ["routes/custom-host"]
+    verbs: ["create", "update", "patch"]
+
+# Required for creating, modifying, deleting
+# console links and console yaml samples
+#
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["console.openshift.io"]
+    resources: ["consolelinks", "consoleyamlsamples"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+# Required for creating, modifying oauthclient
+# resources for authentication access
+#
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["oauth.openshift.io"]
+    resources: ["oauthclients"]
+    verbs: ["create", "get", "list", "update", "watch"]
+
+# Required to determine the version of the
+# OCP cluster (see capabilites package)
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["config.openshift.io"]
+    resources: ["clusterversions"]
+    verbs: ["get"]
