@@ -218,58 +218,6 @@ spec:
           - update
           - watch
         - apiGroups:
-          - route.openshift.io
-          resources:
-          - routes
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - update
-          - patch
-          - watch
-        - apiGroups:
-          - route.openshift.io
-          resources:
-          - routes/custom-host
-          verbs:
-          - create
-        - apiGroups:
-          - networking.k8s.io
-          resources:
-          - ingresses
-          verbs:
-          - create
-          - get
-          - list
-          - update
-          - patch
-          - watch
-        - apiGroups:
-          - console.openshift.io
-          resources:
-          - consolelinks
-          - consoleyamlsamples
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - oauth.openshift.io
-          resources:
-          - oauthclients
-          verbs:
-          - create
-          - get
-          - list
-          - update
-          - watch
-        - apiGroups:
           - ""
           resources:
           - nodes
@@ -284,12 +232,6 @@ spec:
           - get
           - list
           - watch
-        - apiGroups:
-          - config.openshift.io
-          resources:
-          - clusterversions
-          verbs:
-          - get
         - apiGroups:
           - hawt.io
           resources:
@@ -317,6 +259,55 @@ spec:
           verbs:
           - create
           - delete
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - update
+          - patch
+          - watch
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes/custom-host
+          verbs:
+          - create
+          - update
+          - patch
+        - apiGroups:
+          - console.openshift.io
+          resources:
+          - consolelinks
+          - consoleyamlsamples
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - oauth.openshift.io
+          resources:
+          - oauthclients
+          verbs:
+          - create
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - clusterversions
+          verbs:
+          - get
         serviceAccountName: hawtio-operator
       deployments:
       - name: hawtio-operator
