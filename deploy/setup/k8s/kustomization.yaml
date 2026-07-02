@@ -5,3 +5,9 @@ namespace: hawtio-dev
 
 resources:
 - ../base
+
+patches:
+- path: patch_cluster_role.yaml
+  target:
+    kind: ClusterRole
+    name: hawtio-operator-cluster-role

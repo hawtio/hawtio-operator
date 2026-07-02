@@ -1,0 +1,8 @@
+# Required for administration of ingresses
+#
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["create", "get", "list", "update", "patch", "watch"]
