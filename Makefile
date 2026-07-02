@@ -14,8 +14,8 @@ LAST_RELEASED_VERSION ?= 2.0.1
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 FORCE_TOOL_UPDATE ?= false
 
-# Cluster on which to install [ openshift | k8s ]
-CLUSTER_TYPE ?= k8s
+# Cluster on which to install [ openshift | kubernetes ]
+CLUSTER_TYPE ?= kubernetes
 
 # The supported architectures
 ARCHS ?= amd64 arm64
@@ -50,6 +50,7 @@ YQ_VERSION := v4.53.2
 
 CRD_OPTIONS ?= crd:crdVersions=v1
 
+PLACEHOLDER := placeholder
 INSTALL_ROOT := deploy
 GEN_SUFFIX := gen.yaml
 
@@ -327,10 +328,12 @@ endif
 #== Create the manifest bundle artifacts
 #
 #* PARAMETERS:
-#** IMAGE:     Set a custom image for the deployment
-#** VERSION:   Set a custom version for the deployment
-#** NAMESPACE: Set the namespace for the resources
-#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
+#** CLUSTER_TYPE:  Set the cluster type to install on
+#**                    [ openshift | kubernetes ]
+#** IMAGE:         Set a custom image for the deployment
+#** VERSION:       Set a custom version for the deployment
+#** NAMESPACE:     Set the namespace for the resources
+#** DEBUG:         Print the resources to be applied instead of applying them [true|false]
 #
 #---
 bundle: kustomize operator-sdk pre-bundle
@@ -339,7 +342,8 @@ bundle: kustomize operator-sdk pre-bundle
 	@# Sets the operator image to the preferred image:tag
 	@cd bundle && $(KUSTOMIZE) edit set image $(IMAGE_NAME)=$(IMAGE):$(VERSION)
 	@# Build kustomize manifests
-	$(KUSTOMIZE) build $(KOPTIONS) bundle | $(OPERATOR_SDK) generate bundle \
+	$(KUSTOMIZE) build $(KOPTIONS) bundle | \
+		$(OPERATOR_SDK) generate bundle \
 		--kustomize-dir bundle \
 		--version $(OPERATOR_VERSION) -q --overwrite \
 		$(BUNDLE_METADATA_OPTS)
@@ -504,7 +508,7 @@ endif
 #
 #* PARAMETERS:
 #** CLUSTER_TYPE:  Set the cluster type to install on
-#**                    [ openshift | k8s ]
+#**                    [ openshift | kubernetes ]
 #** IMAGE:         Set a custom image for the deployment
 #** VERSION:       Set a custom version for the deployment
 #** NAMESPACE:     Set the namespace for the resources
@@ -527,19 +531,24 @@ endif
 #=== (must be granted the privileges by the Cluster-Admin executed `setup` procedure)
 #
 #* PARAMETERS:
-#** IMAGE:     Set a custom image for the deployment
-#** VERSION:   Set a custom version for the deployment
-#** NAMESPACE: Set the namespace for the resources
-#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
+#** CLUSTER_TYPE:  Set the cluster type to install on
+#**                    [ openshift | kubernetes ]
+#** IMAGE:         Set a custom image for the deployment
+#** VERSION:       Set a custom version for the deployment
+#** NAMESPACE:     Set the namespace for the resources
+#** DEBUG:         Print the resources to be applied instead of applying them [true|false]
 #
 #---
 operator: kubectl kustomize
 	#@ Can be invoked by a user with namespace privileges (rather than a cluster-admin)
-	$(call set-kvars,$(INSTALL_ROOT)/operator)
+	$(call set-kvars,$(INSTALL_ROOT)/operator/${CLUSTER_TYPE})
 ifeq ($(DEBUG), false)
-	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/operator | kubectl apply -f -
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/operator/${CLUSTER_TYPE} | \
+		sed 's/$(PLACEHOLDER)/$(NAMESPACE)/' | \
+		kubectl apply -f -
 else
-	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/operator
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/operator/${CLUSTER_TYPE} | \
+		sed 's/$(PLACEHOLDER)/$(NAMESPACE)/'
 endif
 
 #---
@@ -596,12 +605,12 @@ endif
 #
 #* PARAMETERS:
 #** CLUSTER_TYPE:  Set the cluster type to install on
-#**                    [ openshift | k8s ]
+#**                    [ openshift | kubernetes ]
 #** NAMESPACE:     Set the namespace for the resources
 #** DEBUG:         Print the resources to be applied instead of applying them [true|false]
 #
 #---
-UNINSTALLS = .uninstall-app .uninstall-operator .uninstall-setup/$(CLUSTER_TYPE)
+UNINSTALLS = .uninstall-app .uninstall-operator/$(CLUSTER_TYPE) .uninstall-setup/$(CLUSTER_TYPE)
 
 $(UNINSTALLS): kubectl kustomize
 	# Delete CR instances first while the operator is still running

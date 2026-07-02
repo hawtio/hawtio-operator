@@ -4,7 +4,7 @@ kind: Kustomization
 resources:
 - ../deploy/crs
 - ../deploy/setup/openshift
-- ../deploy/operator/operator.yaml
+- ../deploy/operator/base/operator.yaml
 - scorecard
 
 patches:
