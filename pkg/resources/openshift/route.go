@@ -74,7 +74,7 @@ func NewRoute(hawtio *hawtiov2.Hawtio, routeTLSSecret *v1.Secret, caCertRouteSec
 
 	route.Spec.TLS = tlsConfig
 
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New Route: %s", util.JSONToString(route)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New Route: %s", util.ToJSONString(route)))
 	return route
 }
 

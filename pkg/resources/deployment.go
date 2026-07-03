@@ -179,7 +179,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 		},
 	}
 
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("PodTemplateSpec: %s", util.JSONToString(pod)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("PodTemplateSpec: %s", util.ToJSONString(pod)))
 
 	return pod, err
 }
@@ -264,7 +264,7 @@ func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpe
 		volumeMounts[rbacConfigMapVolumeName] = volumeMount
 	}
 
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New VolumeMounts %s", util.JSONToString(volumeMounts)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New VolumeMounts %s", util.ToJSONString(volumeMounts)))
 	return volumeMounts, nil
 }
 

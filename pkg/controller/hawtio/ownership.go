@@ -79,7 +79,7 @@ func (r *ReconcileHawtio) getHawtioOwner(ctx context.Context, hawtio *hawtiov2.H
 }
 
 func (r *ReconcileHawtio) validateResourceAccess(ctx context.Context, hawtio *hawtiov2.Hawtio, resourceAttr *authorizationv1.ResourceAttributes) error {
-	r.logger.V(util.DebugLogLevel).Info("Validating Resource Access", "resource", resourceAttr)
+	r.logger.V(util.DebugLogLevel).Info("Validating Resource Access", "resource", util.ToJSONString(resourceAttr))
 
 	user, err := r.getHawtioOwner(ctx, hawtio)
 	if err != nil {
@@ -102,7 +102,7 @@ func (r *ReconcileHawtio) validateResourceAccess(ctx context.Context, hawtio *ha
 		return fmt.Errorf("user %s not authorized for custom hosts: %s", user, result.Status.Reason)
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("User access to resource allowed", "user", user, "resource", resourceAttr)
+	r.logger.V(util.DebugLogLevel).Info("User access to resource allowed", "user", user, "resource", util.ToJSONString(resourceAttr))
 
 	return nil
 }

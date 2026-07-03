@@ -65,6 +65,6 @@ func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, lo
 		PublishNotReadyAddresses: true,
 	}
 
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New service %s", util.JSONToString(service)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New service %s", util.ToJSONString(service)))
 	return service
 }
