@@ -84,7 +84,7 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 		},
 	}
 
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New Ingress: %s", util.JSONToString(ingress)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New Ingress: %s", util.ToJSONString(ingress)))
 	return ingress
 }
 

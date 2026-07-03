@@ -61,7 +61,7 @@ func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, 
 		config = strings.Replace(config, "OpenShift", "Kubernetes", -1)
 	}
 
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio config map: %s", config))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio config map: %s", util.ToJSONString(config)))
 
 	configMap := NewDefaultConfigMap(hawtio)
 

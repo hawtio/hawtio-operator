@@ -234,7 +234,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	r.logger = hawtioLogger.WithValues("Operator Namespace", r.operatorPod, "Hawtio CR Namespace", request.Namespace, "Request.Name", request.Name)
 	r.logger.Info(fmt.Sprintf("Reconciling Hawtio in %s", request.Namespace))
 
-	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.apiSpec))
+	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %s", util.ToJSONString(r.apiSpec)))
 
 	crNamespacedName := request.NamespacedName
 
