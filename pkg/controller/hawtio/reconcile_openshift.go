@@ -91,10 +91,10 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 			return fmt.Errorf("Unsupported ConsoleLink configuration - neither Application nor Namespace link")
 		}
 
-		r.logger.V(util.DebugLogLevel).Info("ConsoleLink Default", "blueprint", blueprint)
+		r.logger.V(util.DebugLogLevel).Info("ConsoleLink Default", "blueprint", util.ToJSONString(blueprint))
 
 		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *consolev1.ConsoleLink) {
-			r.logger.V(util.DebugLogLevel).Info("ConsoleLink Hydrating Callback", "hydrated", hydrated, "source", source)
+			r.logger.V(util.DebugLogLevel).Info("ConsoleLink Hydrating Callback", "hydrated", util.ToJSONString(hydrated), "source", util.ToJSONString(source))
 
 			// If hydration stripped required fields, patch them directly back from source
 			if hydrated.Spec.Href == "" || hydrated.Spec.Location == "" {
@@ -106,7 +106,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 			}
 		})
 
-		r.logger.V(util.DebugLogLevel).Info("ConsoleLink Hydrated Default", "serverBlueprint", serverBlueprint)
+		r.logger.V(util.DebugLogLevel).Info("ConsoleLink Hydrated Default", "serverBlueprint", util.ToJSONString(serverBlueprint))
 		if err != nil {
 			return err
 		}
