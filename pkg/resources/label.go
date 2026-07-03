@@ -24,7 +24,7 @@ func LabelsForHawtio(name string) map[string]string {
 
 // PropagateAnnotations propagate annotations from hawtio CR
 func PropagateAnnotations(hawtio *hawtiov2.Hawtio, annotations map[string]string, log logr.Logger) {
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Annotations %s", util.JSONToString(annotations)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Annotations %s", util.ToJSONString(annotations)))
 
 	for k, v := range hawtio.GetAnnotations() {
 		// Only propagate specified annotations
@@ -40,7 +40,7 @@ func PropagateAnnotations(hawtio *hawtiov2.Hawtio, annotations map[string]string
 
 // PropagateLabels propagate labels from hawtio CR
 func PropagateLabels(hawtio *hawtiov2.Hawtio, labels map[string]string, log logr.Logger) {
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Labels %s", util.JSONToString(labels)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Labels %s", util.ToJSONString(labels)))
 
 	for k, v := range hawtio.GetLabels() {
 		// Only propagate specified labels
