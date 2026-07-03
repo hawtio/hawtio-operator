@@ -80,14 +80,14 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	 */
 
 	envVars := newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL)
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container Env Vars %s", util.JSONToString(envVars)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container Env Vars %s", util.ToJSONString(envVars)))
 
 	connect := PlainConnect
 	if util.IsSSL(hawtio, apiSpec) {
 		connect = SSLConnect
 	}
 
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container protocols %s", util.JSONToString(connect)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container protocols %s", util.ToJSONString(connect)))
 
 	var readinessPeriodValue int32 = OnlineReadinessPeriodValue
 	if hawtio.Spec.HealthChecks.OnlineReadinessPeriod != nil {
@@ -164,13 +164,13 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 	 *      timeoutSeconds: 1
 	 */
 	envVars := newGatewayEnvVars(hawtio, apiSpec)
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container Env Vars %s", util.JSONToString(envVars)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container Env Vars %s", util.ToJSONString(envVars)))
 
 	connect := PlainConnect
 	if util.IsSSL(hawtio, apiSpec) {
 		connect = SSLConnect
 	}
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container protocols %s", util.JSONToString(connect)))
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container protocols %s", util.ToJSONString(connect)))
 
 	var readinessPeriodValue int32 = GatewayReadinessPeriodValue
 	if hawtio.Spec.HealthChecks.GatewayReadinessPeriod != nil {
