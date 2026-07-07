@@ -166,26 +166,31 @@ func (r *ReconcileHawtio) resolveRouteCertificate(ctx context.Context, hawtio *h
 }
 
 func (r *ReconcileHawtio) resolveRouteCACertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, error) {
-	caCertSecretName := hawtio.Spec.Route.CaCert.Name
-	if caCertSecretName == "" {
+	caCertSelector := hawtio.Spec.Route.CaCert
+	if caCertSelector.Name == "" {
 		return nil, nil // no secret specified
 	}
 
 	r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA certificate secret to deployment")
 
-	caRouteSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, caCertSecretName, metav1.GetOptions{})
+	// Fetch the secret using the Selector's Name
+	caRouteSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, caCertSelector.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	// Structural Validation
-	if len(caRouteSecret.Data[corev1.TLSPrivateKeyKey]) == 0 || len(caRouteSecret.Data[corev1.TLSCertKey]) == 0 {
-		err := fmt.Errorf("custom route secret %s is missing required keys: tls.crt and/or tls.key", caCertSecretName)
-		r.logger.Error(err, "Invalid custom certificate secret")
+	// Validate using the Selector's specified Key
+	targetKey := caCertSelector.Key
+	if targetKey == "" {
+		targetKey = "ca.crt"
+	}
+
+	if len(caRouteSecret.Data[targetKey]) == 0 {
+		err := fmt.Errorf("custom route CA secret %s is missing the required key: %s", caCertSelector.Name, targetKey)
+		r.logger.Error(err, "Invalid custom CA certificate secret")
 		return nil, err
 	}
 
-	// User mounted certificate so should NOT be adopted as a legacy resource or operator owned
 	return caRouteSecret, nil
 }
 
