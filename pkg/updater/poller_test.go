@@ -15,6 +15,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -24,6 +26,14 @@ type MockRegistryTransport struct {
 	// Maps a registry URL path to the sha256 digest we want to return
 	DigestMap  map[string][]string
 	ShouldFail bool
+}
+
+var mockDeployment = &corev1.ObjectReference{
+	Kind:       "Deployment",
+	APIVersion: "apps/v1",
+	Name:       "TestOperator",
+	Namespace:  "TestNS",
+	UID:        "12345",
 }
 
 func (m *MockRegistryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -95,13 +105,15 @@ func TestRegistryPoller_ExpectedUpdate(t *testing.T) {
 
 	poller := &RegistryPoller{
 		Interval:        10 * time.Millisecond, // Run almost instantly
+		OperatorRef:     mockDeployment,
 		OnlineImageURL:  "quay.io/hawtio/online:latest",
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
 		AuthKeychain:    anonKeyChain,
 		Logger: testr.NewWithOptions(t, testr.Options{
 			Verbosity: 1,
 		}),
-		Trigger: triggerChan,
+		EventEmitter: events.NewFakeRecorder(4),
+		Trigger:      triggerChan,
 		ExtraOptions: []remote.Option{
 			remote.WithTransport(mockTransport), // Inject the mock!
 		},
@@ -156,11 +168,13 @@ func TestRegistryPoller_Idempotency(t *testing.T) {
 	anonKeyChain := &DockerConfigKeychain{Auths: make(map[string]authn.AuthConfig)}
 	poller := &RegistryPoller{
 		Interval:        10 * time.Millisecond,
+		OperatorRef:     mockDeployment,
 		OnlineImageURL:  "quay.io/hawtio/online:latest",
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
 		AuthKeychain:    anonKeyChain,
 		Trigger:         triggerChan,
 		Logger:          testr.New(t),
+		EventEmitter:    events.NewFakeRecorder(4),
 		ExtraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
 	}
 
@@ -205,10 +219,12 @@ func TestRegistryPoller_AirGap(t *testing.T) {
 	triggerChan := make(chan event.GenericEvent, 1)
 	poller := &RegistryPoller{
 		Interval:        10 * time.Millisecond,
+		OperatorRef:     mockDeployment,
 		OnlineImageURL:  "quay.io/hawtio/online:latest",
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
 		Trigger:         triggerChan,
 		Logger:          testr.New(t),
+		EventEmitter:    events.NewFakeRecorder(4),
 		ExtraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
 	}
 
@@ -248,10 +264,12 @@ func TestRegistryPoller_PartialFailure(t *testing.T) {
 	triggerChan := make(chan event.GenericEvent, 1)
 	poller := &RegistryPoller{
 		Interval:        10 * time.Millisecond,
+		OperatorRef:     mockDeployment,
 		OnlineImageURL:  "quay.io/hawtio/online:latest",
 		GatewayImageURL: "quay.io/hawtio/online-gateway:latest",
 		Trigger:         triggerChan,
 		Logger:          testr.New(t),
+		EventEmitter:    events.NewFakeRecorder(4),
 		ExtraOptions:    []remote.Option{remote.WithTransport(mockTransport)},
 	}
 
