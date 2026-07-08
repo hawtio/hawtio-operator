@@ -29,6 +29,11 @@ rules:
   resources: ["configmaps", "serviceaccounts", "services"]
   verbs: ["create", "get", "list", "patch", "update", "watch"]
 
+# Required for broadcasting events to the event logs
+- apiGroups: ["", "events.k8s.io"]
+  resources: ["events"]
+  verbs: ["create", "patch", "update"]
+
 #
 # --- APPS (High Privilege) ---
 #

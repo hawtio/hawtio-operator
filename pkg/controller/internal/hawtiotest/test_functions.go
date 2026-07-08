@@ -50,6 +50,8 @@ import (
 const (
 	HawtioName      = "hawtio-online"
 	HawtioNamespace = "default"
+	OperatorPodNS   = "hawtio-dev-test"
+	OperatorPodName = "hawtio-operator-test-pod"
 
 	Timeout  = time.Second * 10
 	Interval = time.Millisecond * 250
@@ -316,6 +318,94 @@ func createNamespaces(ctx context.Context, testTools *TestTools, namespaces ...s
 	}
 }
 
+// SetupOperatorPod creates the hierarchy of resources representing the operator pod
+func SetupOperatorPod(ctx context.Context, testTools *TestTools) {
+	By("Creating the operator pod hierarchy")
+	// Create Operator Namespace
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: OperatorPodNS},
+	}
+	err := testTools.K8sClient.Create(ctx, ns)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create Operator Deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "hawtio-operator",
+			Namespace: OperatorPodNS,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "hawtio-operator"},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": "hawtio-operator"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "operator",
+						Image: "hawtio/hawtio-operator",
+					}},
+				},
+			},
+		},
+	}
+	err = testTools.K8sClient.Create(ctx, deployment)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create the ReplicaSet and link it to the Deployment
+	isController := true
+	replicaSet := &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "hawtio-operator-abcde",
+			Namespace: OperatorPodNS,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+					Name:       deployment.Name,
+					UID:        deployment.UID,
+					Controller: &isController,
+				},
+			},
+		},
+		Spec: appsv1.ReplicaSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "hawtio-operator"},
+			},
+			Template: deployment.Spec.Template,
+		},
+	}
+	err = testTools.K8sClient.Create(ctx, replicaSet)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create the Pod and link it to the ReplicaSet
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      OperatorPodName,
+			Namespace: OperatorPodNS,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "apps/v1",
+					Kind:       "ReplicaSet",
+					Name:       replicaSet.Name,
+					UID:        replicaSet.UID,
+					Controller: &isController,
+				},
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:  "operator",
+				Image: "hawtio/hawtio-operator",
+			}},
+		},
+	}
+	err = testTools.K8sClient.Create(ctx, pod)
+	Expect(err).NotTo(HaveOccurred())
+}
+
 // StartManager boots the controller-runtime manager using the configuration defined in TestTools.
 func StartManager(testTools *TestTools, extraOpts ...hawtiomgr.MgrOption) *ManagerState {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -330,7 +420,7 @@ func StartManager(testTools *TestTools, extraOpts ...hawtiomgr.MgrOption) *Manag
 	opts := []hawtiomgr.MgrOption{
 		hawtiomgr.WithRestConfig(testTools.Cfg),
 		hawtiomgr.WithWatchNamespaces(testTools.WatchNamespaces),
-		hawtiomgr.WithPodNamespace(HawtioNamespace),
+		hawtiomgr.WithPodNamespace(OperatorPodNS),
 		hawtiomgr.WithBuildVariables(buildVariables),
 		hawtiomgr.WithScheme(testTools.Scheme),
 		hawtiomgr.WithClientTools(testTools.ClientTools),

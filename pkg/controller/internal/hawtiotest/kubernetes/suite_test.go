@@ -36,8 +36,8 @@ func TestIntegrationController(t *testing.T) {
 var _ = BeforeSuite(func() {
 	// Ensure the controller is placed under test mode
 	os.Setenv("HAWTIO_UNDER_TEST", "true")
-	os.Setenv("POD_NAME", "hawtio-operator-test-pod")
-	os.Setenv("POD_NAMESPACE", "hawtio-dev-test")
+	os.Setenv("POD_NAME", hawtiotest.OperatorPodName)
+	os.Setenv("POD_NAMESPACE", hawtiotest.OperatorPodNS)
 
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
@@ -87,6 +87,8 @@ var _ = BeforeSuite(func() {
 		ClientTools:     clientTools,
 		WatchNamespaces: "",
 	}
+
+	hawtiotest.SetupOperatorPod(ctx, testTools)
 })
 
 // AfterSuite runs once after all tests in the suite have finished.

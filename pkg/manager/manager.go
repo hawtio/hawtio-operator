@@ -19,6 +19,7 @@ import (
 	consolev1 "github.com/openshift/api/console/v1"
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	routev1 "github.com/openshift/api/route/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
@@ -154,10 +155,19 @@ type MgrOption func(*mgrConfig)
 // of the RegistryPoller (see createUpdatePoller)
 type PollerConfig struct {
 	Manager         manager.Manager
-	Namespace       string
+	OperatorPod     types.NamespacedName
 	BuildVars       util.BuildVariables
 	PollingInterval time.Duration
 	ExtraOptions    []remote.Option
+}
+
+//
+// Create a function that will run after the Manager has started
+//
+type deferredTask func(context.Context) error
+
+func (f deferredTask) Start(ctx context.Context) error {
+	return f(ctx)
 }
 
 // customPullSecretNameEnvVar is the constant for env variable CUSTOM_PULL_SECRET_NAME
@@ -321,7 +331,7 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	//
 	cfg := PollerConfig{
 		Manager:         mgr,
-		Namespace:       operatorPod.Namespace,
+		OperatorPod:     operatorPod,
 		BuildVars:       mc.buildVariables,
 		PollingInterval: mc.updatePollingInterval,
 		ExtraOptions:    extraOptions,
@@ -347,8 +357,27 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 }
 
 func createUpdatePoller(ctx context.Context, cfg PollerConfig) (*updater.RegistryPoller, chan event.GenericEvent, error) {
+	operatorRef, err := getOperatorRef(ctx, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	eventEmitter := cfg.Manager.GetEventRecorder("hawtio-update-poller")
+
 	if cfg.PollingInterval == 0 {
-		log.Info("Update Poller: Image polling is disabled (interval is 0). Background updater will not be started.")
+		msg := "Update Poller: Image polling is disabled (interval is 0). Background updater will not be started."
+		log.Info(msg, "operator-ref", operatorRef)
+
+		// Wrap the emitter in a deferredTask so it broadcasts the event
+		// after the Manager has properly started
+		err := cfg.Manager.Add(deferredTask(func(ctx context.Context) error {
+			eventEmitter.Eventf(operatorRef, nil, corev1.EventTypeNormal, "ImageUpdateDisabled", "Init", msg)
+			return nil
+		}))
+		if err != nil {
+			return nil, nil, err
+		}
+
 		return nil, nil, nil
 	}
 
@@ -370,11 +399,13 @@ func createUpdatePoller(ctx context.Context, cfg PollerConfig) (*updater.Registr
 
 	poller := &updater.RegistryPoller{
 		Interval:        cfg.PollingInterval,
+		OperatorRef:     operatorRef,
 		OnlineImageURL:  cfg.BuildVars.ImageRepository + ":" + cfg.BuildVars.ImageVersion,
 		GatewayImageURL: cfg.BuildVars.GatewayImageRepository + ":" + cfg.BuildVars.GatewayImageVersion,
 		Trigger:         updateChannel,
 		AuthKeychain:    pollerKeychain,
-		Logger:          log.WithName("Update Poller"),
+		Logger:          log.WithName("Hawtio Update Poller"),
+		EventEmitter:    eventEmitter,
 		ExtraOptions:    cfg.ExtraOptions,
 	}
 
@@ -392,7 +423,7 @@ func discoverRegistryCredentials(ctx context.Context, cfg PollerConfig) ([]byte,
 	// Try the custom secret in the Operator's namespace
 	customSecretName := os.Getenv(customPullSecretNameEnvVar)
 	if customSecretName != "" {
-		err := cfg.Manager.GetAPIReader().Get(ctx, client.ObjectKey{Namespace: cfg.Namespace, Name: customSecretName}, secret)
+		err := cfg.Manager.GetAPIReader().Get(ctx, client.ObjectKey{Namespace: cfg.OperatorPod.Namespace, Name: customSecretName}, secret)
 		if err != nil {
 			// Fail on all errors as user specified CUSTOM_PULL_SECRET_NAME
 			return nil, fmt.Errorf("CUSTOM_PULL_SECRET_NAME was specified but the secret could not be retained: %w", err)
@@ -428,4 +459,63 @@ func parseKeychain(configBytes []byte) (authn.Keychain, error) {
 	}
 
 	return &updater.DockerConfigKeychain{Auths: config.Auths}, nil
+}
+
+func getOperatorRef(ctx context.Context, cfg PollerConfig) (*corev1.ObjectReference, error) {
+	apiReader := cfg.Manager.GetAPIReader()
+	operatorPod := cfg.OperatorPod
+
+	pod := &corev1.Pod{}
+	err := apiReader.Get(ctx, operatorPod, pod)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the ReplicaSet Name from the Pod's OwnerReferences
+	podOwner := metav1.GetControllerOf(pod)
+	if podOwner == nil || podOwner.Kind != "ReplicaSet" {
+		// Fallback to owning Pod if not managed by a ReplicaSet (e.g., local testing)
+		return &corev1.ObjectReference{
+			Kind:       "Pod",
+			APIVersion: "core/v1",
+			Name:       pod.GetName(),
+			Namespace:  pod.GetNamespace(),
+			UID:        pod.GetUID(),
+		}, nil
+	}
+
+	// Fetch the ReplicaSet
+	replicaSet := &appsv1.ReplicaSet{}
+	err = apiReader.Get(ctx, client.ObjectKey{Namespace: operatorPod.Namespace, Name: podOwner.Name}, replicaSet)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the Deployment Name from the ReplicaSet's OwnerReferences
+	rsOwner := metav1.GetControllerOf(replicaSet)
+	if rsOwner == nil || rsOwner.Kind != "Deployment" {
+		// Fallback to ReplicaSet if no Deployment owner exists
+		return &corev1.ObjectReference{
+			Kind:       "ReplicaSet",
+			APIVersion: "apps/v1",
+			Name:       replicaSet.GetName(),
+			Namespace:  replicaSet.GetNamespace(),
+			UID:        replicaSet.GetUID(),
+		}, nil
+	}
+
+	// Fetch the Deployment struct
+	deployment := &appsv1.Deployment{}
+	err = apiReader.Get(ctx, client.ObjectKey{Namespace: operatorPod.Namespace, Name: rsOwner.Name}, deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	return &corev1.ObjectReference{
+		Kind:       "Deployment",
+		APIVersion: "apps/v1",
+		Name:       deployment.GetName(),
+		Namespace:  deployment.GetNamespace(),
+		UID:        deployment.GetUID(),
+	}, nil
 }

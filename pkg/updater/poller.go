@@ -7,10 +7,12 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/hawtio/hawtio-operator/pkg/util"
+	"k8s.io/client-go/tools/events"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
@@ -19,10 +21,12 @@ import (
 // and fires an event if the image changes.
 type RegistryPoller struct {
 	Interval        time.Duration
+	OperatorRef     *corev1.ObjectReference
 	OnlineImageURL  string
 	GatewayImageURL string
 	AuthKeychain    authn.Keychain
 	Logger          logr.Logger
+	EventEmitter    events.EventRecorder
 	Trigger         chan event.GenericEvent // bi-directional channel
 	mu              sync.RWMutex
 	onlineDigest    string
@@ -47,7 +51,8 @@ func (p *RegistryPoller) Start(ctx context.Context) error {
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: Updater polling check")
 
 	if p.Interval == 0 {
-		p.Logger.Info("Update Poller: Image polling disabled (interval is 0)")
+		msg := "Update Poller: Image polling disabled (interval is 0)"
+		p.Logger.Info(msg)
 		<-ctx.Done()
 		return nil
 	}
@@ -63,7 +68,9 @@ func (p *RegistryPoller) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			p.Logger.Info("Update Poller: Stopping registry poller")
+			msg := "Update Poller: Stopping registry poller"
+			p.Logger.Info(msg)
+			p.EventEmitter.Eventf(p.OperatorRef, nil, corev1.EventTypeNormal, "ImageUpdateStopped", "Polling", msg)
 			return nil
 		case <-ticker.C:
 			p.checkRegistry(ctx)
@@ -79,7 +86,9 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Digest:", "digest", newOnlineDigest)
 
 	if errOnline != nil {
-		p.Logger.Error(errOnline, "Update Poller: Failed to check Online image registry. Skipping cycle.")
+		msg := "Update Poller: Failed to check Online image registry. Skipping cycle."
+		p.Logger.Error(errOnline, msg)
+		p.EventEmitter.Eventf(p.OperatorRef, nil, corev1.EventTypeWarning, "ImageUpdateFailed", "Polling", "%s Error: %v", msg, errOnline)
 		p.mu.Lock()
 		p.lastError = errOnline
 		p.mu.Unlock()
@@ -90,7 +99,9 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 	newGatewayDigest, errGateway := GetLatestDigest(ctx, p.GatewayImageURL, p.AuthKeychain, p.ExtraOptions...)
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Gateway Digest:", "digest", newGatewayDigest)
 	if errGateway != nil {
-		p.Logger.Error(errGateway, "Update Poller: Failed to check Gateway image registry. Skipping cycle.")
+		msg := "Update Poller: Failed to check Gateway image registry. Skipping cycle."
+		p.Logger.Error(errGateway, msg)
+		p.EventEmitter.Eventf(p.OperatorRef, nil, corev1.EventTypeWarning, "ImageUpdateFailed", "Polling", "%s Error: %v", msg, errGateway)
 		p.mu.Lock()
 		p.lastError = errGateway
 		p.mu.Unlock()
@@ -112,9 +123,11 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 
 	// Only trigger if we had previous data, and at least one image updated
 	if onlineChanged || gatewayChanged {
-		p.Logger.Info("Update Poller: New Hawtio images found! Triggering cluster-wide rollout",
+		msg := "Update Poller: New Hawtio images found! Triggering cluster-wide rollout"
+		p.Logger.Info(msg,
 			"onlineUpdated", onlineChanged,
 			"gatewayUpdated", gatewayChanged)
+		p.EventEmitter.Eventf(p.OperatorRef, nil, corev1.EventTypeNormal, "ImageUpdateChange", "Polling", "%s - onlineUpdated: %t - gatewayUpdated: %t", msg, onlineChanged, gatewayChanged)
 
 		p.Trigger <- event.GenericEvent{
 			Object: &metav1.PartialObjectMetadata{
