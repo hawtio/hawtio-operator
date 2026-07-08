@@ -28,7 +28,8 @@ import (
 // DefaultPollingInterval is the default polling interval
 // of the updater if no override has been specified with
 // the UPDATE_POLLING_INTERVAL environment variable
-const DefaultPollingInterval = 12 * time.Hour
+// Polling is disabled by default.
+const DefaultPollingInterval = 0 * time.Hour
 
 // logLevelEnvVar is the constant for env variable OPERATOR_LOG_LEVEL
 // which specifies the level of the operator logging.
@@ -236,13 +237,11 @@ func getUpdateInterval() time.Duration {
 	updatePollingInterval := DefaultPollingInterval
 	updatePollingIntervalStr, found := os.LookupEnv(updatePollingIntervalEnvVar)
 	if found {
-		if updatePollingIntervalStr == "0" {
-			updatePollingInterval = 0
-		} else {
+		if updatePollingIntervalStr != "0" {
 			d, err := time.ParseDuration(updatePollingIntervalStr)
 			if err != nil {
-				log.Error(err, "Invalid UPDATE_POLLING_INTERVAL format, defaulting to 12h")
-				// It naturally falls back to the 12h default we set at the top
+				log.Error(err, "Invalid UPDATE_POLLING_INTERVAL format, defaulting to disabled")
+				// Falls back to the 0 default
 			} else {
 				updatePollingInterval = d
 			}
