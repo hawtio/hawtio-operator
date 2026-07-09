@@ -2,7 +2,6 @@ package manager
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,7 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
@@ -37,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/hawtio/hawtio-operator/pkg/apis"
@@ -169,12 +166,6 @@ type deferredTask func(context.Context) error
 func (f deferredTask) Start(ctx context.Context) error {
 	return f(ctx)
 }
-
-// customPullSecretNameEnvVar is the constant for env variable CUSTOM_PULL_SECRET_NAME
-// can specify the name of a custom pull secret in the operator's namespace
-// An empty value means the operator will either try and find a global pull secret
-// (only if on OpenShift) or poll the image registry with no authentication.
-const customPullSecretNameEnvVar = "CUSTOM_PULL_SECRET_NAME"
 
 // WithRestConfig allows an external rest config to be defined
 func WithRestConfig(cfg *rest.Config) MgrOption {
@@ -381,16 +372,6 @@ func createUpdatePoller(ctx context.Context, cfg PollerConfig) (*updater.Registr
 		return nil, nil, nil
 	}
 
-	registryCreds, err := discoverRegistryCredentials(ctx, cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	pollerKeychain, err := parseKeychain(registryCreds)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	//
 	// Creates a bi-directional channel but with downgrade
 	// to receive-only when assigned to ReconcileHawtio
@@ -403,7 +384,7 @@ func createUpdatePoller(ctx context.Context, cfg PollerConfig) (*updater.Registr
 		OnlineImageURL:  cfg.BuildVars.ImageRepository + ":" + cfg.BuildVars.ImageVersion,
 		GatewayImageURL: cfg.BuildVars.GatewayImageRepository + ":" + cfg.BuildVars.GatewayImageVersion,
 		Trigger:         updateChannel,
-		AuthKeychain:    pollerKeychain,
+		APIReader:       cfg.Manager.GetAPIReader(),
 		Logger:          log.WithName("Hawtio Update Poller"),
 		EventEmitter:    eventEmitter,
 		ExtraOptions:    cfg.ExtraOptions,
@@ -415,50 +396,6 @@ func createUpdatePoller(ctx context.Context, cfg PollerConfig) (*updater.Registr
 	}
 
 	return poller, updateChannel, nil
-}
-
-func discoverRegistryCredentials(ctx context.Context, cfg PollerConfig) ([]byte, error) {
-	secret := &corev1.Secret{}
-
-	// Try the custom secret in the Operator's namespace
-	customSecretName := os.Getenv(customPullSecretNameEnvVar)
-	if customSecretName != "" {
-		err := cfg.Manager.GetAPIReader().Get(ctx, client.ObjectKey{Namespace: cfg.OperatorPod.Namespace, Name: customSecretName}, secret)
-		if err != nil {
-			// Fail on all errors as user specified CUSTOM_PULL_SECRET_NAME
-			return nil, fmt.Errorf("CUSTOM_PULL_SECRET_NAME was specified but the secret could not be retained: %w", err)
-		}
-
-		log.V(util.DebugLogLevel).Info("Secret obtained from CUSTOM_PULL_SECRET_NAME")
-
-		dockerConfigJSON, exists := secret.Data[corev1.DockerConfigJsonKey]
-		if !exists {
-			return nil, fmt.Errorf("(CUSTOM_PULL_SECRET_NAME) Secret %s exists but does not contain a %s key; is it a valid docker-registry secret?", customSecretName, corev1.DockerConfigJsonKey)
-		}
-
-		return dockerConfigJSON, nil
-	}
-
-	// Nothing found, proceed anonymously
-	return nil, nil
-}
-
-func parseKeychain(configBytes []byte) (authn.Keychain, error) {
-	// If no secret was found, return an empty keychain that always resolves to Anonymous
-	if len(configBytes) == 0 {
-		return &updater.DockerConfigKeychain{Auths: make(map[string]authn.AuthConfig)}, nil
-	}
-
-	var config struct {
-		Auths map[string]authn.AuthConfig `json:"auths"`
-	}
-
-	if err := json.Unmarshal(configBytes, &config); err != nil {
-		// If JSON parsing fails, return the error
-		return nil, err
-	}
-
-	return &updater.DockerConfigKeychain{Auths: config.Auths}, nil
 }
 
 func getOperatorRef(ctx context.Context, cfg PollerConfig) (*corev1.ObjectReference, error) {

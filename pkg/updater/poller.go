@@ -2,11 +2,14 @@ package updater
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/hawtio/hawtio-operator/pkg/util"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/events"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -14,8 +17,15 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
+
+// hawtioPullSecretName is the constant for the name of the pull
+// secret in the operator's namespace.
+// If no secret with this name exists thens the operator will
+// try to poll the image registry with no authentication.
+const hawtioPullSecretName = "hawtio-pull-secret"
 
 // RegistryPoller checks the remote registry on a schedule
 // and fires an event if the image changes.
@@ -24,7 +34,7 @@ type RegistryPoller struct {
 	OperatorRef     *corev1.ObjectReference
 	OnlineImageURL  string
 	GatewayImageURL string
-	AuthKeychain    authn.Keychain
+	APIReader       client.Reader
 	Logger          logr.Logger
 	EventEmitter    events.EventRecorder
 	Trigger         chan event.GenericEvent // bi-directional channel
@@ -78,33 +88,48 @@ func (p *RegistryPoller) Start(ctx context.Context) error {
 	}
 }
 
+func (p *RegistryPoller) publishError(err error, msg string) {
+	p.Logger.Error(err, msg)
+	p.EventEmitter.Eventf(p.OperatorRef, nil, corev1.EventTypeWarning, "ImageUpdateFailed", "Polling", "%s Error: %v", msg, err)
+
+	p.mu.Lock()
+	p.lastError = err
+	p.mu.Unlock()
+}
+
 func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: Polling registry for new digests", "online image", p.OnlineImageURL, "gateway image", p.GatewayImageURL)
 
+	registryCreds, err := p.discoverRegistryCredentials(ctx)
+	if err != nil {
+		msg := "Update Poller: Failure discoving pull secret. Skipping cycle."
+		p.publishError(err, msg)
+		return // Fail open: if one fails, we skip the whole cycle to keep them synced
+	}
+
+	authKeychain, err := p.parseKeychain(registryCreds)
+	if err != nil {
+		msg := "Update Poller: Failed to parse pull secret. Skipping cycle."
+		p.publishError(err, msg)
+		return // Fail open: if one fails, we skip the whole cycle to keep them synced
+	}
+
 	// Check Online Image
-	newOnlineDigest, errOnline := GetLatestDigest(ctx, p.OnlineImageURL, p.AuthKeychain, p.ExtraOptions...)
+	newOnlineDigest, errOnline := GetLatestDigest(ctx, p.OnlineImageURL, authKeychain, p.ExtraOptions...)
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Digest:", "digest", newOnlineDigest)
 
 	if errOnline != nil {
 		msg := "Update Poller: Failed to check Online image registry. Skipping cycle."
-		p.Logger.Error(errOnline, msg)
-		p.EventEmitter.Eventf(p.OperatorRef, nil, corev1.EventTypeWarning, "ImageUpdateFailed", "Polling", "%s Error: %v", msg, errOnline)
-		p.mu.Lock()
-		p.lastError = errOnline
-		p.mu.Unlock()
+		p.publishError(errOnline, msg)
 		return // Fail open: if one fails, we skip the whole cycle to keep them synced
 	}
 
 	// Check Gateway Image
-	newGatewayDigest, errGateway := GetLatestDigest(ctx, p.GatewayImageURL, p.AuthKeychain, p.ExtraOptions...)
+	newGatewayDigest, errGateway := GetLatestDigest(ctx, p.GatewayImageURL, authKeychain, p.ExtraOptions...)
 	p.Logger.V(util.DebugLogLevel).Info("Update Poller: New Online Gateway Digest:", "digest", newGatewayDigest)
 	if errGateway != nil {
 		msg := "Update Poller: Failed to check Gateway image registry. Skipping cycle."
-		p.Logger.Error(errGateway, msg)
-		p.EventEmitter.Eventf(p.OperatorRef, nil, corev1.EventTypeWarning, "ImageUpdateFailed", "Polling", "%s Error: %v", msg, errGateway)
-		p.mu.Lock()
-		p.lastError = errGateway
-		p.mu.Unlock()
+		p.publishError(errGateway, msg)
 		return
 	}
 
@@ -138,4 +163,45 @@ func (p *RegistryPoller) checkRegistry(ctx context.Context) {
 			},
 		}
 	}
+}
+
+func (p *RegistryPoller) discoverRegistryCredentials(ctx context.Context) ([]byte, error) {
+	secret := &corev1.Secret{}
+
+	// Try the pull secret in the Operator's namespace
+	err := p.APIReader.Get(ctx, client.ObjectKey{Namespace: p.OperatorRef.Namespace, Name: hawtioPullSecretName}, secret)
+	if err != nil && kerrors.IsNotFound(err) {
+		// No secret present, proceed anonymously
+		return nil, nil
+	} else if err != nil {
+		// Fail on all errors as user specified CUSTOM_PULL_SECRET_NAME
+		return nil, fmt.Errorf("Error occurred obtaining %s secret: %w", hawtioPullSecretName, err)
+	}
+
+	p.Logger.V(util.DebugLogLevel).Info("Secret obtained", "name", hawtioPullSecretName)
+
+	dockerConfigJSON, exists := secret.Data[corev1.DockerConfigJsonKey]
+	if !exists {
+		return nil, fmt.Errorf("Secret '%s' exists but does not contain a %s key; is it a valid docker-registry secret?", hawtioPullSecretName, corev1.DockerConfigJsonKey)
+	}
+
+	return dockerConfigJSON, nil
+}
+
+func (p *RegistryPoller) parseKeychain(configBytes []byte) (authn.Keychain, error) {
+	// If no secret was found, return an empty keychain that always resolves to Anonymous
+	if len(configBytes) == 0 {
+		return &DockerConfigKeychain{Auths: make(map[string]authn.AuthConfig)}, nil
+	}
+
+	var config struct {
+		Auths map[string]authn.AuthConfig `json:"auths"`
+	}
+
+	if err := json.Unmarshal(configBytes, &config); err != nil {
+		// If JSON parsing fails, return the error
+		return nil, err
+	}
+
+	return &DockerConfigKeychain{Auths: config.Auths}, nil
 }
