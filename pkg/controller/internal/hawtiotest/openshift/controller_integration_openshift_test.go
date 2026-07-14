@@ -176,11 +176,7 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 			}, "5s", "1s").Should(Succeed())
 		})
 
-		//
-		// SKIPPED DUE TO UPDATER DISABLED
-		// (temporarily!)
-		//
-		XContext("targetting the Image Updater", func() {
+		Context("targetting the Image Updater", func() {
 			It("Dynamically updating Deployment images when the background poller detects new digests", func() {
 				hawtiotest.PerformCommonUpdaterTest(testTools, mgrState, "OpenShift")
 			})
