@@ -187,13 +187,6 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - secrets
-          verbs:
-          - create
-          - delete
-        - apiGroups:
-          - ""
-          resources:
           - configmaps
           - serviceaccounts
           - services
@@ -303,6 +296,27 @@ spec:
           - '*'
           verbs:
           - '*'
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - rolebindings
+          verbs:
+          - create
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resourceNames:
+          - hawtio-operator-signing-key-reader
+          resources:
+          - roles
+          verbs:
+          - bind
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - create
+          - delete
         serviceAccountName: hawtio-operator
       deployments:
       - name: hawtio-operator
@@ -363,6 +377,13 @@ spec:
           - update
           - patch
           - delete
+        - apiGroups:
+          - apps
+          resources:
+          - replicasets
+          verbs:
+          - get
+          - list
         serviceAccountName: hawtio-operator
     strategy: deployment
   installModes:
