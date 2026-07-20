@@ -4,14 +4,14 @@ kind: Kustomization
 namespace: hawtio
 
 resources:
-- ../crd
-- ../cluster_role.yaml
-- ../cluster_role_binding.yaml
-- ../service_account.yaml
-- ../operator_signer_key_reader_role.yaml
-- ../operator_role.yaml
-- ../operator_role_binding.yaml
-- hawtio-aggregation-rules.yaml
+- ../base
+- operator_signer_key_reader_role.yaml
+
+patches:
+- path: patch_cluster_role.yaml
+  target:
+    kind: ClusterRole
+    name: hawtio-operator-cluster-role
 
 #
 # Patch to ensure the namespace of the signer-key role
