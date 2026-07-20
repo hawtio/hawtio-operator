@@ -1,0 +1,28 @@
+# Required to create a role-binding for access to
+# the key signer on OpenShift
+#
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings"]
+    verbs: ["create"]
+
+# Adds permission to bind to the dynamic target Role once its created
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    resourceNames: ["hawtio-operator-signing-key-reader"]
+    verbs: ["bind"]
+
+# Required for management of the hawtio-online proxy
+# certificate in tenant namespaces on OpenShift
+#
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete"]
