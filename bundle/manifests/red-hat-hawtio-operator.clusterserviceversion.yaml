@@ -251,6 +251,12 @@ spec:
           - create
           - delete
         - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        - apiGroups:
           - route.openshift.io
           resources:
           - routes
@@ -337,6 +343,8 @@ spec:
                 ports:
                 - containerPort: 8080
                   name: metrics
+                - containerPort: 9443
+                  name: webhook
                 resources:
                   limits:
                     cpu: 500m
@@ -344,7 +352,16 @@ spec:
                   requests:
                     cpu: 250m
                     memory: 100Mi
+                volumeMounts:
+                - mountPath: /tmp/k8s-webhook-server/serving-certs
+                  name: webhook-certs
+                  readOnly: true
               serviceAccountName: hawtio-operator
+              volumes:
+              - name: webhook-certs
+                secret:
+                  defaultMode: 420
+                  secretName: hawtio-operator-webhook-cert
       permissions:
       - rules:
         - apiGroups:
@@ -394,3 +411,25 @@ spec:
     name: Red Hat
   replaces: red-hat-hawtio-operator.v2.0.0
   version: 2.0.1
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    deploymentName: hawtio-operator
+    generateName: mutate.hawtio.io
+    rules:
+    - apiGroups:
+      - hawt.io
+      apiVersions:
+      - v2
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - hawtios
+      scope: Namespaced
+    sideEffects: None
+    targetPort: 9443
+    timeoutSeconds: 10
+    type: MutatingAdmissionWebhook
+    webhookPath: /hawtio-guard

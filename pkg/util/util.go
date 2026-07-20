@@ -18,6 +18,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+// HawtioUnderTestEnvVar is name of env var used to put code into testing mode
+const HawtioUnderTestEnvVar = "HAWTIO_UNDER_TEST"
+
 var log = logf.Log.WithName("util")
 var logLevelEnvVar = "OPERATOR_LOG_LEVEL"
 

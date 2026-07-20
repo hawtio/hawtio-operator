@@ -8,6 +8,8 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
+	"github.com/hawtio/hawtio-operator/pkg/util"
+
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -99,8 +101,8 @@ func (r *ReconcileHawtio) osCreateClientCertificate(ctx context.Context, hawtio 
 		var clientCertSecret *corev1.Secret
 		// If we're in test mode, don't try to create a real cert.
 		// Just log it and return 'nil' to signal "no error, nothing to do".
-		if os.Getenv(HawtioUnderTestEnvVar) == "true" {
-			r.logger.Info(fmt.Sprintf("%s: Creating OpenShift self-signed mock proxying certificate", HawtioUnderTestEnvVar))
+		if os.Getenv(util.HawtioUnderTestEnvVar) == "true" {
+			r.logger.Info(fmt.Sprintf("%s: Creating OpenShift self-signed mock proxying certificate", util.HawtioUnderTestEnvVar))
 			clientCertSecret, err = newSelfCertificateSecret(ctx, r, hawtio, clientSecretName, namespace)
 			if err != nil {
 				return nil, 0, err

@@ -5,3 +5,11 @@ namespace: hawtio
 
 resources:
 - ../base
+- webhook-service.yaml
+- webhook.yaml
+
+patches:
+- path: patch_operator.yaml
+  target:
+    kind: Deployment
+    name: hawtio-operator

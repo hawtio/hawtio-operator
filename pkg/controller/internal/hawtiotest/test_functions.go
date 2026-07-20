@@ -303,6 +303,9 @@ func createBasicHawtioCR(ctx context.Context, testTools *TestTools, name, namesp
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Annotations: map[string]string{
+				"hawtio.io/last-modified-by": "user",
+			},
 		},
 		Spec: hawtiov2.HawtioSpec{
 			Type:    hawtiov2.NamespaceHawtioDeploymentType,
@@ -514,6 +517,9 @@ func PerformEmptyTypeHawtioCR(ctx context.Context, testTools *TestTools) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      emptyTypeName,
 			Namespace: HawtioNamespace, // Use a consistent test namespace
+			Annotations: map[string]string{
+				"hawtio.io/last-modified-by": "user",
+			},
 		},
 		Spec: hawtiov2.HawtioSpec{
 			Version: "latest",
@@ -695,7 +701,13 @@ func PerformCommonUpdaterTest(testTools *TestTools, mgrState *ManagerState, plat
 	By("Creating the Hawtio CR")
 	hawtioName := "hawtio-poller-test"
 	hawtio := &hawtiov2.Hawtio{
-		ObjectMeta: metav1.ObjectMeta{Name: hawtioName, Namespace: HawtioNamespace},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtioName,
+			Namespace: HawtioNamespace,
+			Annotations: map[string]string{
+				"hawtio.io/last-modified-by": "user",
+			},
+		},
 		Spec: hawtiov2.HawtioSpec{
 			Type: hawtiov2.NamespaceHawtioDeploymentType,
 		},
@@ -760,8 +772,14 @@ func PerformCommonUpdaterNetworkFailureTest(testTools *TestTools, mgrState *Mana
 	By("Creating the Hawtio CR")
 	hawtioName := "hawtio-network-fail-test"
 	hawtio := &hawtiov2.Hawtio{
-		ObjectMeta: metav1.ObjectMeta{Name: hawtioName, Namespace: HawtioNamespace},
-		Spec:       hawtiov2.HawtioSpec{Type: hawtiov2.NamespaceHawtioDeploymentType},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtioName,
+			Namespace: HawtioNamespace,
+			Annotations: map[string]string{
+				"hawtio.io/last-modified-by": "user",
+			},
+		},
+		Spec: hawtiov2.HawtioSpec{Type: hawtiov2.NamespaceHawtioDeploymentType},
 	}
 	Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
 
@@ -825,8 +843,14 @@ func PerformCommonUpdaterPartialFailureTest(testTools *TestTools, mgrState *Mana
 	By("Creating the Hawtio CR")
 	hawtioName := "hawtio-partial-fail-test"
 	hawtio := &hawtiov2.Hawtio{
-		ObjectMeta: metav1.ObjectMeta{Name: hawtioName, Namespace: HawtioNamespace},
-		Spec:       hawtiov2.HawtioSpec{Type: hawtiov2.NamespaceHawtioDeploymentType},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hawtioName,
+			Namespace: HawtioNamespace,
+			Annotations: map[string]string{
+				"hawtio.io/last-modified-by": "user",
+			},
+		},
+		Spec: hawtiov2.HawtioSpec{Type: hawtiov2.NamespaceHawtioDeploymentType},
 	}
 	Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
 

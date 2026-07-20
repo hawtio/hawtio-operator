@@ -48,7 +48,6 @@ var hawtioLogger = logf.Log.WithName("controller_hawtio")
 
 const (
 	hawtioFinalizer         = "hawt.io/finalizer"
-	HawtioUnderTestEnvVar   = "HAWTIO_UNDER_TEST"
 )
 
 var ErrLegacyResourceAdopted = errs.New("A legacy resource has been adopted, requeue required")
@@ -103,7 +102,7 @@ func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *cli
 	// Need to skip name registry validation if
 	// the controller is being run through test suites
 	skipValidation := false
-	if os.Getenv(HawtioUnderTestEnvVar) == "true" {
+	if os.Getenv(util.HawtioUnderTestEnvVar) == "true" {
 		skipValidation = true
   }
 
@@ -253,6 +252,12 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		// Return and don't requeue
 		return reconcile.Result{}, nil
 	}
+
+	user, err := r.getHawtioOwner(ctx, hawtio)
+	if (err != nil) {
+		return reconcile.Result{}, err
+	}
+	r.logger.Info("=== Hawtio Ownership ===", "owner", user)
 
 	// =====================================================================
 	// PHASE 2: DELETION AND FINALIZERS
