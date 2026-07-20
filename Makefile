@@ -14,6 +14,15 @@ LAST_RELEASED_VERSION ?= 2.0.0
 BUNDLE_IMAGE_NAME ?= $(IMAGE)-bundle
 FORCE_TOOL_UPDATE ?= false
 
+# Cluster on which to install [ openshift | k8s ]
+CLUSTER_TYPE ?= k8s
+
+# The supported architectures
+ARCHS ?= amd64 arm64
+
+# Destination registry prefix when pushing
+DESTINATION_PREFIX = docker://
+
 # Is this build part of an automated CI pipeline
 CI_BUILD ?= false
 
@@ -203,29 +212,6 @@ else
 	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/crd
 endif
 
-#---
-#
-#@ deploy
-#
-#== Deploy all the resources of the operator to the current cluster
-#
-#=== Can only be executed as a cluster-admin
-#
-#* PARAMETERS:
-#** IMAGE:     Set a custom image for the deployment
-#** VERSION:   Set a custom version for the deployment
-#** NAMESPACE: Set the namespace for the resources
-#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
-#
-#---
-deploy: kubectl kustomize install
-	$(call set-kvars,$(INSTALL_ROOT))
-ifeq ($(DEBUG), false)
-	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT) | kubectl apply -f -
-else
-	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)
-endif
-
 # Generate bundle manifests and metadata
 DEFAULT_CHANNEL ?= $(shell echo "v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
 CHANNELS ?= $(DEFAULT_CHANNEL),latest
@@ -303,7 +289,7 @@ bundle: kustomize operator-sdk pre-bundle
 	@# Sets the operator image to the preferred image:tag
 	@cd bundle && $(KUSTOMIZE) edit set image $(IMAGE_NAME)=$(IMAGE):$(VERSION)
 	@# Build kustomize manifests
-	$(KUSTOMIZE) build bundle | $(OPERATOR_SDK) generate bundle \
+	$(KUSTOMIZE) build $(KOPTIONS) bundle | $(OPERATOR_SDK) generate bundle \
 		--kustomize-dir bundle \
 		--version $(OPERATOR_VERSION) -q --overwrite \
 		$(BUNDLE_METADATA_OPTS)
@@ -467,17 +453,19 @@ endif
 #=== Calls check-admin
 #
 #* PARAMETERS:
-#** IMAGE:     Set a custom image for the deployment
-#** VERSION:   Set a custom version for the deployment
-#** NAMESPACE: Set the namespace for the resources
-#** DEBUG:     Print the resources to be applied instead of applying them [true|false]
+#** CLUSTER_TYPE:  Set the cluster type to install on
+#**                    [ openshift | k8s ]
+#** IMAGE:         Set a custom image for the deployment
+#** VERSION:       Set a custom version for the deployment
+#** NAMESPACE:     Set the namespace for the resources
+#** DEBUG:         Print the resources to be applied instead of applying them [true|false]
 setup: kubectl kustomize check-admin
 	#@ Must be invoked by a user with cluster-admin privileges
-	$(call set-kvars,$(INSTALL_ROOT)/setup)
+	$(call set-kvars,$(INSTALL_ROOT)/setup/$(CLUSTER_TYPE))
 ifeq ($(DEBUG), false)
-	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/setup | kubectl apply -f -
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/setup/$(CLUSTER_TYPE) | kubectl apply -f -
 else
-	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/setup
+	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/setup/$(CLUSTER_TYPE)
 endif
 
 #---
@@ -548,7 +536,22 @@ else
 	$(KUSTOMIZE) build $(KOPTIONS) $(INSTALL_ROOT)/app
 endif
 
-UNINSTALLS = .uninstall-app .uninstall-operator .uninstall-setup
+#---
+#
+#@ uninstall
+#
+#== Removes the operator from the cluster
+#
+#=== (must be granted the privileges by the Cluster-Admin)
+#
+#* PARAMETERS:
+#** CLUSTER_TYPE:  Set the cluster type to install on
+#**                    [ openshift | k8s ]
+#** NAMESPACE:     Set the namespace for the resources
+#** DEBUG:         Print the resources to be applied instead of applying them [true|false]
+#
+#---
+UNINSTALLS = .uninstall-app .uninstall-operator .uninstall-setup/$(CLUSTER_TYPE)
 
 $(UNINSTALLS): kubectl kustomize
 	# Delete CR instances first while the operator is still running

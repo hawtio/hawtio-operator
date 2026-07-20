@@ -4,5 +4,4 @@ kind: Kustomization
 namespace: hawtio
 
 resources:
-- ../init
-- operator.yaml
+- service_account.yaml
