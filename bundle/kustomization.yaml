@@ -16,3 +16,7 @@ patches:
     kind: Deployment
     name: hawtio-operator
     version: v1
+- path: ../deploy/operator/openshift/patch_operator.yaml
+  target:
+    kind: Deployment
+    name: hawtio-operator
