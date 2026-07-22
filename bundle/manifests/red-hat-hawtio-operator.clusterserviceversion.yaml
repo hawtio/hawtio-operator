@@ -99,7 +99,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: quay.io/hawtio/operator:2.0.1
-    createdAt: "2026-07-16T12:30:10Z"
+    createdAt: "2026-07-22T11:41:15Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <2.0.0'
@@ -341,10 +341,10 @@ spec:
                 imagePullPolicy: Always
                 name: hawtio-operator
                 ports:
-                - containerPort: 8080
-                  name: metrics
                 - containerPort: 9443
                   name: webhook
+                - containerPort: 8080
+                  name: metrics
                 resources:
                   limits:
                     cpu: 500m
