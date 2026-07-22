@@ -276,7 +276,7 @@ CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
 # Not required for first version to be deployed to Operator Hub
 CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
 # Ensure all the 1.x releases should upgrade to 2
-CSV_SKIP_RANGE := >=1.0.0 <2.0.0
+CSV_SKIP_RANGE := >=1.0.0 <2.0.1
 IMAGE_NAME ?= $(DEFAULT_IMAGE)
 
 # Test Bundle Index
