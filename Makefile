@@ -222,7 +222,17 @@ ifeq ($(CI_BUILD), false)
 ifeq (, $(if $(filter true,$(FORCE_TOOL_UPDATE)),,$(shell command -v gotestfmt 2> /dev/null)))
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 endif
-	CGO_ENABLED=0 GOARCH=$(GOARCH) $(TEST_ENV_VARS) go test $(TEST_FLAGS) -count=1 -json ./... 2>&1 | gotestfmt
+# Run all tests including integration tests
+# - First attempt with JSON output for gotestfmt formatting
+# - If tests fail, re-run without JSON for readable error output
+	@CGO_ENABLED=0 GOARCH=$(GOARCH) $(TEST_ENV_VARS) go test $(TEST_FLAGS) -count=1 -json ./... 2>&1 | gotestfmt; \
+	if [ $$? -ne 0 ]; then \
+		echo ""; \
+		echo "Tests failed. Re-running without JSON for readable output:"; \
+		echo "================================================================"; \
+		CGO_ENABLED=0 GOARCH=$(GOARCH) $(TEST_ENV_VARS) go test $(TEST_FLAGS) -count=1 -v ./...; \
+		exit 1; \
+	fi
 else
 	CGO_ENABLED=0 GOARCH=$(GOARCH) $(TEST_ENV_VARS) go test $(TEST_FLAGS) -v -count=1 ./...
 endif
