@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} golang:1.26.2-alpine3.23 AS builder
+FROM --platform=${BUILDPLATFORM} golang:1.26.5-alpine3.23 AS builder
 
 ARG TARGETARCH
 ARG HAWTIO_ONLINE_VERSION=latest
