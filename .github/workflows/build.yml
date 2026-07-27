@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ["1.26.2"]
+        go: ["1.26.5"]
         arch: [ amd64, arm64 ]
     steps:
       - name: Install QEMU static binaries for Podman
