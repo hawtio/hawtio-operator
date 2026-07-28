@@ -11,22 +11,3 @@ patches:
   target:
     kind: ClusterRole
     name: hawtio-operator-cluster-role
-
-#
-# Patch to ensure the namespace of the signer-key role
-# is not overwritten by kustomize. By making it a transformer
-# it is performed at the end of the kustomize process.
-#
-transformers:
-- |
-  apiVersion: builtin
-  kind: PatchTransformer
-  metadata:
-    name: fix-service-ca-namespace
-  patch: |-
-    - op: replace
-      path: /metadata/namespace
-      value: openshift-service-ca
-  target:
-    kind: Role
-    name: hawtio-operator-signing-key-reader
