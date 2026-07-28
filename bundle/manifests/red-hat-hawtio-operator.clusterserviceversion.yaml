@@ -239,19 +239,13 @@ spec:
           verbs:
           - '*'
         - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - rolebindings
-          verbs:
-          - create
-        - apiGroups:
-          - rbac.authorization.k8s.io
+          - ""
           resourceNames:
-          - hawtio-operator-signing-key-reader
+          - signing-key
           resources:
-          - roles
+          - secrets
           verbs:
-          - bind
+          - get
         - apiGroups:
           - ""
           resources:
