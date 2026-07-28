@@ -5,7 +5,6 @@ namespace: hawtio
 
 resources:
 - ../base
-- operator_signer_key_reader_role.yaml
 
 patches:
 - path: patch_cluster_role.yaml
