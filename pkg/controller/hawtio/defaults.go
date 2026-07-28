@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -24,44 +23,6 @@ import (
 // Cap the maximum requeue time to 24 hours
 // Maximum time to sleep before a requeue should take place
 var maxRequeueTime = 24 * time.Hour
-
-func (r *ReconcileHawtio) ensureSigningKeyAccess(ctx context.Context) error {
-	// Get the operator's current runtime namespace
-	namespace := r.operatorPod.Namespace
-	bindingName := fmt.Sprintf("hawtio-operator-signing-key-binding-%s", namespace)
-
-	// Define the localized binding manifest
-	binding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      bindingName,
-			Namespace: "openshift-service-ca",
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      "hawtio-operator",
-				Namespace: namespace,
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			Kind:     "Role",
-			Name:     "hawtio-operator-signing-key-reader",
-			APIGroup: "rbac.authorization.k8s.io",
-		},
-	}
-
-	// Create and quietly backoff if already exists
-	err := r.client.Create(ctx, binding)
-	if err != nil {
-		if kerrors.IsAlreadyExists(err) {
-			return nil // Already bound, safe to proceed
-		}
-		// If it fails due to lack of permissions to create bindings, bubble it up
-		return fmt.Errorf("failed to create role-binding for key signing: %w", err)
-	}
-
-	return nil
-}
 
 func (r *ReconcileHawtio) usingCustomClientSecret(hawtio *hawtiov2.Hawtio) bool {
 	commonName := hawtio.Spec.Auth.ClientCertCommonName
@@ -80,12 +41,6 @@ func (r *ReconcileHawtio) getMasterClientSecretName(hawtio *hawtiov2.Hawtio) str
 func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
 	if ! r.apiSpec.IsOpenShift4 {
 		return nil, 0, nil // not required on Kubernetes
-	}
-
-	// Ensure the operator has access to the key-signer in openshift-service-ca
-	err := r.ensureSigningKeyAccess(ctx)
-	if err != nil {
-		return nil, 0, err
 	}
 
 	clientSecretName := r.getMasterClientSecretName(hawtio)

@@ -1,21 +1,17 @@
-# Required to create a role-binding for access to
-# the key signer on OpenShift
+# Essential for accessing the signing-key for generating
+# the proxy certificate for accessing jolokia applications
+#
+# - Mitigated to only getting a secret named "signing-key"
+# - OLM cannot install roles in other namespaces so only way
+#   to give permission to access this signing-key
 #
 - op: add
   path: /rules/-
   value:
-    apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["rolebindings"]
-    verbs: ["create"]
-
-# Adds permission to bind to the dynamic target Role once its created
-- op: add
-  path: /rules/-
-  value:
-    apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["roles"]
-    resourceNames: ["hawtio-operator-signing-key-reader"]
-    verbs: ["bind"]
+    apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["signing-key"]
+    verbs: ["get"]
 
 # Required for management of the hawtio-online proxy
 # certificate in tenant namespaces on OpenShift
