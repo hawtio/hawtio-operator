@@ -99,7 +99,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: quay.io/hawtio/operator:2.0.1
-    createdAt: "2026-07-28T16:32:31Z"
+    createdAt: "2026-07-29T15:16:01Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <2.0.1'
@@ -356,28 +356,6 @@ spec:
                 secret:
                   defaultMode: 420
                   secretName: hawtio-operator-webhook-cert
-      permissions:
-      - rules:
-        - apiGroups:
-          - ""
-          resources:
-          - secrets
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - apps
-          resources:
-          - replicasets
-          verbs:
-          - get
-          - list
-        serviceAccountName: hawtio-operator
     strategy: deployment
   installModes:
   - supported: true
