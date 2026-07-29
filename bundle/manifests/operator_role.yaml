@@ -1,0 +1,20 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hawtio-operator-role
+rules:
+
+#
+# --- SECRETS (Isolated) ---
+#
+
+# Required for management of the hawtio-online proxy
+# certificate on OpenShift in the operator's own namespace
+#
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list"]
