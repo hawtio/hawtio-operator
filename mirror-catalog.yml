@@ -7,3 +7,14 @@ spec:
     - source:<registry that cluster requires w/ repository endpoint>
       mirrors:
         - <actual registry w/ repository endpoint>
+---
+
+apiVersion: config.openshift.io/v1
+kind: ImageDigestMirrorSet
+metadata:
+  name: my-digest-mirror
+spec:
+  imageDigestMirrors:
+    - source:<registry that cluster requires w/ repository endpoint>
+      mirrors:
+        - <actual registry w/ repository endpoint>
