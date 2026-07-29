@@ -356,28 +356,11 @@ spec:
                     cpu: 250m
                     memory: 100Mi
               serviceAccountName: hawtio-operator
-      permissions:
-      - rules:
-        - apiGroups:
-          - ""
-          resources:
-          - secrets
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - apps
-          resources:
-          - replicasets
-          verbs:
-          - get
-          - list
-        serviceAccountName: hawtio-operator
+              volumes:
+              - name: webhook-certs
+                secret:
+                  defaultMode: 420
+                  secretName: hawtio-operator-webhook-cert
     strategy: deployment
   installModes:
   - supported: true
