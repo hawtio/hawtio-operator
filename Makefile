@@ -267,12 +267,14 @@ endif
 DEFAULT_CHANNEL ?= $(shell echo "v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
 CHANNELS ?= $(DEFAULT_CHANNEL),latest
 PACKAGE := red-hat-hawtio-operator
-MANIFESTS := bundle
+BUNDLE := bundle
+MANIFESTS := $(BUNDLE)/manifests
+DEPLOY := deploy
 CSV_VERSION ?= $(OPERATOR_VERSION)
 CSV_NAME := $(PACKAGE).v$(CSV_VERSION)
 CSV_DISPLAY_NAME := Hawtio Operator
 CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
-CSV_PATH := $(MANIFESTS)/bases/$(CSV_FILENAME)
+CSV_PATH := $(BUNDLE)/bases/$(CSV_FILENAME)
 # Not required for first version to be deployed to Operator Hub
 CSV_REPLACES := $(LAST_RELEASED_IMAGE_NAME).v$(LAST_RELEASED_VERSION)
 # Ensure all the 1.x releases should upgrade to 2
@@ -347,6 +349,14 @@ bundle: kustomize operator-sdk pre-bundle
 		--kustomize-dir bundle \
 		--version $(OPERATOR_VERSION) -q --overwrite \
 		$(BUNDLE_METADATA_OPTS)
+	@$(MAKE) post-bundle
+
+post-bundle:
+	@echo "--- Injecting isolated local Role & RoleBinding into bundle ---"
+	@cp $(DEPLOY)/setup/base/operator_role.yaml $(MANIFESTS)/
+	@cp $(DEPLOY)/setup/base/operator_role_binding.yaml $(MANIFESTS)/
+	@# Re-validate the bundle to ensure OLM metadata and raw manifests are clean
+	@$(MAKE) validate-bundle
 
 #---
 #
@@ -386,7 +396,7 @@ bundle-build: bundle
 #---
 bundle-index: opm yq
 	BUNDLE_INDEX=$(BUNDLE_INDEX) INDEX_DIR=$(INDEX_DIR) PACKAGE=$(PACKAGE) YQ=$(YQ) \
-	OPM=$(OPM) BUNDLE_IMAGE=$(BUNDLE_IMAGE_NAME):$(VERSION) CSV_NAME=$(CSV_NAME) \
+	OPM=$(OPM) OPM_OPTIONS=${OPM_OPTIONS} BUNDLE_IMAGE=$(BUNDLE_IMAGE_NAME):$(VERSION) CSV_NAME=$(CSV_NAME) \
 	CSV_SKIPS="$(CSV_SKIP_RANGE)" CSV_REPLACES=$(CSV_REPLACES) CHANNELS="$(CHANNELS)" \
 	CONTAINER_BUILDER=$(CONTAINER_BUILDER) ./script/build_bundle_index.sh
 

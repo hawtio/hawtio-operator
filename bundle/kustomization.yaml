@@ -3,11 +3,24 @@ kind: Kustomization
 
 resources:
 - ../deploy/crs
-- ../deploy/setup/openshift
+- ../deploy/crd
+- ../deploy/init
+- ../deploy/setup/base/cluster_role.yaml
+- ../deploy/setup/base/cluster_role_binding.yaml
+- ../deploy/setup/base/hawtio-aggregation-rules.yaml
 - ../deploy/operator/base/operator.yaml
 - ../deploy/operator/openshift/webhook-service.yaml
 - ../deploy/operator/openshift/webhook.yaml
 - scorecard
+
+#
+# Do NOT add
+# ../deploy/setup/base/operator_role.yaml
+# ../deploy/setup/base/operator_role_binding
+#
+# These permissions will get promoted to a cluster role
+# in All-Namespace mode and this will violate security requirements
+#
 
 patches:
 - path: patches/patch-watch-namespaces.yaml
@@ -16,6 +29,10 @@ patches:
     kind: Deployment
     name: hawtio-operator
     version: v1
+- path: ../deploy/setup/openshift/patch_cluster_role.yaml
+  target:
+    kind: ClusterRole
+    name: hawtio-operator-cluster-role
 - path: ../deploy/operator/openshift/patch_operator.yaml
   target:
     kind: Deployment
