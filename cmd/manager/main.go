@@ -30,6 +30,12 @@ import (
 // the UPDATE_POLLING_INTERVAL environment variable
 const DefaultPollingInterval = 12 * time.Hour
 
+// DefaultCertificateExpiryPeriod is the default expiry
+// period for client proxy certificates if no override has
+// been specified with the CERTIFICATE_EXPIRY_PERIOD
+// environment variable
+const DefaultCertificateExpiryPeriod = 24 * time.Hour
+
 // logLevelEnvVar is the constant for env variable OPERATOR_LOG_LEVEL
 // which specifies the level of the operator logging.
 // An empty value means the operator runs with a level of "Info".
@@ -57,6 +63,14 @@ var podNamespaceEnvVar = "POD_NAMESPACE"
 // Values should be in the form of a duration, ie. 6h, 12h, and the default
 // will be 12h.
 var updatePollingIntervalEnvVar = "UPDATE_POLLING_INTERVAL"
+
+// certificateExpiryPeriod is the constant for env variable CERTIFICATE_EXPIRY_PERIOD
+// which specifies the expiry period added to the master proxy certificate
+// and sleep period (- NOW) before each CR re-reconciles with the operator
+// Values should be in the form of a duration, ie. 2h, 12h, not less than 2h
+// and the default will be 24h
+//
+var certificateExpiryPeriodEnvVar = "CERTIFICATE_EXPIRY_PERIOD"
 
 // Go build-time variables
 var (
@@ -137,16 +151,23 @@ func main() {
 	// Get update polling interval (Empty = 12h)
 	updatePollingInterval := getUpdateInterval()
 
+	// Get certficate expired period (Empty = 24h)
+	certExpiryPeriod := getCertificateExpiryPeriod()
+
+	log.Info("Operator Environment Variables",
+		"UPDATE_POLLING_INTERVAL", updatePollingInterval.String(),
+		"CERTIFICATE_EXPIRY_PERIOD", certExpiryPeriod.String())
+
 	flag.Parse()
 
-	err = operatorRun(watchNamespaces, podNamespace, updatePollingInterval, cfg)
+	err = operatorRun(watchNamespaces, podNamespace, certExpiryPeriod, updatePollingInterval, cfg)
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
 // operatorRun setup and run the operator
-func operatorRun(watchNamespaces string, podNamespace string, updatePollingInterval time.Duration, cfg *rest.Config) error {
+func operatorRun(watchNamespaces string, podNamespace string, certExpiryPeriod time.Duration, updatePollingInterval time.Duration, cfg *rest.Config) error {
 	// Become the leader before proceeding
 	// Note: leader.Become uses POD_NAMESPACE env var implicitly
 	err := leader.Become(context.TODO(), "hawtio-lock")
@@ -178,6 +199,7 @@ func operatorRun(watchNamespaces string, podNamespace string, updatePollingInter
 		hawtiomgr.WithWatchNamespaces(watchNamespaces),
 		hawtiomgr.WithPodNamespace(podNamespace),
 		hawtiomgr.WithBuildVariables(bv),
+		hawtiomgr.WithCertificateExpiryPeriod(certExpiryPeriod),
 		hawtiomgr.WithUpdatePollingInterval(updatePollingInterval),
 	)
 
@@ -230,6 +252,26 @@ func getLogLevel() zapcore.Level {
 
 	fmt.Println("Defaulting to log level of info")
 	return zap.InfoLevel
+}
+
+func getCertificateExpiryPeriod() time.Duration {
+	certExpiryPeriod := DefaultCertificateExpiryPeriod
+	certExpiryPeriodStr, found := os.LookupEnv(certificateExpiryPeriodEnvVar)
+	if found {
+		d, err := time.ParseDuration(certExpiryPeriodStr)
+		if err != nil {
+			log.Error(err, "Invalid CERTIFICATE_EXPIRY_PERIOD format, defaulting to 24hr")
+			// It naturally falls back to the 24hr default we set at the top
+		} else {
+			certExpiryPeriod = d
+			if certExpiryPeriod < 2*time.Hour {
+				log.Info("WARNING: Configured certificate expiry period is less than 2 hours. This should only be used for testing and development environments.",
+					"CERTIFICATE_EXPIRY_PERIOD", certExpiryPeriod.String())
+			}
+		}
+	}
+
+	return certExpiryPeriod
 }
 
 func getUpdateInterval() time.Duration {

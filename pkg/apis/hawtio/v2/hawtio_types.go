@@ -120,14 +120,27 @@ type HawtioAuth struct {
 	InternalSSL *bool `json:"internalSSL,omitempty"`
 	// The generated client certificate CN
 	ClientCertCommonName string `json:"clientCertCommonName,omitempty"`
-	// The generated client certificate expiration date
+	// ClientCertExpirationDate specifies the exact target expiration date for
+	// self-signed certificates generated on plain Kubernetes clusters.
+	//
+	// Deprecated: On OpenShift, serving certificate lifecycle and expiration dates
+	// are managed automatically by OpenShift's service-ca operator. Setting this
+	// field on OpenShift clusters has no effect and will be ignored.
+	// +optional
 	ClientCertExpirationDate *metav1.Time `json:"clientCertExpirationDate,omitempty"`
 	// Deprecated: ClientCertCheckSchedule is ignored in v2.0.0. The Operator now
 	// uses native Kubernetes event timers to schedule certificate rotation.
 	// +kubebuilder:validation:Optional
 	ClientCertCheckSchedule string `json:"clientCertCheckSchedule,omitempty"`
-	// The duration in hours before the expiration date, during which the certification can be rotated.
-	// The default is set to 24 hours.
+	// ClientCertExpirationPeriod specifies the buffer window in hours before
+	// certificate expiration during which the operator will attempt rotation.
+	// Default is 24 hours.
+	//
+	// Deprecated: On OpenShift, this field is now ignored. Serving certificates are
+	// managed by OpenShift's service-ca operator, and proxy certificates are configured
+	// globally via the CERTIFICATE_EXPIRY_PERIOD operator environment variable.
+	// +optional
+	// +kubebuilder:default=24
 	ClientCertExpirationPeriod int `json:"clientCertExpirationPeriod,omitempty"`
 }
 

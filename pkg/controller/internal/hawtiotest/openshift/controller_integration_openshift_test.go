@@ -4,7 +4,14 @@ package hawtiotest
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,6 +32,38 @@ import (
 
 	"github.com/hawtio/hawtio-operator/pkg/controller/internal/hawtiotest"
 )
+
+// see pkg/controller/hawtio/defaults.go
+const masterProxyingSecretName = "hawtio-operator-tls-proxying"
+
+// Helper function to generate a valid self-signed X.509 certificate & key PEM block in-memory
+func generateShortLivedCertPEM(duration time.Duration) ([]byte, []byte) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	Expect(err).NotTo(HaveOccurred())
+
+	serialNumberNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	Expect(err).NotTo(HaveOccurred())
+
+	template := x509.Certificate{
+		SerialNumber: serialNumberNumber,
+		Subject: pkix.Name{
+			CommonName: "hawtio-online.hawtio.svc",
+		},
+		NotBefore:             time.Now().Add(-1 * time.Minute),
+		NotAfter:              time.Now().Add(duration), // Expires in 5 seconds!
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	Expect(err).NotTo(HaveOccurred())
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+
+	return certPEM, keyPEM
+}
 
 var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 	var mgrState *hawtiotest.ManagerState
@@ -155,7 +194,7 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 			masterSecret := &corev1.Secret{}
 			// Adjust 'testTools.OperatorNamespace' or wherever your operator holds its master key
 			masterSecretKey := types.NamespacedName{
-				Name:      fmt.Sprintf("%s-tls-proxying", hawtio.Name),
+				Name:      masterProxyingSecretName,
 				Namespace: hawtiotest.OperatorPodNS,
 			}
 			Eventually(func() bool {
@@ -339,6 +378,246 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 				hawtiotest.PerformCommonUpdaterPartialFailureTest(testTools, mgrState, "OpenShift")
 			})
 		})
+
+		Context("Master and Slave Certificate Lifecycle", func() {
+
+			It("Should verify master and slave certificate metadata and structure", func() {
+				By("Creating Hawtio CR")
+				hawtio := hawtiotest.CreateBasicHawtioCR(mgrState.Ctx, testTools, "cert-test", hawtiotest.HawtioNamespace)
+
+				masterSecret := &corev1.Secret{}
+				masterKey := types.NamespacedName{
+					Name:      masterProxyingSecretName,
+					Namespace: hawtiotest.OperatorPodNS,
+				}
+
+				var slaveSecretName string
+				By("Waiting for master certificate, slave certificate, and CR status update")
+				Eventually(func(g Gomega) {
+					// Fetch CR and check status
+					fetched := &hawtiov2.Hawtio{}
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(hawtio), fetched)).To(Succeed())
+					slaveSecretName = fetched.Status.ClientCertificate.Active
+					g.Expect(slaveSecretName).NotTo(BeEmpty())
+					g.Expect(fetched.Status.ClientCertificate.Pending).To(BeEmpty())
+
+					// Verify slave name contains expected prefix hash pattern
+					g.Expect(slaveSecretName).To(ContainSubstring(fmt.Sprintf("%s-tls-proxying", hawtio.Name)))
+
+					// Fetch Master Secret
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, masterKey, masterSecret)).To(Succeed())
+				}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
+
+				// Fetch Slave Secret once names are resolved
+				slaveSecret := &corev1.Secret{}
+				slaveKey := types.NamespacedName{Name: slaveSecretName, Namespace: hawtiotest.HawtioNamespace}
+				Expect(testTools.K8sClient.Get(mgrState.Ctx, slaveKey, slaveSecret)).To(Succeed())
+
+				By("Verifying Secret Type and Labels")
+				Expect(masterSecret.Type).To(Equal(corev1.SecretTypeTLS))
+				Expect(slaveSecret.Type).To(Equal(corev1.SecretTypeTLS))
+				Expect(masterSecret.Labels).To(HaveKeyWithValue("app", "hawtio"))
+				Expect(slaveSecret.Labels).To(HaveKeyWithValue("app", "hawtio"))
+
+				By("Verifying Data Keys and Content Equality")
+				Expect(masterSecret.Data).To(HaveKey("tls.crt"))
+				Expect(masterSecret.Data).To(HaveKey("tls.key"))
+				Expect(masterSecret.Data["tls.crt"]).NotTo(BeEmpty())
+				Expect(masterSecret.Data["tls.key"]).NotTo(BeEmpty())
+
+				Expect(slaveSecret.Data["tls.crt"]).To(Equal(masterSecret.Data["tls.crt"]))
+				Expect(slaveSecret.Data["tls.key"]).To(Equal(masterSecret.Data["tls.key"]))
+
+				By("Verifying Slave Owner References")
+				Expect(slaveSecret.OwnerReferences).To(HaveLen(1), "Slave secret must have exactly one owner reference")
+				Expect(slaveSecret.OwnerReferences[0].Name).To(Equal(hawtio.Name))
+				Expect(slaveSecret.OwnerReferences[0].UID).To(Equal(hawtio.UID))
+				Expect(*slaveSecret.OwnerReferences[0].Controller).To(BeTrue())
+
+				By("Parsing X.509 Certificate to verify Common Name and Expiry")
+				block, _ := pem.Decode(masterSecret.Data["tls.crt"])
+				Expect(block).NotTo(BeNil(), "PEM block should be decodable")
+
+				cert, err := x509.ParseCertificate(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cert.Subject.CommonName).To(Equal("hawtio-online.hawtio.svc"))
+
+				// Verify default expiry for the proxy certificate would be 24hr
+				// but we have to use a self-signed certificate which has a
+				// 1 year default.
+				expectedExpiry := time.Now().AddDate(1, 0, 0)
+				Expect(cert.NotAfter).To(BeTemporally("~", expectedExpiry, 5*time.Minute))
+			})
+
+			It("Should handle multiple CRs sharing the same master certificate", func() {
+				By("Creating multiple Hawtio CRs")
+				cr1 := hawtiotest.CreateBasicHawtioCR(mgrState.Ctx, testTools, "multi-cert-1", hawtiotest.HawtioNamespace)
+				cr2 := hawtiotest.CreateBasicHawtioCR(mgrState.Ctx, testTools, "multi-cert-2", hawtiotest.HawtioNamespace)
+				cr3 := hawtiotest.CreateBasicHawtioCR(mgrState.Ctx, testTools, "multi-cert-3", hawtiotest.HawtioNamespace)
+
+				DeferCleanup(func() {
+					By("Cleaning up additional test CRs")
+					hawtiotest.PerformDeleteHawtioCR(testTools, cr2.Name, hawtiotest.HawtioNamespace)
+					hawtiotest.PerformDeleteHawtioCR(testTools, cr3.Name, hawtiotest.HawtioNamespace)
+				})
+
+				By("Verifying all CRs share the same master certificate")
+				masterKey := types.NamespacedName{
+					Name:      masterProxyingSecretName,
+					Namespace: hawtiotest.OperatorPodNS,
+				}
+
+				masterSecret := &corev1.Secret{}
+				Eventually(func() error {
+					return testTools.K8sClient.Get(mgrState.Ctx, masterKey, masterSecret)
+				}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
+
+				originalCertData := masterSecret.Data["tls.crt"]
+
+				By("Verifying all CRs have slave certificates pointing to master data")
+				var slave1Name, slave2Name, slave3Name string
+				Eventually(func(g Gomega) {
+					fetched1 := &hawtiov2.Hawtio{}
+					fetched2 := &hawtiov2.Hawtio{}
+					fetched3 := &hawtiov2.Hawtio{}
+
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(cr1), fetched1)).To(Succeed())
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(cr2), fetched2)).To(Succeed())
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(cr3), fetched3)).To(Succeed())
+
+					slave1Name = fetched1.Status.ClientCertificate.Active
+					slave2Name = fetched2.Status.ClientCertificate.Active
+					slave3Name = fetched3.Status.ClientCertificate.Active
+
+					g.Expect(slave1Name).NotTo(BeEmpty())
+					g.Expect(slave2Name).NotTo(BeEmpty())
+					g.Expect(slave3Name).NotTo(BeEmpty())
+				}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
+
+				slave1 := &corev1.Secret{}
+				slave2 := &corev1.Secret{}
+				slave3 := &corev1.Secret{}
+
+				Expect(testTools.K8sClient.Get(mgrState.Ctx, types.NamespacedName{Name: slave1Name, Namespace: hawtiotest.HawtioNamespace}, slave1)).To(Succeed())
+				Expect(testTools.K8sClient.Get(mgrState.Ctx, types.NamespacedName{Name: slave2Name, Namespace: hawtiotest.HawtioNamespace}, slave2)).To(Succeed())
+				Expect(testTools.K8sClient.Get(mgrState.Ctx, types.NamespacedName{Name: slave3Name, Namespace: hawtiotest.HawtioNamespace}, slave3)).To(Succeed())
+
+				Expect(slave1.Data["tls.crt"]).To(Equal(originalCertData))
+				Expect(slave2.Data["tls.crt"]).To(Equal(originalCertData))
+				Expect(slave3.Data["tls.crt"]).To(Equal(originalCertData))
+			})
+		})
+
+		Context("Dynamic Certificate Rotation", func() {
+
+			It("Should detect a certificate expiring in 5 seconds and automatically rotate it", func() {
+				CRName := "cert-rotation-test"
+
+				By("Creating a basic Hawtio CR")
+				hawtio := hawtiotest.CreateBasicHawtioCR(mgrState.Ctx, testTools, CRName, hawtiotest.HawtioNamespace)
+
+				masterSecretKey := types.NamespacedName{
+					Name:      masterProxyingSecretName,
+					Namespace: hawtiotest.OperatorPodNS,
+				}
+
+				masterSecret := &corev1.Secret{}
+
+				By("Waiting for the initial master certificate to be created by the operator")
+				var initialSerial *big.Int
+				Eventually(func(g Gomega) {
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, masterSecretKey, masterSecret)).To(Succeed())
+					g.Expect(masterSecret.Data["tls.crt"]).NotTo(BeEmpty())
+
+					block, _ := pem.Decode(masterSecret.Data["tls.crt"])
+					cert, err := x509.ParseCertificate(block.Bytes)
+					g.Expect(err).NotTo(HaveOccurred())
+					initialSerial = cert.SerialNumber
+				}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
+
+				By("Generating a fake short-lived certificate expiring in 5 seconds")
+				shortCertPEM, shortKeyPEM := generateShortLivedCertPEM(5 * time.Second)
+
+				block, _ := pem.Decode(shortCertPEM)
+				shortCert, err := x509.ParseCertificate(block.Bytes)
+				Expect(err).NotTo(HaveOccurred())
+				shortSerial := shortCert.SerialNumber
+
+				By("Overwriting the master secret with the short-lived certificate payload")
+				// Fetch fresh instance to avoid resourceVersion conflicts
+				Expect(testTools.K8sClient.Get(mgrState.Ctx, masterSecretKey, masterSecret)).To(Succeed())
+				masterSecret.Data["tls.crt"] = shortCertPEM
+				masterSecret.Data["tls.key"] = shortKeyPEM
+				Expect(testTools.K8sClient.Update(mgrState.Ctx, masterSecret)).To(Succeed())
+
+				By("Overwriting the active slave secret (if present) with the short-lived certificate payload")
+				fetchedCR := &hawtiov2.Hawtio{}
+				Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(hawtio), fetchedCR)).To(Succeed())
+				if fetchedCR.Status.ClientCertificate.Active != "" {
+					slaveKey := types.NamespacedName{
+						Name:      fetchedCR.Status.ClientCertificate.Active,
+						Namespace: hawtiotest.HawtioNamespace,
+					}
+					slaveSecret := &corev1.Secret{}
+					if err := testTools.K8sClient.Get(mgrState.Ctx, slaveKey, slaveSecret); err == nil {
+						slaveSecret.Data["tls.crt"] = shortCertPEM
+						slaveSecret.Data["tls.key"] = shortKeyPEM
+						Expect(testTools.K8sClient.Update(mgrState.Ctx, slaveSecret)).To(Succeed())
+					}
+				}
+
+				By("Triggering a reconcile loop by annotating the Hawtio CR")
+				// Updating the CR forces the reconciler to run immediately rather than waiting for requeue
+				Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(hawtio), fetchedCR)).To(Succeed())
+				if fetchedCR.Annotations == nil {
+					fetchedCR.Annotations = make(map[string]string)
+				}
+				fetchedCR.Annotations["test.hawtio.io/trigger-reconcile"] = time.Now().String()
+				Expect(testTools.K8sClient.Update(mgrState.Ctx, fetchedCR)).To(Succeed())
+
+				By("Verifying the operator detects expiry and rotates the master certificate with a new 24h cert")
+				Eventually(func(g Gomega) {
+					updatedMasterSecret := &corev1.Secret{}
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, masterSecretKey, updatedMasterSecret)).To(Succeed())
+
+					block, _ := pem.Decode(updatedMasterSecret.Data["tls.crt"])
+					g.Expect(block).NotTo(BeNil())
+
+					currentCert, err := x509.ParseCertificate(block.Bytes)
+					g.Expect(err).NotTo(HaveOccurred())
+
+					// 1. Verify serial number has changed from BOTH initial and short-lived certs
+					g.Expect(currentCert.SerialNumber.Cmp(shortSerial)).NotTo(Equal(0), "Certificate should have rotated away from the short-lived cert")
+					g.Expect(currentCert.SerialNumber.Cmp(initialSerial)).NotTo(Equal(0), "Certificate serial should be newly generated")
+
+					// Verify default expiry for the proxy certificate would be 24hr
+					// but we have to use a self-signed certificate which has a
+					// 1 year default.
+					// Verify new cert's expiration date has been reset to ~1yr in the future
+					expectedExpiry := time.Now().AddDate(1, 0, 0)
+					g.Expect(currentCert.NotAfter).To(BeTemporally("~", expectedExpiry, 5*time.Minute))
+				}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
+
+				By("Verifying slave secret is updated to match the newly rotated master secret")
+				Eventually(func(g Gomega) {
+					fetchedCR := &hawtiov2.Hawtio{}
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(hawtio), fetchedCR)).To(Succeed())
+
+					slaveSecretName := fetchedCR.Status.ClientCertificate.Active
+					g.Expect(slaveSecretName).NotTo(BeEmpty())
+
+					slaveSecret := &corev1.Secret{}
+					slaveKey := types.NamespacedName{Name: slaveSecretName, Namespace: hawtiotest.HawtioNamespace}
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, slaveKey, slaveSecret)).To(Succeed())
+
+					// Verify payload sync between slave and rotated master
+					updatedMasterSecret := &corev1.Secret{}
+					g.Expect(testTools.K8sClient.Get(mgrState.Ctx, masterSecretKey, updatedMasterSecret)).To(Succeed())
+					g.Expect(slaveSecret.Data["tls.crt"]).To(Equal(updatedMasterSecret.Data["tls.crt"]))
+				}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
+			})
+		})
 	})
 
 	Context("on OpenShift testing all namespaces watching", func() {
@@ -354,4 +633,5 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 		})
 
 	})
+
 })

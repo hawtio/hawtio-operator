@@ -156,11 +156,12 @@ type mgrConfig struct {
 	operatorPodNS   string
 	buildVariables  util.BuildVariables
 	// Optional
-	scheme                *runtime.Scheme
-	clientTools           *clients.ClientTools
-	metrics               metricserver.Options
-	updatePollingInterval time.Duration
-	registryTransport     http.RoundTripper
+	scheme                  *runtime.Scheme
+	clientTools             *clients.ClientTools
+	metrics                 metricserver.Options
+	certificateExpiryPeriod time.Duration
+	updatePollingInterval   time.Duration
+	registryTransport       http.RoundTripper
 }
 
 // MgrOption function to populate manager config
@@ -203,7 +204,14 @@ func WithPodNamespace(ns string) MgrOption {
 	}
 }
 
-// WithUpdatePollingInterval defines polling interval for updater of disables it
+// WithCertificateExpiryPeriod defines expiry period of proxy certificates
+func WithCertificateExpiryPeriod(period time.Duration) MgrOption {
+	return func(c *mgrConfig) {
+		c.certificateExpiryPeriod = period
+	}
+}
+
+// WithUpdatePollingInterval defines polling interval for updater or disables it
 func WithUpdatePollingInterval(interval time.Duration) MgrOption {
 	return func(c *mgrConfig) {
 		c.updatePollingInterval = interval
@@ -380,6 +388,7 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	if err := hawtio.Add(
 		mgr, operatorPod, mc.clientTools,
 		apiSpec, mc.buildVariables,
+		mc.certificateExpiryPeriod,
 		updatePoller, updateChannel); err != nil {
 		return nil, err
 	}
