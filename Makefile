@@ -271,7 +271,7 @@ BUNDLE := bundle
 MANIFESTS := $(BUNDLE)/manifests
 DEPLOY := deploy
 CSV_VERSION ?= $(OPERATOR_VERSION)
-CSV_NAME := $(PACKAGE).v$(CSV_VERSION)
+CSV_NAME ?= $(PACKAGE).v$(CSV_VERSION)
 CSV_DISPLAY_NAME := Hawtio Operator
 CSV_FILENAME := $(PACKAGE).clusterserviceversion.yaml
 CSV_PATH := $(BUNDLE)/bases/$(CSV_FILENAME)
@@ -285,6 +285,7 @@ IMAGE_NAME ?= $(DEFAULT_IMAGE)
 BUNDLE_INDEX ?= registry.redhat.io/redhat/redhat-operator-index:v4.21
 INDEX_DIR := index
 OPM := opm
+OPM_OPTIONS ?= ""
 
 # Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
@@ -391,7 +392,9 @@ bundle-build: bundle
 #* PARAMETERS:
 #** IMAGE:       Set the custom image name (will be suffixed with '-bundle')
 #** VERSION:     Set the custom version for the bundle image
+#** CSV_NAME:    Set the CSV name if different for the name of the bundle image
 #** CSV_VERSION: Set the CSV version if different from the OPERATOR_VERSION / TAG
+#** OPM_OPTIONS: Add any extra options for opm render, eg. --use-http
 #
 #---
 bundle-index: opm yq
