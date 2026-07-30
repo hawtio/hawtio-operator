@@ -10,8 +10,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"k8s.io/apimachinery/pkg/types"
-
 	"github.com/hawtio/hawtio-operator/pkg/controller/internal/hawtiotest"
 )
 
@@ -40,11 +38,10 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 
 		It("Should create ingress", func() {
 			By("Creating a new Hawtio CR")
-			hawtioKey := types.NamespacedName{Name: hawtiotest.HawtioName, Namespace: hawtiotest.HawtioNamespace}
 			hawtio := &hawtiov2.Hawtio{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      hawtioKey.Name,
-					Namespace: hawtioKey.Namespace,
+					Name:      hawtiotest.HawtioName,
+					Namespace: hawtiotest.HawtioNamespace,
 				},
 				Spec: hawtiov2.HawtioSpec{
 					Type:    hawtiov2.NamespaceHawtioDeploymentType,
@@ -54,10 +51,9 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 			Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
 
 			By("Waiting for Ingress to be created")
-			ingressKey := types.NamespacedName{Name: hawtiotest.HawtioName, Namespace: hawtiotest.HawtioNamespace}
 			Eventually(func(g Gomega) {
 				ingress := &networkingv1.Ingress{}
-				g.Expect(testTools.K8sClient.Get(mgrState.Ctx, ingressKey, ingress)).To(Succeed())
+				g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtiotest.LookupKey(hawtio), ingress)).To(Succeed())
 			}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
 		})
 

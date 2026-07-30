@@ -292,15 +292,16 @@ func compareResource(name string, actual interface{}, expected interface{}) {
 	}
 }
 
-func lookupKey(hawtio *hawtiov2.Hawtio) types.NamespacedName {
+// LookupKey provided a new NamespacedName based on Hawtio CR
+func LookupKey(hawtio *hawtiov2.Hawtio) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      hawtio.Name,
 		Namespace: hawtio.Namespace,
 	}
 }
 
-// createBasicHawtioCR is a lightweight helper for the cache tests
-func createBasicHawtioCR(ctx context.Context, testTools *TestTools, name, namespace string) *hawtiov2.Hawtio {
+// CreateBasicHawtioCR is a lightweight helper for the cache tests
+func CreateBasicHawtioCR(ctx context.Context, testTools *TestTools, name, namespace string) *hawtiov2.Hawtio {
 	hawtio := &hawtiov2.Hawtio{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -528,7 +529,7 @@ func PerformEmptyTypeHawtioCR(ctx context.Context, testTools *TestTools) {
 			// Explicitly missed out type value
 		},
 	}
-	lookupKey := lookupKey(emptyTypeHawtio)
+	lookupKey := LookupKey(emptyTypeHawtio)
 
 	// Attempt to create the invalid CR.
 	Expect(testTools.K8sClient.Create(ctx, emptyTypeHawtio)).Should(Succeed())
@@ -553,12 +554,12 @@ func PerformEmptyTypeHawtioCR(ctx context.Context, testTools *TestTools) {
 // PerformCommonResourceTest tests the reconciler checking the generated resources
 func PerformCommonResourceTest(ctx context.Context, testTools *TestTools) {
 	By("Creating a new Hawtio CR")
-	hawtio := createBasicHawtioCR(ctx, testTools, HawtioName, HawtioNamespace)
+	hawtio := CreateBasicHawtioCR(ctx, testTools, HawtioName, HawtioNamespace)
 
 	By("Checking the Hawtio Phase has reached Initialized")
 	Eventually(func() hawtiov2.HawtioPhase {
 		fetched := &hawtiov2.Hawtio{}
-		lookupKey := lookupKey(hawtio)
+		lookupKey := LookupKey(hawtio)
 		err := testTools.K8sClient.Get(testTools.Ctx, lookupKey, fetched)
 		if err != nil {
 			return "" // Keep trying if Get fails
@@ -568,7 +569,7 @@ func PerformCommonResourceTest(ctx context.Context, testTools *TestTools) {
 
 	By("Checking if the ConfigMap was created")
 	configMap := &corev1.ConfigMap{}
-	configMapLookupKey := lookupKey(hawtio)
+	configMapLookupKey := LookupKey(hawtio)
 	Eventually(func() bool {
 		err := testTools.K8sClient.Get(ctx, configMapLookupKey, configMap)
 		return err == nil
@@ -583,7 +584,7 @@ func PerformCommonResourceTest(ctx context.Context, testTools *TestTools) {
 
 	By("Checking if the service account was created")
 	sa := &corev1.ServiceAccount{}
-	saLookupKey := lookupKey(hawtio)
+	saLookupKey := LookupKey(hawtio)
 	Eventually(func() bool {
 		err := testTools.K8sClient.Get(ctx, saLookupKey, sa)
 		return err == nil
@@ -591,7 +592,7 @@ func PerformCommonResourceTest(ctx context.Context, testTools *TestTools) {
 
 	By("Checking if the Deployment was created")
 	deployment := &appsv1.Deployment{}
-	deploymentLookupKey := lookupKey(hawtio)
+	deploymentLookupKey := LookupKey(hawtio)
 	Eventually(func() bool {
 		err := testTools.K8sClient.Get(ctx, deploymentLookupKey, deployment)
 		return err == nil
@@ -605,7 +606,7 @@ func PerformCommonResourceTest(ctx context.Context, testTools *TestTools) {
 
 	By("Checking if the Service was created")
 	service := &corev1.Service{}
-	svcLookupKey := lookupKey(hawtio)
+	svcLookupKey := LookupKey(hawtio)
 	Eventually(func() bool {
 		err := testTools.K8sClient.Get(ctx, svcLookupKey, service)
 		return err == nil
@@ -623,7 +624,7 @@ func PerformIgnoreNamespaceTest(ctx context.Context, testTools *TestTools) {
 	By("Creating a namespace that will be ignored")
 	ignoredNS := "hawtio-ignored-ns"
 	createNamespaces(ctx, testTools, ignoredNS)
-	ignoredCR := createBasicHawtioCR(ctx, testTools, "hawtio-scoped-ignored", ignoredNS)
+	ignoredCR := CreateBasicHawtioCR(ctx, testTools, "hawtio-scoped-ignored", ignoredNS)
 	DeferCleanup(func() {
 		By("Deleting the Hawtio CR in ignored namespace")
 		PerformDeleteHawtioCR(testTools, ignoredCR.Name, ignoredNS)
@@ -645,12 +646,12 @@ func PerformWatchAllNamespacesTest(ctx context.Context, testTools *TestTools) {
 	By("Setting up test namespaces")
 	createNamespaces(ctx, testTools, otherNS1, otherNS2)
 
-	hawtioCR := createBasicHawtioCR(ctx, testTools, HawtioName, HawtioNamespace)
-	otherCR1 := createBasicHawtioCR(ctx, testTools, "hawtio-other-1", otherNS1)
+	hawtioCR := CreateBasicHawtioCR(ctx, testTools, HawtioName, HawtioNamespace)
+	otherCR1 := CreateBasicHawtioCR(ctx, testTools, "hawtio-other-1", otherNS1)
 	DeferCleanup(func() {
 		PerformDeleteHawtioCR(testTools, otherCR1.Name, otherNS1)
 	})
-	otherCR2 := createBasicHawtioCR(ctx, testTools, "hawtio-other-2", otherNS2)
+	otherCR2 := CreateBasicHawtioCR(ctx, testTools, "hawtio-other-2", otherNS2)
 	DeferCleanup(func() {
 		PerformDeleteHawtioCR(testTools, otherCR2.Name, otherNS2)
 	})

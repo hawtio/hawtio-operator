@@ -57,18 +57,19 @@ type ReconcileHawtio struct {
 	util.BuildVariables
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the API server
-	client        client.Client
-	scheme        *runtime.Scheme
-	apiReader     client.Reader
-	coreClient    corev1client.CoreV1Interface
-	oauthClient   oauthclient.Interface
-	configClient  configclient.Interface
-	apiClient     kclient.Interface
-	apiSpec       *capabilities.ApiServerSpec
-	logger        logr.Logger
-	operatorPod   types.NamespacedName
-	updatePoller  *updater.RegistryPoller
-	updateChannel <-chan event.GenericEvent // only receives events
+	client           client.Client
+	scheme           *runtime.Scheme
+	apiReader        client.Reader
+	coreClient       corev1client.CoreV1Interface
+	oauthClient      oauthclient.Interface
+	configClient     configclient.Interface
+	apiClient        kclient.Interface
+	apiSpec          *capabilities.ApiServerSpec
+	logger           logr.Logger
+	operatorPod      types.NamespacedName
+	certExpiryPeriod time.Duration
+	updatePoller     *updater.RegistryPoller
+	updateChannel    <-chan event.GenericEvent // only receives events
 }
 
 func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedEventHandler[T, reconcile.Request] {
@@ -77,20 +78,21 @@ func enqueueRequestForOwner[T client.Object](mgr manager.Manager) handler.TypedE
 
 // Add creates a new Hawtio Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *clients.ClientTools, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables, updatePoller *updater.RegistryPoller, updateChannel chan event.GenericEvent) error {
+func Add(mgr manager.Manager, operatorPod types.NamespacedName, clientTools *clients.ClientTools, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables, certExpiryPeriod time.Duration, updatePoller *updater.RegistryPoller, updateChannel chan event.GenericEvent) error {
 	r := &ReconcileHawtio{
-		BuildVariables: bv,
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
-		apiReader:      mgr.GetAPIReader(),
-		coreClient:     clientTools.CoreClient,
-		oauthClient:    clientTools.OAuthClient,
-		configClient:   clientTools.ConfigClient,
-		apiClient:      clientTools.ApiClient,
-		apiSpec:        apiSpec,
-		operatorPod:    operatorPod,
-		updatePoller:   updatePoller,
-		updateChannel:  updateChannel,
+		BuildVariables:   bv,
+		client:           mgr.GetClient(),
+		scheme:           mgr.GetScheme(),
+		apiReader:        mgr.GetAPIReader(),
+		coreClient:       clientTools.CoreClient,
+		oauthClient:      clientTools.OAuthClient,
+		configClient:     clientTools.ConfigClient,
+		apiClient:        clientTools.ApiClient,
+		apiSpec:          apiSpec,
+		operatorPod:      operatorPod,
+		certExpiryPeriod: certExpiryPeriod,
+		updatePoller:     updatePoller,
+		updateChannel:    updateChannel,
 	}
 
 	if r.apiSpec.IsOpenShift4 {
@@ -318,9 +320,13 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 	}
 
 	// Resolve the master client proxy certificate (if applicable)
+	r.logger.V(util.DebugLogLevel).Info("=== Resolving Master Client Certificate ===")
 	masterClientSecret, nextMasterCertCheckIn, err := r.resolveMasterClientCertificate(ctx, hawtio)
 	if err != nil {
 		return reconcile.Result{}, err
+	}
+	if masterClientSecret != nil {
+		r.logger.V(util.DebugLogLevel).Info("Master Client Certificate", "secret", masterClientSecret.Name, "next check-in", nextMasterCertCheckIn.String())
 	}
 
 	// Can be nil if no slave client certificate required
@@ -329,13 +335,12 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		var slaveName string
 		if r.usingCustomClientSecret(hawtio) {
 			// slaveClientSecretName for a custom secret has no hash
-			// so is labelled up the same as the master certificate
-			slaveName = r.getMasterClientSecretName(hawtio)
+			slaveName = fmt.Sprintf("%s-tls-proxying", hawtio.Name)
 		} else {
 			// Calculate the hash of the secret's payload and suffix the value
 			// to the name of the CR's copy / slave certificate
 			masterCertHash := r.calculateSecretHash(masterClientSecret)
-			slaveName = fmt.Sprintf("%s-%s", masterClientSecret.Name, masterCertHash)
+			slaveName = fmt.Sprintf("%s-tls-proxying-%s", hawtio.Name, masterCertHash)
 		}
 
 		if hawtio.Status.ClientCertificate.Active != slaveName && hawtio.Status.ClientCertificate.Pending != slaveName {

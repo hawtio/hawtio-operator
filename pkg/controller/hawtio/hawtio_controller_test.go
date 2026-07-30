@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -206,7 +207,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			res, err = r.Reconcile(context.TODO(), request)
 			assert.NoError(t, err, "reconcile Error")
 			// Requeue for ensure that certificates are rechecked
-			assert.Equal(t, reconcile.Result{Requeue: false, RequeueAfter: 24}, res)
+			assert.Equal(t, reconcile.Result{Requeue: false, RequeueAfter: 24 * time.Hour}, res)
 
 			t.Run("hawtio-online", func(t *testing.T) {
 				t.Run("check if the Hawtio has been created", func(t *testing.T) {
