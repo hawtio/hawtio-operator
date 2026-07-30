@@ -20,6 +20,9 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+// MasterClientSecretName is the name of the operator's master client secret
+const MasterClientSecretName = "hawtio-operator-tls-proxying"
+
 // Cap the maximum requeue time to 24 hours
 // Maximum time to sleep before a requeue should take place
 var maxRequeueTime = 24 * time.Hour
@@ -27,10 +30,6 @@ var maxRequeueTime = 24 * time.Hour
 func (r *ReconcileHawtio) usingCustomClientSecret(hawtio *hawtiov2.Hawtio) bool {
 	commonName := hawtio.Spec.Auth.ClientCertCommonName
 	return len(commonName) > 0 && commonName != HAWTIO_CERT_COMMON_NAME
-}
-
-func (r *ReconcileHawtio) getMasterClientSecretName(hawtio *hawtiov2.Hawtio) string {
-	return fmt.Sprintf("%s-tls-proxying", hawtio.Name)
 }
 
 //
@@ -43,7 +42,7 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 		return nil, 0, nil // not required on Kubernetes
 	}
 
-	clientSecretName := r.getMasterClientSecretName(hawtio)
+	clientSecretName := MasterClientSecretName
 
 	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift master proxying certificate in Operator Namespace %s", r.operatorPod.Namespace))
 

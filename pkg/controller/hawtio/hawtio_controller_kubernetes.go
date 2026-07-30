@@ -30,9 +30,21 @@ func newSelfCertificateSecret(ctx context.Context, r *ReconcileHawtio, hawtio *h
 	return servingCertSecret, nil
 }
 
+// getRotationBufferWindow gets the period in hours
+// from hawtio CR before expiry of the certificate
+func getRotationBufferWindow(hawtio *hawtiov2.Hawtio) time.Duration {
+	periodHours := hawtio.Spec.Auth.ClientCertExpirationPeriod
+	if periodHours == 0 {
+		periodHours = 24
+	}
+
+	return time.Duration(periodHours) * time.Hour
+}
+
 func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
 	// This secret name should be the same as used in deployment.go
 	servingSecretName := hawtio.Name + "-tls-serving"
+	rotationWindow := getRotationBufferWindow(hawtio)
 
 	// Check whether serving certificate secret exists
 	servingCertSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, servingSecretName, metav1.GetOptions{})
@@ -57,7 +69,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 		// Is the secret certificate invalid (expired).
 		// If so they need to update it with a new certificate.
 		//
-		expiryIn := checkCertificateExpiry(hawtio, servingCertSecret, r.logger)
+		expiryIn := checkCertificateExpiry(rotationWindow, servingCertSecret, r.logger)
 		if expiryIn == 0 {
 			// certificate is invalid or close to expiring
 			// create a new one and update the secret
@@ -80,8 +92,8 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 				return nil, 0, err
 			}
 
-			// reset expiryIn to maximum as new certificate
-			expiryIn = certificateExpiryPeriod(hawtio)
+			// reset expiryIn to maximum with buffer as new certificate
+			expiryIn = checkCertificateExpiry(rotationWindow, servingCertSecret, r.logger)
 		}
 
 		return servingCertSecret, expiryIn, nil
@@ -105,8 +117,9 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 		}
 
 		conKLog.Info("Serving certificate created successfully", "secret", servingSecretName)
-		// New Secret so maximum expiry period
-		return servingCertSecret, certificateExpiryPeriod(hawtio), nil
+		// New Secret so maximum expiry period with buffer
+		expiryIn := checkCertificateExpiry(rotationWindow, servingCertSecret, r.logger)
+		return servingCertSecret, expiryIn, nil
 	}
 
 	// error was something but not NotFound
