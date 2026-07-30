@@ -114,8 +114,8 @@ if [ ! -f ${INDEX_BASE_YAML} ]; then
     echo "Error: failed to pull latest version of bundle catalog index image"
     exit 1
   fi
-  echo "=== Calling opm render on ${BUNDLE_INDEX} ..."
-  ${OPM} render ${BUNDLE_INDEX} -o yaml > ${INDEX_BASE_YAML}
+  echo "=== Calling opm render ${OPM_OPTIONS} on ${BUNDLE_INDEX} ..."
+  ${OPM} render ${OPM_OPTIONS} ${BUNDLE_INDEX} -o yaml > ${INDEX_BASE_YAML}
   if [ $? != 0 ]; then
     echo "Error: failed to render the base catalog"
     exit 1
@@ -146,8 +146,8 @@ if [ ! -f ${INDEX_BASE_YAML} ]; then
 fi
 
 if [ ! -f ${NEW_BUNDLE_YAML} ]; then
-  echo "=== Calling opm render on ${BUNDLE_IMAGE} ..."
-  ${OPM} render -o yaml ${BUNDLE_IMAGE} > ${NEW_BUNDLE_YAML}
+  echo "=== Calling opm render ${OPM_OPTIONS} on ${BUNDLE_IMAGE} ..."
+  ${OPM} render ${OPM_OPTIONS} -o yaml ${BUNDLE_IMAGE} > ${NEW_BUNDLE_YAML}
   if [ $? != 0 ]; then
     echo "Error: failed to render the ${PACKAGE} bundle catalog"
     exit 1
