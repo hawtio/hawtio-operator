@@ -19,6 +19,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 const HAWTIO_CERT_COMMON_NAME = "hawtio-online.hawtio.svc"
@@ -124,18 +125,24 @@ func generateCertificateSecret(hawtio *hawtiov2.Hawtio, name string, namespace s
 	}, nil
 }
 
-func certificateExpiryPeriod(hawtio *hawtiov2.Hawtio) time.Duration {
-	periodHours := hawtio.Spec.Auth.ClientCertExpirationPeriod
-	if periodHours == 0 {
-		periodHours = 24
+// calculateRequeueBuffer calculates the buffer
+// as a proportion of the total duration
+func calculateRequeueBuffer(totalDuration time.Duration) time.Duration {
+	// Buffer is 10% of total lifetime, up to a max of 1 hour
+	buffer := totalDuration / 10
+	if buffer > (1 * time.Hour) {
+		return 1 * time.Hour
 	}
-
-	return time.Duration(periodHours)
+	// Floor buffer at 10 seconds for ultra-short test certs
+	if buffer < (10 * time.Second) {
+		return 10 * time.Second
+	}
+	return buffer
 }
 
 // checkCertificateExpiry evaluates the client certificate.
 // Returns: (nextCheck time.Duration) where 0 is rotate immediately
-func checkCertificateExpiry(hawtio *hawtiov2.Hawtio, secret *corev1.Secret, log logr.Logger) time.Duration {
+func checkCertificateExpiry(certExpiryPeriod time.Duration, secret *corev1.Secret, log logr.Logger) time.Duration {
 	certData, exists := secret.Data[corev1.TLSCertKey]
 	if !exists {
 		return 0 // Malformed secret, overwrite it
@@ -151,14 +158,23 @@ func checkCertificateExpiry(hawtio *hawtiov2.Hawtio, secret *corev1.Secret, log 
 		return 0
 	}
 
-	periodHours := certificateExpiryPeriod(hawtio)
-	threshold := periodHours * time.Hour
 	timeUntilExpiry := time.Until(cert.NotAfter)
-	if timeUntilExpiry <= threshold {
+	buffer := calculateRequeueBuffer(certExpiryPeriod)
+	log.V(util.DebugLogLevel).Info("check certificate expiry",
+		"expiry period", certExpiryPeriod.String(),
+		"time until expiry", timeUntilExpiry.String(),
+		"buffer", buffer.String(),
+	)
+
+	// If expired or inside the buffer window, rotate immediately.
+	if timeUntilExpiry <= buffer {
 		log.Info("Certificate expired or expiring soon. In-place rotation required.")
 		return 0
 	}
 
-	sleepDuration := timeUntilExpiry - threshold
+	// Schedule sleep until the rotation window opens
+	sleepDuration := timeUntilExpiry - buffer
+
+	log.Info("Certificate valid. Scheduling next reconciliation wake-up.", "requeueIn", sleepDuration.String())
 	return sleepDuration
 }
