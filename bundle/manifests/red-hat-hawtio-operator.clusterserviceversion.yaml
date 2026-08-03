@@ -99,7 +99,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     containerImage: quay.io/hawtio/operator:2.0.1
-    createdAt: "2026-07-29T15:16:01Z"
+    createdAt: "2026-08-03T09:04:52Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <2.0.1'

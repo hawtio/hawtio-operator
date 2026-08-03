@@ -850,13 +850,25 @@ spec:
                     description: The generated client certificate CN
                     type: string
                   clientCertExpirationDate:
-                    description: The generated client certificate expiration date
+                    description: |-
+                      ClientCertExpirationDate specifies the exact target expiration date for
+                      self-signed certificates generated on plain Kubernetes clusters.
+
+                      Deprecated: On OpenShift, serving certificate lifecycle and expiration dates
+                      are managed automatically by OpenShift's service-ca operator. Setting this
+                      field on OpenShift clusters has no effect and will be ignored.
                     format: date-time
                     type: string
                   clientCertExpirationPeriod:
+                    default: 24
                     description: |-
-                      The duration in hours before the expiration date, during which the certification can be rotated.
-                      The default is set to 24 hours.
+                      ClientCertExpirationPeriod specifies the buffer window in hours before
+                      certificate expiration during which the operator will attempt rotation.
+                      Default is 24 hours.
+
+                      Deprecated: On OpenShift, this field is now ignored. Serving certificates are
+                      managed by OpenShift's service-ca operator, and proxy certificates are configured
+                      globally via the CERTIFICATE_EXPIRY_PERIOD operator environment variable.
                     type: integer
                   internalSSL:
                     default: true
