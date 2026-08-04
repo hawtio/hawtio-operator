@@ -118,6 +118,9 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: ConsolePlugin
+      name: consoleplugins.hawt.io
+      version: v1
     - description: An Hawtio console that eases the discovery and management of hawtio-enabled
         applications
       displayName: Hawtio
@@ -197,6 +200,15 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - ""
+          - events.k8s.io
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
         - apiGroups:
           - apps
           resources:
