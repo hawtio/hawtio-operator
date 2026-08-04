@@ -124,15 +124,22 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 			hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volume)
 		}
 
+		//
+		// Both containers require the ssl serving certificate volume mount
+		//
 		volume, ok = volumeMounts[serviceSigningSecretVolumeName]
 		if ok {
 			hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volume)
+			gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
 		}
 
+		//
+		// Only the gateway container requires the ssl proxy client certificate
+		//
 		if apiSpec.IsOpenShift4 {
 			volume, ok := volumeMounts[clientCertificateSecretVolumeName]
 			if ok {
-				hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volume)
+				gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
 			}
 		}
 
@@ -141,11 +148,6 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 			if ok {
 				gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
 			}
-		}
-
-		volume, ok = volumeMounts[serviceSigningSecretVolumeName]
-		if ok {
-			gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
 		}
 	}
 	volumes := newVolumes(hawtio, apiSpec, config, log)
