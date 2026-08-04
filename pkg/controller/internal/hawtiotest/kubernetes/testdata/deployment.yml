@@ -60,7 +60,7 @@ spec:
               fieldPath: metadata.namespace
         - name: HAWTIO_ONLINE_LOG_LEVEL
           value: "info"
-        image: quay.io/hawtio/online:2.3.0
+        image: quay.io/hawtio/online:3.2.0
         imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3
@@ -96,8 +96,6 @@ spec:
         - mountPath: /etc/tls/private/serving
           name: hawtio-online-tls-serving
       - env:
-        - name: HAWTIO_ONLINE_GATEWAY_WEB_SERVER
-          value: https://localhost:8443
         - name: HAWTIO_ONLINE_GATEWAY_SSL_KEY
           value: /etc/tls/private/serving/tls.key
         - name: HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE
@@ -110,7 +108,7 @@ spec:
           value: "false"
         - name: HAWTIO_ONLINE_AUTH
           value: form
-        image: quay.io/hawtio/online-gateway:2.3.0
+        image: quay.io/hawtio/online-gateway:3.2.0
         imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3

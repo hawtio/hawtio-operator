@@ -133,7 +133,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 		if apiSpec.IsOpenShift4 {
 			volume, ok := volumeMounts[clientCertificateSecretVolumeName]
 			if ok {
-				hawtioContainer.VolumeMounts = append(hawtioContainer.VolumeMounts, volume)
+				gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
 			}
 		}
 

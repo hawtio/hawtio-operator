@@ -1,7 +1,6 @@
 package resources
 
 import (
-	"fmt"
 	"path"
 	"strings"
 
@@ -187,23 +186,8 @@ func envVarsForNginx(nginx hawtiov2.HawtioNginx) []corev1.EnvVar {
 }
 
 func envVarsForGateway(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec) []corev1.EnvVar {
-
-	webSrvProtocol := "http"
-	webSvrPort := 8080
+	envVars := []corev1.EnvVar{}
 	isSSL := util.IsSSL(hawtio, apiSpec)
-
-	if isSSL {
-		webSrvProtocol = "https"
-		webSvrPort = 8443
-	}
-
-	envVars := []corev1.EnvVar{
-		{
-			Name:  GatewayWebSvrEnvVar,
-			Value: fmt.Sprintf("%s://localhost:%d", webSrvProtocol, webSvrPort), // Same port as defined in hawtio container
-		},
-	}
-
 	if isSSL {
 		envVars = append(envVars,
 			corev1.EnvVar{
