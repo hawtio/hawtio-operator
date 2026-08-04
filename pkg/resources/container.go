@@ -3,7 +3,6 @@ package resources
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -44,7 +43,7 @@ var SSLConnect = Connect{
 	Protocol: "HTTPS",
 }
 
-func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, imageVersion string, imageRepository string, log logr.Logger) corev1.Container {
+func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, bv util.BuildVariables, log logr.Logger) corev1.Container {
 	/*
 	 * - name: hawtio-online-container
 	 *   image: quay.io/hawtio/online
@@ -78,6 +77,8 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	 *     - name: hawtio-online-tls-serving
 	 *       mountPath: /etc/tls/private/serving
 	 */
+	hawtioVersion := bv.GetOnlineVersion()
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Image Version: %s", hawtioVersion))
 
 	envVars := newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL)
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container Env Vars %s", util.ToJSONString(envVars)))
@@ -101,7 +102,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 
 	container := corev1.Container{
 		Name:            hawtio.Name + "-container",
-		Image:           getHawtioImageFor(imageVersion, imageRepository),
+		Image:           bv.ImageURI(bv.GetOnlineImageRepo(), hawtioVersion),
 		ImagePullPolicy: getImagePullPolicy(),
 		Env:             envVars,
 		ReadinessProbe: &corev1.Probe{
@@ -140,7 +141,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	return container
 }
 
-func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, imageVersion string, imageGatewayRepository string, log logr.Logger) corev1.Container {
+func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, bv util.BuildVariables, log logr.Logger) corev1.Container {
 	/*
 	 * - name: hawtio-online-gateway-container
 	 *   image: quay.io/hawtio/online-gateway
@@ -163,6 +164,9 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 	 *      periodSeconds: 30
 	 *      timeoutSeconds: 1
 	 */
+	gatewayVersion := bv.GetOnlineGatewayVersion()
+	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Gateway Image Version: %s", gatewayVersion))
+
 	envVars := newGatewayEnvVars(hawtio, apiSpec)
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container Env Vars %s", util.ToJSONString(envVars)))
 
@@ -184,7 +188,7 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 
 	container := corev1.Container{
 		Name:            hawtio.Name + "-gateway-container",
-		Image:           getGatewayImageFor(imageVersion, imageGatewayRepository),
+		Image:           bv.ImageURI(bv.GetOnlineGatewayImageRepo(), gatewayVersion),
 		ImagePullPolicy: getImagePullPolicy(),
 		Env:             envVars,
 		Ports: []corev1.ContainerPort{
@@ -250,32 +254,6 @@ func newGatewayEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerS
 	envVars = append(envVars, envVarsForRBAC...)
 
 	return envVars
-}
-
-func getHawtioImageFor(tag string, imageRepository string) string {
-	return getImageFor(tag, imageRepository, "IMAGE_REPOSITORY", "quay.io/hawtio/online")
-}
-
-func getGatewayImageFor(tag string, gatewayImgRepository string) string {
-	return getImageFor(tag, gatewayImgRepository, "GATEWAY_IMAGE_REPOSITORY", "quay.io/hawtio/online-gateway")
-}
-
-func getImageFor(tag string, imgRepo string, envVar string, defaultVal string) string {
-	repository := os.Getenv(envVar)
-	if repository == "" {
-		if imgRepo != "" {
-			repository = imgRepo
-		} else {
-			repository = defaultVal
-		}
-	}
-
-	if strings.HasPrefix(tag, "sha256:") {
-		// tag is a sha checksum tag
-		return repository + "@" + tag
-	}
-
-	return repository + ":" + tag
 }
 
 func getImagePullPolicy() corev1.PullPolicy {

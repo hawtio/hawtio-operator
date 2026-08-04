@@ -79,6 +79,10 @@ var (
 	ImageVersion                         string
 	GatewayImageVersion                  string
 	GatewayImageRepository               string
+	PluginImageRepository                string
+	PluginImageVersion                   string
+	PluginGatewayImageVersion            string
+	PluginGatewayImageRepository         string
 	OperatorVersion                      string
 	LegacyServingCertificateMountVersion string
 	ProductName                          string
@@ -98,16 +102,21 @@ func printVersion() {
 
 func printBuildVars(bv util.BuildVariables, watchNamespaces string) {
 	log.Info(fmt.Sprintf("Hawtio Operator Version: %s", bv.OperatorVersion))
-	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.ImageRepository))
+	log.Info(fmt.Sprintf("Hawtio Online Image Repository: %s", bv.GetOnlineImageRepo()))
 	log.Info(fmt.Sprintf("Hawtio Online Image Version: %s", bv.GetOnlineVersion()))
-	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Repository: %s", bv.GatewayImageRepository))
-	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Version: %s", bv.GetGatewayVersion()))
+	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Repository: %s", bv.GetOnlineGatewayImageRepo()))
+	log.Info(fmt.Sprintf("Hawtio Online Gateway Image Version: %s", bv.GetOnlineGatewayVersion()))
 
 	if watchNamespaces == "" {
 		log.Info("Operator: Watching ALL namespaces (Cluster Scoped)")
 	} else {
 		log.Info(fmt.Sprintf("Operator: Watching '%s' namespaces only", watchNamespaces))
 	}
+
+	log.Info(fmt.Sprintf("Hawtio Console Plugin Image Repository: %s", bv.GetPluginImageRepo()))
+	log.Info(fmt.Sprintf("Hawtio Console Plugin Image Version: %s", bv.GetPluginVersion()))
+	log.Info(fmt.Sprintf("Hawtio Console Plugin Gateway Image Repository: %s", bv.GetPluginGatewayImageRepo()))
+	log.Info(fmt.Sprintf("Hawtio Console Plugin Gateway Image Version: %s", bv.GetPluginGatewayVersion()))
 }
 
 func main() {
@@ -181,10 +190,16 @@ func operatorRun(watchNamespaces string, podNamespace string, certExpiryPeriod t
 
 	// Setup all Controllers
 	bv := util.BuildVariables{
-		ImageRepository:                      ImageRepository,
-		ImageVersion:                         ImageVersion,
-		GatewayImageVersion:                  GatewayImageVersion,
-		GatewayImageRepository:               GatewayImageRepository,
+		ImageRepository:        ImageRepository,
+		ImageVersion:           ImageVersion,
+		GatewayImageVersion:    GatewayImageVersion,
+		GatewayImageRepository: GatewayImageRepository,
+		ConsolePlugin: util.ConsolePluginVars{
+			ImageRepository:        PluginImageRepository,
+			ImageVersion:           PluginImageVersion,
+			GatewayImageVersion:    PluginGatewayImageVersion,
+			GatewayImageRepository: PluginGatewayImageRepository,
+		},
 		OperatorVersion:                      OperatorVersion,
 		LegacyServingCertificateMountVersion: LegacyServingCertificateMountVersion,
 		ProductName:                          ProductName,

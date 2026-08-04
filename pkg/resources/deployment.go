@@ -97,15 +97,8 @@ func newDeployment(hawtio *hawtiov2.Hawtio, replicas *int32, pts corev1.PodTempl
 func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, config cfg.DeploymentConfiguration, buildVariables util.BuildVariables, log logr.Logger) (corev1.PodTemplateSpec, error) {
 	log.V(util.DebugLogLevel).Info("New Pod Template Spec")
 
-	hawtioVersion := buildVariables.GetOnlineVersion()
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Image Version: %s", hawtioVersion))
-
-	hawtioContainer := newHawtioContainer(hawtio, apiSpec, config.OpenShiftConsoleURL, hawtioVersion, buildVariables.ImageRepository, log)
-
-	gatewayVersion := buildVariables.GetGatewayVersion()
-	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Using Hawtio Gateway Image Version: %s", gatewayVersion))
-
-	gatewayContainer := newGatewayContainer(hawtio, apiSpec, gatewayVersion, buildVariables.GatewayImageRepository, log)
+	hawtioContainer := newHawtioContainer(hawtio, apiSpec, config.OpenShiftConsoleURL, buildVariables, log)
+	gatewayContainer := newGatewayContainer(hawtio, apiSpec, buildVariables, log)
 
 	annotations := map[string]string{
 		configVersionAnnotation: config.ConfigMap.GetResourceVersion(),
@@ -113,7 +106,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 
 	PropagateAnnotations(hawtio, annotations, log)
 
-	volumeMounts, err := newVolumeMounts(hawtio, apiSpec, hawtioVersion, hawtio.Spec.RBAC.ConfigMap, buildVariables, log)
+	volumeMounts, err := newVolumeMounts(hawtio, apiSpec, hawtio.Spec.RBAC.ConfigMap, buildVariables, log)
 	if err != nil {
 		return corev1.PodTemplateSpec{}, err
 	}
@@ -214,7 +207,7 @@ func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, co
 	return volumes
 }
 
-func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, hawtioVersion string, rbacConfigMapName string, buildVariables util.BuildVariables, log logr.Logger) (map[string]corev1.VolumeMount, error) {
+func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, rbacConfigMapName string, buildVariables util.BuildVariables, log logr.Logger) (map[string]corev1.VolumeMount, error) {
 	var volumeMounts map[string]corev1.VolumeMount
 	var volumeMountPath string
 
@@ -237,6 +230,7 @@ func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpe
 	 * The serving-certificate volume
 	 */
 	if util.IsSSL(hawtio, apiSpec) {
+		hawtioVersion := buildVariables.GetOnlineVersion()
 		volumeMountPath, err := getServingCertificateMountPath(hawtioVersion, buildVariables.LegacyServingCertificateMountVersion)
 		if err != nil {
 			return nil, err
