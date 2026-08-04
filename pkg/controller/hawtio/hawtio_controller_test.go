@@ -101,10 +101,6 @@ var sslHawtioEnvVars = append(plainHawtioEnvVars,
 
 var plainGatewayEnvVars = []corev1.EnvVar{
 	{
-		Name:  resources.GatewayWebSvrEnvVar,
-		Value: "http://localhost:8080",
-	},
-	{
 		Name:  resources.HawtioAuthEnvVar,
 		Value: "form",
 	},
@@ -118,11 +114,7 @@ var plainGatewayEnvVars = []corev1.EnvVar{
 	},
 }
 
-var sslGatewayEnvVars = append(plainGatewayEnvVars[1:],
-	corev1.EnvVar{
-		Name:  resources.GatewayWebSvrEnvVar,
-		Value: "https://localhost:8443",
-	},
+var sslGatewayEnvVars = append(plainGatewayEnvVars,
 	corev1.EnvVar{
 		Name:  resources.GatewaySSLKeyEnvVar,
 		Value: "/etc/tls/private/serving/tls.key",

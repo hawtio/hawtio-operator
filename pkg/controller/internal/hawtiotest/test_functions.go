@@ -135,8 +135,8 @@ func (m *MockRegistryTransport) RoundTrip(req *http.Request) (*http.Response, er
 
 var buildVariables = util.BuildVariables{
 	ImageRepository:                      "quay.io/hawtio/online",
-	ImageVersion:                         "2.3.0",
-	GatewayImageVersion:                  "2.3.0",
+	ImageVersion:                         "3.2.0",
+	GatewayImageVersion:                  "3.2.0",
 	GatewayImageRepository:               "quay.io/hawtio/online-gateway",
 	LegacyServingCertificateMountVersion: "",
 	ProductName:                          "",
