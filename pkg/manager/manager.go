@@ -42,6 +42,7 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/clients"
 	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio"
+	"github.com/hawtio/hawtio-operator/pkg/controller/hawtioplugin"
 	"github.com/hawtio/hawtio-operator/pkg/updater"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 	hawtiowebhook "github.com/hawtio/hawtio-operator/pkg/webhook"
@@ -383,6 +384,16 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 		mc.certificateExpiryPeriod,
 		updatePoller, updateChannel); err != nil {
 		return nil, err
+	}
+
+	// The hawtio plugin is ONLY relevant to OpenShift
+	if apiSpec.IsOpenShift4 {
+		if err := hawtioplugin.Add(
+			mgr, operatorPod, mc.clientTools,
+			apiSpec, mc.buildVariables,
+			mc.certificateExpiryPeriod); err != nil {
+			return nil, err
+		}
 	}
 
 	return mgr, nil
