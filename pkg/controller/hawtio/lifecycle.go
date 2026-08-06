@@ -24,6 +24,8 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+const hawtioFinalizer = "hawt.io/finalizer"
+
 // RequeueError is a custom error type used to signal that the controller
 // should gracefully requeue the reconciliation after a specific duration,
 // without treating it as a crash or failure.

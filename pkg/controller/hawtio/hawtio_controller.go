@@ -46,10 +46,6 @@ import (
 
 var hawtioLogger = logf.Log.WithName("controller_hawtio")
 
-const (
-	hawtioFinalizer         = "hawt.io/finalizer"
-)
-
 var ErrLegacyResourceAdopted = errs.New("A legacy resource has been adopted, requeue required")
 
 // ReconcileHawtio reconciles a Hawtio object
