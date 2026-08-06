@@ -118,8 +118,8 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - kind: ConsolePlugin
-      name: consoleplugins.hawt.io
+    - kind: HawtioPlugin
+      name: hawtioplugins.hawt.io
       version: v1
     - description: An Hawtio console that eases the discovery and management of hawtio-enabled
         applications

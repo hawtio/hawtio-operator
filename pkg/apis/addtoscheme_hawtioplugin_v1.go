@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/hawtio/hawtio-operator/pkg/apis/consoleplugin/v1"
+	"github.com/hawtio/hawtio-operator/pkg/apis/hawtioplugin/v1"
 )
 
 func init() {

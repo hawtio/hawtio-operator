@@ -194,7 +194,7 @@ func operatorRun(watchNamespaces string, podNamespace string, certExpiryPeriod t
 		ImageVersion:           ImageVersion,
 		GatewayImageVersion:    GatewayImageVersion,
 		GatewayImageRepository: GatewayImageRepository,
-		ConsolePlugin: util.ConsolePluginVars{
+		Plugin: util.HawtioPluginVars{
 			ImageRepository:        PluginImageRepository,
 			ImageVersion:           PluginImageVersion,
 			GatewayImageVersion:    PluginGatewayImageVersion,

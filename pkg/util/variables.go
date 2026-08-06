@@ -49,14 +49,14 @@ const (
 	PluginGatewayImageVersionEnvVarDefault = "latest"
 )
 
-type ConsolePluginVars struct {
-	// The console plugin operand image repository
+type HawtioPluginVars struct {
+	// The hawtio plugin operand image repository
 	ImageRepository string
-	// The console plugin gateway operand image repository
+	// The hawtio plugin gateway operand image repository
 	GatewayImageRepository string
-	// The console plugin operand image version
+	// The hawtio plugin operand image version
 	ImageVersion string
-	// The console plugin gateway operand image version
+	// The hawtio plugin gateway operand image version
 	GatewayImageVersion string
 }
 
@@ -70,8 +70,8 @@ type BuildVariables struct {
 	ImageVersion string
 	// The hawtio-gateway operand image version
 	GatewayImageVersion string
-	// ConsolePlugin build-time properties
-	ConsolePlugin ConsolePluginVars
+	// HawtioPlugin build-time properties
+	Plugin HawtioPluginVars
 	// The operator version
 	OperatorVersion string
 	// Legacy serving certificate version
@@ -139,25 +139,25 @@ func (bv *BuildVariables) GetOnlineGatewayVersion() string {
 // GetPluginImageRepo returns the preferred plugin image repository
 // taking into account the PLUGIN_IMAGE_REPOSITORY env var
 func (bv *BuildVariables) GetPluginImageRepo() string {
-	return getEnvVarOrDefault(PluginImageRepoEnvVar, bv.ConsolePlugin.ImageRepository, PluginImageRepoEnvVarDefault)
+	return getEnvVarOrDefault(PluginImageRepoEnvVar, bv.Plugin.ImageRepository, PluginImageRepoEnvVarDefault)
 }
 
 // GetPluginGatewayImageRepo returns the preferred plugin gateway image repository
 // taking into account the PLUGIN_GATEWAY_IMAGE_REPOSITORY env var
 func (bv *BuildVariables) GetPluginGatewayImageRepo() string {
-	return getEnvVarOrDefault(PluginGatewayImageRepoEnvVar, bv.ConsolePlugin.GatewayImageRepository, PluginGatewayImageRepoEnvVarDefault)
+	return getEnvVarOrDefault(PluginGatewayImageRepoEnvVar, bv.Plugin.GatewayImageRepository, PluginGatewayImageRepoEnvVarDefault)
 }
 
 // GetPluginVersion returns the preferred online-console-plugin version
 // taking into account the PLUGIN_IMAGE_VERSION env var and the
 // ImageVersion property
 func (bv *BuildVariables) GetPluginVersion() string {
-	return getEnvVarOrDefault(PluginImageVersionEnvVar, bv.ConsolePlugin.ImageVersion, PluginImageVersionEnvVarDefault)
+	return getEnvVarOrDefault(PluginImageVersionEnvVar, bv.Plugin.ImageVersion, PluginImageVersionEnvVarDefault)
 }
 
 // GetPluginGatewayVersion returns the preferred online-console-plugin-gateway version
 // taking into account the PLUGIN_GATEWAY_IMAGE_VERSION env var and the
 // GatewayImageVersion property
 func (bv *BuildVariables) GetPluginGatewayVersion() string {
-	return getEnvVarOrDefault(PluginGatewayImageVersionEnvVar, bv.ConsolePlugin.GatewayImageVersion, PluginGatewayImageVersionEnvVarDefault)
+	return getEnvVarOrDefault(PluginGatewayImageVersionEnvVar, bv.Plugin.GatewayImageVersion, PluginGatewayImageVersionEnvVarDefault)
 }

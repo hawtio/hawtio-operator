@@ -3,4 +3,4 @@ kind: Kustomization
 
 resources:
   - hawt.io_hawtios.yaml
-  - hawt.io_consoleplugins.yaml
+  - hawt.io_hawtioplugins.yaml

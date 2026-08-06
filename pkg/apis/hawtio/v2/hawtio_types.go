@@ -92,7 +92,7 @@ type HawtioSpec struct {
 	// The Hawtio health checking configuration
 	HealthChecks HawtioHealthCheckPeriods `json:"healthChecks,omitempty"`
 	// The flag to request installation of the Console Plugin
-	EnableConsolePlugin *bool `json:"enableHawtioPlugin,omitempty"`
+	EnableHawtioPlugin *bool `json:"enableHawtioPlugin,omitempty"`
 }
 
 // The configuration for which metadata on Hawtio custom resources to propagate to

@@ -1004,7 +1004,7 @@ spec:
                         type: string
                     type: object
                 type: object
-              enableConsolePlugin:
+              enableHawtioPlugin:
                 description: The flag to request installation of the Console Plugin
                 type: boolean
               externalRoutes:

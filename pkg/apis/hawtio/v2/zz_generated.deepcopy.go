@@ -359,8 +359,8 @@ func (in *HawtioSpec) DeepCopyInto(out *HawtioSpec) {
 	in.Config.DeepCopyInto(&out.Config)
 	out.Logging = in.Logging
 	in.HealthChecks.DeepCopyInto(&out.HealthChecks)
-	if in.EnableConsolePlugin != nil {
-		in, out := &in.EnableConsolePlugin, &out.EnableConsolePlugin
+	if in.EnableHawtioPlugin != nil {
+		in, out := &in.EnableHawtioPlugin, &out.EnableHawtioPlugin
 		*out = new(bool)
 		**out = **in
 	}

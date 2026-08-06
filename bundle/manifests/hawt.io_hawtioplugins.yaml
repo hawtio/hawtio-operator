@@ -4,19 +4,19 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
   creationTimestamp: null
-  name: consoleplugins.hawt.io
+  name: hawtioplugins.hawt.io
 spec:
   group: hawt.io
   names:
     categories:
     - hawtio
-    kind: ConsolePlugin
-    listKind: ConsolePluginList
-    plural: consoleplugins
+    kind: HawtioPlugin
+    listKind: HawtioPluginList
+    plural: hawtioplugins
     shortNames:
-    - hcp
-    - hcpio
-    singular: consoleplugin
+    - hphawt
+    - hcphawt
+    singular: hawtioplugin
   scope: Cluster
   versions:
   - additionalPrinterColumns:
@@ -39,7 +39,7 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: ConsolePlugin is the Schema for the consoleplugins API.
+        description: HawtioPlugin is the Schema for the hawtioplugins API.
         properties:
           apiVersion:
             description: |-
@@ -59,10 +59,10 @@ spec:
           metadata:
             type: object
           spec:
-            description: ConsolePluginSpec defines the desired state of ConsolePlugin.
+            description: HawtioPluginSpec defines the desired state of HawtioPlugin.
             properties:
               healthChecks:
-                description: The ConsolePlugin health checking configuration
+                description: The HawtioPlugin health checking configuration
                 properties:
                   gatewayLivenessPeriod:
                     description: Configure the period, in seconds, between gateway
@@ -86,7 +86,7 @@ spec:
                     type: integer
                 type: object
               logging:
-                description: The ConsolePlugin logging configuration
+                description: The HawtioPlugin logging configuration
                 properties:
                   gatewayLogLevel:
                     description: Configure gateway log level {info|debug}
@@ -149,7 +149,7 @@ spec:
                     type: boolean
                 type: object
               resources:
-                description: The ConsolePlugin console compute resources
+                description: The HawtioPlugin console compute resources
                 properties:
                   claims:
                     description: |-
@@ -209,10 +209,10 @@ spec:
                 type: object
             type: object
           status:
-            description: ConsolePluginStatus defines the observed state of ConsolePlugin.
+            description: HawtioPluginStatus defines the observed state of HawtioPlugin.
             properties:
               gatewayImage:
-                description: The ConsolePlugin gateway container image
+                description: The HawtioPlugin gateway container image
                 type: string
               phase:
                 description: The deployment phase
@@ -220,9 +220,10 @@ spec:
                 - Initialized
                 - Deployed
                 - Failed
+                - Disabled
                 type: string
               pluginImage:
-                description: The ConsolePlugin plugin container image
+                description: The HawtioPlugin plugin container image
                 type: string
             type: object
         type: object

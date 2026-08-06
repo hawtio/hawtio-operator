@@ -80,7 +80,7 @@ func ConfigureScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 
-	// Register Hawtio and ConsolePlugin api scheme
+	// Register Hawtio and HawtioPlugin api scheme
 	err = apis.AddToScheme(scheme)
 	if err != nil {
 		return nil, err
