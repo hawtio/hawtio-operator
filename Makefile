@@ -280,7 +280,7 @@ endif
 DEFAULT_CHANNEL ?= $(shell echo "v$(word 1,$(subst ., ,$(lastword $(OPERATOR_VERSION))))")
 CHANNELS ?= $(DEFAULT_CHANNEL),latest
 PACKAGE := hawtio-operator
-MANIFESTS := bundle
+BUNDLE := bundle
 MANIFESTS := $(BUNDLE)/manifests
 DEPLOY := deploy
 CSV_VERSION ?= $(OPERATOR_VERSION)
