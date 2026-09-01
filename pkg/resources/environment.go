@@ -31,7 +31,6 @@ const (
 	/*
 	 * Gateway Env Vars
 	 */
-	GatewayWebSvrEnvVar      = "HAWTIO_ONLINE_GATEWAY_WEB_SERVER"         // https://localhost:8443
 	GatewaySSLKeyEnvVar      = "HAWTIO_ONLINE_GATEWAY_SSL_KEY"            // /etc/tls/private/serving/tls.key
 	GatewaySSLCertEnvVar     = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE"    // /etc/tls/private/serving/tls.crt
 	GatewaySSLCertCAEnvVar   = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE_CA" // /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
