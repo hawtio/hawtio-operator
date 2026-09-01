@@ -83,7 +83,7 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultService(hawtio))
+		adoptionErr := r.AdoptLegacyResource(ctx, resources.NewDefaultService(hawtio))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors
@@ -261,7 +261,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, oresources.NewDefaultRoute(hawtio))
+		adoptionErr := r.AdoptLegacyResource(ctx, oresources.NewDefaultRoute(hawtio))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors
@@ -326,7 +326,7 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, kresources.NewDefaultIngress(hawtio))
+		adoptionErr := r.AdoptLegacyResource(ctx, kresources.NewDefaultIngress(hawtio))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors

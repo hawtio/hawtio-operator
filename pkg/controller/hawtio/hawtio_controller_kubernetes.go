@@ -57,7 +57,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 			// This a legacy certificate so adopt it
 			// Note: adoptLegacyResource returns the Sentinel Error (ErrLegacyResourceAdopted)
 			// on success.
-			adoptErr := r.adoptLegacyResource(ctx, servingCertSecret)
+			adoptErr := r.AdoptLegacyResource(ctx, servingCertSecret)
 			if adoptErr != nil {
 				// Returns ErrLegacyResourceAdopted (to requeue) or a real API error
 				return nil, 0, adoptErr

@@ -75,7 +75,7 @@ func (r *ReconcileHawtio) osCreateClientCertificate(ctx context.Context, hawtio 
 			// This a legacy certificate so adopt it
 			// Note: adoptLegacyResource returns the Sentinel Error (ErrLegacyResourceAdopted)
 			// on success.
-			adoptErr := r.adoptLegacyResource(ctx, clientCertSecret)
+			adoptErr := r.AdoptLegacyResource(ctx, clientCertSecret)
 			if adoptErr != nil {
 				// Returns ErrLegacyResourceAdopted (to requeue) or a real API error
 				return nil, 0, adoptErr

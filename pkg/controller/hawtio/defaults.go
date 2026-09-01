@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	hawtioctrls "github.com/hawtio/hawtio-operator/pkg/controller/common"
 
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
@@ -203,7 +204,7 @@ func (r *ReconcileHawtio) resolveServingClientCertificate(ctx context.Context, h
 	// Create -serving certificate
 	servingCertSecret, expiryIn, err := kubeCreateServingCertificate(ctx, r, hawtio)
 	if err != nil {
-		if err == ErrLegacyResourceAdopted {
+		if err == hawtioctrls.ErrLegacyResourceAdopted {
 			r.Logger.Error(err, "Kube serving certificate exists but need to adopt")
 		} else {
 			r.Logger.Error(err, "Failed to create serving certificate")

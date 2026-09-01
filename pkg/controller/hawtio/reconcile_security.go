@@ -77,7 +77,7 @@ func (r *ReconcileHawtio) reconcileServiceAccount(ctx context.Context, hawtio *h
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultServiceAccount(hawtio))
+		adoptionErr := r.AdoptLegacyResource(ctx, resources.NewDefaultServiceAccount(hawtio))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors
@@ -173,7 +173,7 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultOAuthClient(clientName))
+		adoptionErr := r.AdoptLegacyResource(ctx, resources.NewDefaultOAuthClient(clientName))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors

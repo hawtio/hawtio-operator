@@ -126,7 +126,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, openshift.NewDefaultConsoleLink(consoleLinkName))
+		adoptionErr := r.AdoptLegacyResource(ctx, openshift.NewDefaultConsoleLink(consoleLinkName))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors

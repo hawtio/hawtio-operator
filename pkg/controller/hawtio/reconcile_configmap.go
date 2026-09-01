@@ -55,7 +55,7 @@ func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtio
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
+		adoptionErr := r.AdoptLegacyResource(ctx, resources.NewDefaultConfigMap(hawtio))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors

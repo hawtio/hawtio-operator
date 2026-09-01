@@ -206,5 +206,33 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 
 		return reconcile.Result{Requeue: true}, nil
 	}
+
+	// =====================================================================
+	// PHASE 4: RECONCILE AND DEPLOY PHASE
+	// =====================================================================
+
+	// Reconcile the service account
+	r.Logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account ===")
+	opResult, err := r.reconcileServiceAccount(ctx, hawtioPlugin, r.OperatorPod.Namespace)
+	r.LogOperationResult("ServiceAccount", opResult)
+	if err == nil {
+		return commonctrl.HandleResultAndError(err)
+	}
+
+	//2
+	// - Plugin
+	//   * ConsolePlugin: hawtio-online-console-plugin
+	//   * Service: hawtio-online-console-plugin
+	//   * Deployment: hawtio-online-console-plugin
+	//   * service certificate secret generated from annotation in Service
+	//
+	// - Gateway
+	//   * ConfigMap: hawtio-online-console-plugin-rbac
+	//   * Deployment: hawtio-online-console-plugin-gateway
+	//   * Service: hawtio-online-console-plugin-gateway (service certificate)
+	//   * Route: hawtio-online-console-plugin-gateway
+	//
+
+	// TODO - resources
 	return ctrl.Result{}, nil
 }

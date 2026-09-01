@@ -11,6 +11,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
+	hawtioctrls "github.com/hawtio/hawtio-operator/pkg/controller/common"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,7 +37,7 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			// If the poller finishes sooner, its channel event will wake up the
 			// reconcile again anyway
 			// Return None, and our custom struct with the 2-second delay
-			return controllerutil.OperationResultNone, &RequeueError{
+			return controllerutil.OperationResultNone, &hawtioctrls.RequeueError{
 				Message:      "waiting for initial registry baseline",
 				RequeueAfter: 2 * time.Second,
 			}
@@ -91,7 +92,7 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 	// since it is legacy and not labelled. The create failed so it
 	// should be adopted and reconciled.
 	if err != nil && kerrors.IsAlreadyExists(err) {
-		adoptionErr := r.adoptLegacyResource(ctx, resources.NewDefaultDeployment(hawtio))
+		adoptionErr := r.AdoptLegacyResource(ctx, resources.NewDefaultDeployment(hawtio))
 		if adoptionErr != nil {
 			// If adoption failed (e.g., API error) or an adoption was called
 			// return any of these errors

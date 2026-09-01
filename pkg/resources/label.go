@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	commonapi "github.com/hawtio/hawtio-operator/pkg/apis/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -23,12 +23,12 @@ func LabelsForHawtio(name string) map[string]string {
 }
 
 // PropagateAnnotations propagate annotations from hawtio CR
-func PropagateAnnotations(hawtio *hawtiov2.Hawtio, annotations map[string]string, log logr.Logger) {
+func PropagateAnnotations(hawtio commonapi.HawtioGeneral, annotations map[string]string, log logr.Logger) {
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Annotations %s", util.ToJSONString(annotations)))
 
 	for k, v := range hawtio.GetAnnotations() {
 		// Only propagate specified annotations
-		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Annotations, k) {
+		if !util.MatchPatterns(hawtio.GetMetadataInfo().AnnotationPatterns, k) {
 			continue
 		}
 		// Not overwrite existing annotations
@@ -39,12 +39,12 @@ func PropagateAnnotations(hawtio *hawtiov2.Hawtio, annotations map[string]string
 }
 
 // PropagateLabels propagate labels from hawtio CR
-func PropagateLabels(hawtio *hawtiov2.Hawtio, labels map[string]string, log logr.Logger) {
+func PropagateLabels(hawtio commonapi.HawtioGeneral, labels map[string]string, log logr.Logger) {
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Propagating Labels %s", util.ToJSONString(labels)))
 
 	for k, v := range hawtio.GetLabels() {
 		// Only propagate specified labels
-		if !util.MatchPatterns(hawtio.Spec.MetadataPropagation.Labels, k) {
+		if !util.MatchPatterns(hawtio.GetMetadataInfo().LabelPatterns, k) {
 			continue
 		}
 		// Not overwrite existing labels
