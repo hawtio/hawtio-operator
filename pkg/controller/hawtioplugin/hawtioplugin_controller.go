@@ -122,5 +122,51 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 		return reconcile.Result{}, err
 	}
 
+	// =====================================================================
+	// PHASE 2: SETUP: FETCH HAWTIOPLUGIN CR
+	// =====================================================================
+	//
+	// Find the HawtioPlugin CR if one exists
+	// - If exists then validate the configuration
+	// - If not then create a new default one and requeue
+	//
+	// Fetch the Hawtio instance from the cluster.
+	r.Logger.V(util.DebugLogLevel).Info("=== Fetching Hawtio Plugin Custom Resource ===")
+	hawtioPlugin, err := r.fetchHawtioPlugin(ctx)
+	if err != nil {
+		return reconcile.Result{}, err
+	} else if hawtioPlugin == nil {
+		// HawtioPlugin CR not found so create a new one
+		err := r.createHawtioPlugin(ctx)
+		// Requeue to re-evaluate
+		return reconcile.Result{Requeue: true}, err
+	}
+
+	hawtioPluginStatus := createStatusWithImages(r.BuildVariables)
+
+	// hawtioPlugin should exist, either as a default or user-defined CR
+
+	if !shouldEnablePlugin {
+		r.Logger.Info("Hawtio Console Plugin not required - disabling")
+		//
+		// No hawtio CR enablement at this time
+		//
+		// - Remove all resources
+		//   * Delete all resources in reverse order using r.Delete
+		//   * No need to requeue inbetween except if there is an error
+		//   * Ignore NotFound errors:
+		//     if err := r.Delete(ctx, service); client.IgnoreNotFound(err) != nil {
+		//
+
+		// TODO
+
+		// - Change HawtioPlugin phase to Disabled
+		// - Complete
+		//
+		r.Logger.V(util.DebugLogLevel).Info("Setting HawtioPlugin phase to Disabled")
+		hawtioPluginStatus.Phase = hawtiopluginv1.PluginPhaseDisabled
+		err := r.setPluginStatus(ctx, hawtioPlugin, hawtioPluginStatus)
+		return reconcile.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }

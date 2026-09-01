@@ -154,3 +154,16 @@ type HawtioPluginList struct {
 func init() {
 	SchemeBuilder.Register(&HawtioPlugin{}, &HawtioPluginList{})
 }
+
+// NewHawtioPlugin new default HawtioPlugin CR
+// CR is cluster-scoped so the namespace with be empty
+func NewHawtioPlugin(name string) *HawtioPlugin {
+	hawtioPlugin := &HawtioPlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "",
+		},
+	}
+
+	return hawtioPlugin
+}
