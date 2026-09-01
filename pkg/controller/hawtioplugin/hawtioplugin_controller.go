@@ -109,7 +109,18 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 
 	r.Logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Cluster API Specification: %+v", r.ApiSpec))
 
-	// TODO(user): your logic here
+	// =====================================================================
+	// PHASE 1: SETUP: FETCH HAWTIO
+	// =====================================================================
+	// Check all hawtio CRs to see whether console should be
+	// installed or remain installed
+	//
+	r.Logger.V(util.DebugLogLevel).Info("=== Finding Aggregate Hawtio Plugin Enablement ===")
+	shouldEnablePlugin, err := r.reconcileHawtio(ctx)
+	r.Logger.V(util.DebugLogLevel).Info("Hawtio CR plugin", "enabled", shouldEnablePlugin)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
