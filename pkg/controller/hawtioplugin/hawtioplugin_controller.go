@@ -234,5 +234,67 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 	//
 
 	// TODO - resources
+
+	// =====================================================================
+	// PHASE 5: UPDATE PHASE
+	// =====================================================================
+	r.Logger.V(util.DebugLogLevel).Info("Update phase - refreshing HawtioPlugin status")
+
+	//
+	// Await the installation of the deployment
+	//
+	// TODO
+	// deployment := &appsv1.Deployment{}
+	// err = r.Client.Get(ctx, crNamespacedName, deployment)
+	// if err != nil && kerrors.IsNotFound(err) {
+	// 	return reconcile.Result{Requeue: true}, nil
+	// } else if err != nil {
+	// 	r.Logger.Error(err, "Failed to get deployment")
+	// 	return reconcile.Result{}, err
+	// }
+
+	// Refresh the hawtioplugin CR to minimize conflict window
+	// Gets the absolute latest ResourceVersion from the server.
+	// TODO
+	// if err := r.Client.Get(ctx, crNamespacedName, hawtioPlugin); err != nil {
+	// 	return reconcile.Result{}, err
+	// }
+
+	// Create a copy of the status to modify.
+	// TODO
+	// newStatus := hawtioPlugin.Status.DeepCopy()
+	//
+	// Reconcile Hawtio status image field from deployment container image
+	// newStatus.Image = deployment.Spec.Template.Spec.Containers[0].Image
+	// newStatus.GatewayImage = deployment.Spec.Template.Spec.Containers[1].Image
+
+	// Determine the overall phase based on the deployment's readiness.
+	// if deployment.Status.ReadyReplicas > 0 {
+	// 	newStatus.Phase = hawtiov2.HawtioPhaseDeployed
+	// } else {
+	// 	// The Deployment isn't ready yet. Let's check if it has timed out.
+	// 	if r.isDeploymentFailed(deployment) {
+	// 		newStatus.Phase = hawtiov2.HawtioPhaseFailed
+	// 	} else {
+	// 		// It's not ready, but it hasn't failed yet. It's likely pulling images
+	// 		// or waiting for the container to start. Keep it as Initialized.
+	// 		newStatus.Phase = hawtiov2.HawtioPhaseInitialized
+	// 	}
+	// }
+	// Only send an update to the API server if the status has actually changed.
+	// This prevents empty updates and reduces load on the API server.
+	// if !reflect.DeepEqual(hawtio.Status, *newStatus) {
+	// 	hawtio.Status = *newStatus
+	// 	r.Logger.Info("Status has changed, updating Hawtio CR",
+	// 		"Phase", newStatus.Phase,
+	// 		"URL", newStatus.URL,
+	// 		"Replicas", newStatus.Replicas,
+	// 		"Image", newStatus.Image,
+	// 		"Gateway Image", newStatus.GatewayImage)
+	// 	if err := r.Client.Status().Update(ctx, hawtio); err != nil {
+	// 		r.Logger.Error(err, "Failed to update Hawtio status")
+	// 		return reconcile.Result{}, err
+	// 	}
+	// }
 	return ctrl.Result{}, nil
 }
