@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -167,6 +168,43 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 		hawtioPluginStatus.Phase = hawtiopluginv1.PluginPhaseDisabled
 		err := r.setPluginStatus(ctx, hawtioPlugin, hawtioPluginStatus)
 		return reconcile.Result{}, err
+	}
+
+	// =====================================================================
+	// PHASE 3: INITIALIZE STATUS
+	// =====================================================================
+	// Verify existence of optional resources - rbac configmap
+	// Check the status of the RBAC ConfigMap.
+	// If specified in the CR then it should be present.
+	//
+	// - verification of configmap to determine syntax is ok?
+	//
+	r.Logger.V(util.DebugLogLevel).Info("=== Verifying RBAC ConfigMap ===")
+	valid, err := r.verifyRBACConfigMap(ctx, hawtioPlugin, r.OperatorPod.Namespace)
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			// Let's poll for the RBAC ConfigMap to be created
+			return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+		}
+
+		return reconcile.Result{}, err
+	} else if !valid {
+		// Lets poll until the RBAC ConfigMap is valid
+		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+	}
+
+	//
+	// - If the rbac ConfigMap was invalid then fail (not found is ok)
+	//
+	if len(hawtioPlugin.Status.Phase) == 0 || hawtioPlugin.Status.Phase == hawtiopluginv1.PluginPhaseFailed {
+		r.Logger.V(util.DebugLogLevel).Info("Hawtio.Status.Phase is zero or failed. Setting to initialized.")
+		hawtioPluginStatus.Phase = hawtiopluginv1.PluginPhaseInitialized
+		err := r.setPluginStatus(ctx, hawtioPlugin, hawtioPluginStatus)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		return reconcile.Result{Requeue: true}, nil
 	}
 	return ctrl.Result{}, nil
 }
