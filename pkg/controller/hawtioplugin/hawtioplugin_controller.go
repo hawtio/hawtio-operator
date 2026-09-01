@@ -7,12 +7,21 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	routev1 "github.com/openshift/api/route/v1"
+
+	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	hawtiopluginv1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtioplugin/v1"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/clients"
@@ -21,7 +30,8 @@ import (
 )
 
 const (
-	HawtioUnderTestEnvVar = "HAWTIO_UNDER_TEST"
+	HawtioUnderTestEnvVar     = "HAWTIO_UNDER_TEST"
+	singletonHawtioPluginName = "hawtio-console-plugin"
 )
 
 var pluginLogger = logf.Log.WithName("controller_hawtioplugin")
@@ -71,8 +81,24 @@ func (r *ReconcileHawtioPlugin) setupWithManager(mgr ctrl.Manager) error {
 			SkipNameValidation: &skipValidation,
 		}).
 		Named("hawtioplugin-controller").
-		// Watches(/* ... */).
-		// Owns(&appsv1.Deployment{}).
+		Watches(
+			hawtiov2.NewHawtio(),
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+				return []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Name:      singletonHawtioPluginName,
+							Namespace: r.OperatorPod.Namespace,
+						},
+					},
+				}
+			}),
+		).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
+		Owns(&routev1.Route{}).
 		Complete(r)
 }
 
