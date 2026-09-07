@@ -19,6 +19,8 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	common "github.com/hawtio/hawtio-operator/pkg/apis/common"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -153,6 +155,44 @@ type HawtioPluginList struct {
 
 func init() {
 	SchemeBuilder.Register(&HawtioPlugin{}, &HawtioPluginList{})
+}
+
+//
+// Implementation of interfaces
+//
+
+// GetMetadataInfo implements the HawtioGeneral interface method
+func (hawtioPlugin HawtioPlugin) GetMetadataInfo() common.MetadataInfo {
+	return common.MetadataInfo{
+		LabelPatterns:      hawtioPlugin.Spec.MetadataPropagation.Labels,
+		AnnotationPatterns: hawtioPlugin.Spec.MetadataPropagation.Annotations,
+	}
+}
+
+// GetCertificateOptions implements the HawtioGeneral interface method
+func (hawtioPlugin HawtioPlugin) GetCertificateOptions() common.CertificateOptions {
+	// CommonName is a built-in constant and does not vary via the CR
+	return common.CertificateOptions{
+		CommonName: "hawtio-plugin-proxy-certificate",
+	}
+}
+
+// GetRbacOptions implements the HawtioGeneral interface method
+func (hawtioPlugin HawtioPlugin) GetRbacOptions() common.RbacOptions {
+	return common.RbacOptions{
+		ConfigMap:           hawtioPlugin.Spec.RBAC.ConfigMap,
+		DisableRBACRegistry: hawtioPlugin.Spec.RBAC.DisableRBACRegistry,
+	}
+}
+
+// GetNginxOptions implements the HawtioGeneral interface method
+func (hawtioPlugin HawtioPlugin) GetNginxOptions() common.NginxOptions {
+	return common.NginxOptions{
+		ClientBodyBufferSize:       hawtioPlugin.Spec.Nginx.ClientBodyBufferSize,
+		ProxyBuffers:               hawtioPlugin.Spec.Nginx.ProxyBuffers,
+		SubrequestOutputBufferSize: hawtioPlugin.Spec.Nginx.SubrequestOutputBufferSize,
+		MasterBurstSize:            hawtioPlugin.Spec.Nginx.MasterBurstSize,
+	}
 }
 
 // NewHawtioPlugin new default HawtioPlugin CR
