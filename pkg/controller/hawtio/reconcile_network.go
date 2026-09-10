@@ -99,7 +99,14 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 	return opResult, nil
 }
 
+//
 // Does the owner of the CR have access to the route/custom-host sub-resource
+// Returns:
+// - ErrNoModifiedByAnnotation sentinal error if no annotation is present in legacy CR
+// - Error if user does not have adequate permissions to customise the route host name
+// - nil if the route host name is not being customised
+// - nil if the user has permission to customise the route host name
+//
 func (r *ReconcileHawtio) validateRoutePermissions(ctx context.Context, hawtio *hawtiov2.Hawtio) error {
 	if hawtio.Spec.RouteHostName == "" {
 		// Custom Route is not required so SAR not necessary
@@ -125,15 +132,51 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		return nil, controllerutil.OperationResultNone, nil
 	}
 
-	err := r.validateRoutePermissions(ctx, hawtio)
-	if err != nil {
+	existingRoute := &routev1.Route{}
+	err := r.client.Get(ctx, types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}, existingRoute)
+	routeExists := err == nil
+
+	//
+	// An erro`r occurred whilst getting an existing route
+	// and is not the NotFound error
+	//
+	if err != nil && !kerrors.IsNotFound(err) {
+		// A real error occurred trying to get the Route. Fail fast.
+		r.logger.Error(err, "Failed to get existing Route for pre-check")
 		return nil, controllerutil.OperationResultNone, err
 	}
 
-	existingRoute := &routev1.Route{}
-	err = r.client.Get(ctx, types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}, existingRoute)
+	//
+	// Validate the user permissions for the route to see
+	// if ok to continue with reconciling the route
+	//
+	err = r.validateRoutePermissions(ctx, hawtio)
+	if err != nil {
+		//
+		// If a legacy CR, ie. already installed but no owner annotation,
+		// with an active custom route, log a warning & let it survive
+		//
+		if _, ok := err.(*ErrNoModifiedByAnnotation); ok && routeExists {
+			r.logger.Error(err, "Legacy Hawtio CR detected with active custom route but missing 'modified-by' annotation. Allowing existing route to remain but CR should be edited and saved to allow the webhook to add a modified-by annotation.",
+				"name", hawtio.Name,
+				"namespace", hawtio.Namespace,
+			)
+			// Skip the rest of creation/update logic to guarantee nothing is broken,
+			// returning the existing route unaltered.
+			return existingRoute, controllerutil.OperationResultNone, nil
+		}
 
-	if err == nil {
+		//
+		// For a NEW CR with no annotation or real SAR failures, fail fast
+		//
+		return nil, controllerutil.OperationResultNone, err
+	}
+
+	//
+	// Validation of the route permissions produced no error
+	// and a route already exists
+	//
+	if routeExists {
 		// A route was found. Now, apply the special condition check.
 		isGenerated := strings.EqualFold(existingRoute.Annotations[oresources.RouteHostGeneratedAnnotation], "true")
 
@@ -155,10 +198,6 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 			// Returning (nil, nil) signals success for this loop, allowing the next one to proceed cleanly.
 			return nil, controllerutil.OperationResultUpdated, nil
 		}
-	} else if !kerrors.IsNotFound(err) {
-		// A real error occurred trying to get the Route. Fail fast.
-		r.logger.Error(err, "Failed to get existing Route for pre-check")
-		return nil, controllerutil.OperationResultNone, err
 	}
 
 	// err was not found so carry-on with creating a new route
