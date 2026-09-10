@@ -233,6 +233,95 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 			}, "5s", "1s").Should(Succeed())
 		})
 
+		It("Should bypass validation for Legacy Hawtio CR (no modified-by annotation) with no custom route", func() {
+			hawtioKey := types.NamespacedName{Name: "legacy-no-custom-route", Namespace: hawtiotest.HawtioNamespace}
+
+			By("Creating a Legacy Hawtio CR (no modification annotation, no custom route host)")
+			hawtio := &hawtiov2.Hawtio{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hawtioKey.Name,
+					Namespace: hawtioKey.Namespace,
+					// No 'hawtio.io/last-modified-by' annotation
+				},
+				Spec: hawtiov2.HawtioSpec{
+					Type:          hawtiov2.NamespaceHawtioDeploymentType,
+					RouteHostName: "",
+				},
+			}
+			Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
+
+			By("Verifying the controller loop proceeds cleanly to stable state without freezing")
+			Eventually(func(g Gomega) {
+				g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtioKey, &routev1.Route{})).To(Succeed())
+			}, hawtiotest.Timeout, hawtiotest.Interval).Should(Succeed())
+		})
+
+		It("Should log warning and preserve route for Legacy Hawtio CR (no modified-by annotation) with an existing custom route", func() {
+			hawtioKey := types.NamespacedName{Name: "legacy-with-custom-route", Namespace: hawtiotest.HawtioNamespace}
+			customHost := "legacy-host.apps-crc.testing"
+
+			By("Pre-creating the physical Route in the cluster to simulate pre-upgrade state")
+			preExistingRoute := &routev1.Route{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hawtioKey.Name,
+					Namespace: hawtioKey.Namespace,
+				},
+				Spec: routev1.RouteSpec{
+					Host: customHost,
+					To: routev1.RouteTargetReference{
+						Kind: "Service",
+						Name: hawtioKey.Name,
+					},
+				},
+			}
+			Expect(testTools.K8sClient.Create(mgrState.Ctx, preExistingRoute)).To(Succeed())
+
+			By("Creating the corresponding Legacy Hawtio CR with custom hostname matching the pre-created route")
+			hawtio := &hawtiov2.Hawtio{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hawtioKey.Name,
+					Namespace: hawtioKey.Namespace,
+					// No 'hawtio.io/last-modified-by' annotation
+				},
+				Spec: hawtiov2.HawtioSpec{
+					Type:          hawtiov2.NamespaceHawtioDeploymentType,
+					RouteHostName: customHost,
+				},
+			}
+			Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
+
+			By("Verifying the pre-existing Route remains completely untouched and is not deleted or broken")
+			Consistently(func(g Gomega) {
+				liveRoute := &routev1.Route{}
+				g.Expect(testTools.K8sClient.Get(mgrState.Ctx, hawtioKey, liveRoute)).To(Succeed())
+				g.Expect(liveRoute.Spec.Host).To(Equal(customHost))
+			}, "5s", "1s").Should(Succeed())
+		})
+
+		It("Should fail fast and refuse creation for a new/invalid Hawtio CR with no modified-by annotation but requesting a custom route", func() {
+			hawtioKey := types.NamespacedName{Name: "new-invalid-custom-route", Namespace: hawtiotest.HawtioNamespace}
+
+			By("Creating a brand new Hawtio CR requesting a custom route host but missing required audit metadata")
+			hawtio := &hawtiov2.Hawtio{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hawtioKey.Name,
+					Namespace: hawtioKey.Namespace,
+					// Missing 'hawtio.io/last-modified-by' annotation completely
+				},
+				Spec: hawtiov2.HawtioSpec{
+					Type:          hawtiov2.NamespaceHawtioDeploymentType,
+					RouteHostName: "malicious-host.apps-crc.testing",
+				},
+			}
+			Expect(testTools.K8sClient.Create(mgrState.Ctx, hawtio)).To(Succeed())
+
+			By("Verifying that the Route is safely blocked and never physically instantiated in the cluster")
+			Consistently(func(g Gomega) {
+				err := testTools.K8sClient.Get(mgrState.Ctx, hawtioKey, &routev1.Route{})
+				g.Expect(kerrors.IsNotFound(err)).To(BeTrue())
+			}, "5s", "1s").Should(Succeed())
+		})
+
 		Context("targetting the Image Updater", func() {
 			It("Dynamically updating Deployment images when the background poller detects new digests", func() {
 				hawtiotest.PerformCommonUpdaterTest(testTools, mgrState, "OpenShift")
