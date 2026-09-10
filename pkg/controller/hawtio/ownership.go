@@ -15,6 +15,14 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+type ErrNoModifiedByAnnotation struct {
+	CRName string
+}
+
+func (e *ErrNoModifiedByAnnotation) Error() string {
+	return fmt.Sprintf("The last user to modify the Hawtio CR %s cannot be determined", e.CRName)
+}
+
 func (r *ReconcileHawtio) getOperatorOwner(ctx context.Context) (metav1.Object, error) {
 	r.logger.V(util.DebugLogLevel).Info("Getting operator owner ...")
 
@@ -71,7 +79,7 @@ func (r *ReconcileHawtio) getHawtioOwner(ctx context.Context, hawtio *hawtiov2.H
 
 	user := hawtio.Annotations["hawtio.io/last-modified-by"]
 	if len(user) == 0 {
-		return "", fmt.Errorf("The owner of the Hawtio CR %s cannot be determined", hawtio.Name)
+		return "", &ErrNoModifiedByAnnotation{CRName: hawtio.Name}
 	}
 
 	r.logger.V(util.DebugLogLevel).Info("Hawtio CR auditing", "modified-by", user)
