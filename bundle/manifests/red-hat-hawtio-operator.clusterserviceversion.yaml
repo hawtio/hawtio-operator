@@ -98,8 +98,8 @@ metadata:
     capabilities: Seamless Upgrades
     categories: Integration & Delivery
     certified: "false"
-    containerImage: quay.io/hawtio/operator:2.0.0
-    createdAt: "2026-05-18T13:03:32Z"
+    containerImage: quay.io/hawtio/operator:2.1.0
+    createdAt: "2026-09-10T13:57:12Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <2.0.0'
@@ -113,7 +113,7 @@ metadata:
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
     operatorframework.io/os.zos: supported
-  name: red-hat-hawtio-operator.v2.0.0
+  name: red-hat-hawtio-operator.v2.1.0
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -131,7 +131,7 @@ spec:
       name: hawtios.hawt.io
       version: v2
   description: |
-    **⚠️ Important**: Version 2.0.0 is a major architectural update that enables the Hawtio Operator to be Cluster Scoped (All Namespaces).
+    **⚠️ Important**: Version 2.0.0+ is a major architectural update that enables the Hawtio Operator to be Cluster Scoped (All Namespaces).
 
     Existing upgrades of the operator can successfully continue in single-namespace mode.
     However, a change to the install mode (to all-namespaces) will require a reinstall of the operator.
@@ -143,7 +143,7 @@ spec:
 
     1. **Uninstall** the existing v1.x Hawtio Operator via the OpenShift Console or CLI. _(Note: Running Hawtio console instances will NOT be deleted)_
 
-    2. **Install** the v2.0 Hawtio Operator from OperatorHub.
+    2. **Install** the v2.0+ Hawtio Operator from OperatorHub.
 
     3. The new operator will automatically detect, adopt, and label your existing resources.
 
@@ -207,6 +207,15 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - ""
+          - events.k8s.io
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+          - update
         - apiGroups:
           - apps
           resources:
@@ -329,7 +338,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: hawtio-operator
-                image: quay.io/hawtio/operator:2.0.0
+                image: quay.io/hawtio/operator:2.1.0
                 imagePullPolicy: Always
                 name: hawtio-operator
                 ports:
@@ -368,5 +377,5 @@ spec:
   minKubeVersion: 1.24.0
   provider:
     name: Red Hat
-  replaces: red-hat-hawtio-operator.v1.3.1
-  version: 2.0.0
+  replaces: red-hat-hawtio-operator.v2.0.1
+  version: 2.1.0
