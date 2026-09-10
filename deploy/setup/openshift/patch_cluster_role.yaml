@@ -27,6 +27,16 @@
     resources: ["secrets"]
     verbs: ["create", "delete"]
 
+# Required for checking if user is allowed
+# to create custom routes
+#
+- op: add
+  path: /rules/-
+  value:
+    apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+
 # Required for administration of routes on OpenShift
 #
 - op: add

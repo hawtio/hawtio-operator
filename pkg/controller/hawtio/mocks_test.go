@@ -15,6 +15,9 @@ func initHawtio(includeSSL int) *hawtiov2.Hawtio {
 	hawtio.ObjectMeta = metav1.ObjectMeta{
 		Name:      hawtioCRName,
 		Namespace: "hawtio-online-ns",
+		Annotations: map[string]string{
+			"hawtio.io/last-modified-by": "user",
+		},
 		Labels: map[string]string{
 			"app": "hawtio",
 		},

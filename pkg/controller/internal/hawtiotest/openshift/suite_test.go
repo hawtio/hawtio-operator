@@ -12,6 +12,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -91,6 +94,15 @@ var _ = BeforeSuite(func() {
 		ClientTools:     clientTools,
 		WatchNamespaces: "",
 	}
+
+	//
+	// Create openshift-service-ca Namespace
+	//
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: "openshift-service-ca"},
+	}
+	err = testTools.K8sClient.Create(ctx, ns)
+	Expect(err).NotTo(HaveOccurred())
 
 	hawtiotest.SetupOperatorPod(ctx, testTools)
 })

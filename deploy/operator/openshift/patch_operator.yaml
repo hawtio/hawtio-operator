@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hawtio-operator
+spec:
+  template:
+    spec:
+      containers:
+        - name: hawtio-operator
+          ports:
+            - containerPort: 9443
+              name: webhook
+          volumeMounts:
+          - name: webhook-certs
+            mountPath: /tmp/k8s-webhook-server/serving-certs
+            readOnly: true
+      volumes:
+      - name: webhook-certs
+        secret:
+          defaultMode: 420
+          secretName: hawtio-operator-webhook-cert

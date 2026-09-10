@@ -8,6 +8,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	routev1 "github.com/openshift/api/route/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 
@@ -98,14 +99,39 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 	return opResult, nil
 }
 
+// Does the owner of the CR have access to the route/custom-host sub-resource
+func (r *ReconcileHawtio) validateRoutePermissions(ctx context.Context, hawtio *hawtiov2.Hawtio) error {
+	if hawtio.Spec.RouteHostName == "" {
+		// Custom Route is not required so SAR not necessary
+		return nil
+	}
+	r.logger.V(util.DebugLogLevel).Info("Validating User Permissions for custom Route Host Name")
+
+	// Does the user have the privilege to create a custom-host in a route
+	resourceAttr := &authorizationv1.ResourceAttributes{
+		Namespace:   hawtio.Namespace,
+		Verb:        "create",
+		Group:       "route.openshift.io",
+		Resource:    "routes",
+		Subresource: "custom-host",
+	}
+
+	return r.validateResourceAccess(ctx, hawtio, resourceAttr)
+}
+
 func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig cfg.DeploymentConfiguration) (*routev1.Route, controllerutil.OperationResult, error) {
 	// Only create a route if confirmed as Openshift and supports routes
 	if !r.apiSpec.IsOpenShift4 || !r.apiSpec.Routes {
 		return nil, controllerutil.OperationResultNone, nil
 	}
 
+	err := r.validateRoutePermissions(ctx, hawtio)
+	if err != nil {
+		return nil, controllerutil.OperationResultNone, err
+	}
+
 	existingRoute := &routev1.Route{}
-	err := r.client.Get(ctx, types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}, existingRoute)
+	err = r.client.Get(ctx, types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}, existingRoute)
 
 	if err == nil {
 		// A route was found. Now, apply the special condition check.

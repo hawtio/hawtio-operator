@@ -199,7 +199,13 @@ var _ = Describe("Testing the Hawtio Controller", Ordered, func() {
 
 			By("Creating a Hawtio CR with an empty RouteHostName")
 			hawtio := &hawtiov2.Hawtio{
-				ObjectMeta: metav1.ObjectMeta{Name: hawtioKey.Name, Namespace: hawtioKey.Namespace},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      hawtioKey.Name,
+					Namespace: hawtioKey.Namespace,
+					Annotations: map[string]string{
+						"hawtio.io/last-modified-by": "user",
+					},
+				},
 				Spec: hawtiov2.HawtioSpec{
 					Type:          hawtiov2.NamespaceHawtioDeploymentType,
 					RouteHostName: "", // This is the trigger for the bug
