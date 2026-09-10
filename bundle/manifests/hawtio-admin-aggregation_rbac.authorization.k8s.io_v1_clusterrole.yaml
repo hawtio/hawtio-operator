@@ -4,6 +4,7 @@ metadata:
   creationTimestamp: null
   labels:
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
   name: hawtio-admin-aggregation
 rules:
 - apiGroups:
