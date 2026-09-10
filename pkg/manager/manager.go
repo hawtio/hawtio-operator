@@ -34,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
@@ -43,6 +44,7 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/controller/hawtio"
 	"github.com/hawtio/hawtio-operator/pkg/updater"
 	"github.com/hawtio/hawtio-operator/pkg/util"
+	hawtiowebhook "github.com/hawtio/hawtio-operator/pkg/webhook"
 )
 
 var log = logf.Log.WithName("manager")
@@ -323,6 +325,22 @@ func New(mgrOptions ...MgrOption) (manager.Manager, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct manager: %w", err)
+	}
+
+	// Register custom endpoint onto manager's webhook server
+	// Only for OpenShift for now due to HTTPS requirements
+	// TODO consider for Kubernetes if ever required
+	if apiSpec.IsOpenShift4 && os.Getenv(util.HawtioUnderTestEnvVar) != "true" {
+		// Create native admission decoder using the manager's runtime scheme
+		decoder := admission.NewDecoder(mgr.GetScheme())
+
+		// Instantiate the mutator webhook and hook up the decoder
+		mutatorHandler := &hawtiowebhook.HawtioGuard{}
+		mutatorHandler.InjectDecoder(decoder)
+
+		mgr.GetWebhookServer().Register("/hawtio-guard", &admission.Webhook{
+			Handler: mutatorHandler,
+		})
 	}
 
 	var extraOptions []remote.Option

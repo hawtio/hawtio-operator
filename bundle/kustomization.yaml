@@ -5,6 +5,8 @@ resources:
 - ../deploy/crs
 - ../deploy/setup/openshift
 - ../deploy/operator/base/operator.yaml
+- ../deploy/operator/openshift/webhook-service.yaml
+- ../deploy/operator/openshift/webhook.yaml
 - scorecard
 
 patches:
