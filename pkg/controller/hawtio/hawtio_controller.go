@@ -253,11 +253,21 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 		return reconcile.Result{}, nil
 	}
 
+	//
+	// Check on the hawtio CR modified-by annotation
+	// to log who currently 'owns' the CR
+	//
 	user, err := r.getHawtioOwner(ctx, hawtio)
-	if (err != nil) {
-		return reconcile.Result{}, err
+	if err != nil {
+		// If it's a legacy resource missing metadata, log a soft warning but DO NOT crash the loop.
+		if _, ok := err.(*ErrNoModifiedByAnnotation); ok {
+			r.logger.Info("=== Hawtio Ownership === Legacy resource with no modification tracking available.")
+		} else {
+			return reconcile.Result{}, err
+		}
+	} else {
+		r.logger.Info("=== Hawtio Ownership ===", "owner", user)
 	}
-	r.logger.Info("=== Hawtio Ownership ===", "owner", user)
 
 	// =====================================================================
 	// PHASE 2: DELETION AND FINALIZERS
