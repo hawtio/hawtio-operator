@@ -18,7 +18,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-containerregistry v0.21.7
 	github.com/onsi/ginkgo/v2 v2.32.0
-	github.com/onsi/gomega v1.42.1
+	github.com/onsi/gomega v1.43.0
 	github.com/openshift/api v0.0.0-20251016080153-44baf885fd37
 	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
 	github.com/operator-framework/operator-lib v0.19.0
