@@ -1,4 +1,4 @@
-package hawtio
+package common
 
 import (
 	"crypto/rand"

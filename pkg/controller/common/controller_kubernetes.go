@@ -1,10 +1,10 @@
-package hawtio
+package common
 
 import (
 	"context"
 	"time"
 
-	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	commonapi "github.com/hawtio/hawtio-operator/pkg/apis/common"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -16,24 +16,10 @@ import (
 
 var conKLog = logf.Log.WithName("controller_hawtio_kubernetes")
 
-func newSelfCertificateSecret(ctx context.Context, r *ReconcileHawtio, hawtio *hawtiov2.Hawtio, name string, namespace string) (*corev1.Secret, error) {
-	// Let's default to one year validity period
-	expirationDate := time.Now().AddDate(1, 0, 0)
-	if date := hawtio.Spec.Auth.ClientCertExpirationDate; date != nil && !date.IsZero() {
-		expirationDate = date.Time
-	}
-	servingCertSecret, err := generateSelfSignedCertSecret(hawtio, name, namespace, HAWTIO_CERT_COMMON_NAME, expirationDate)
-	if err != nil {
-		return nil, errs.Wrap(err, "Generating the serving certificate failed")
-	}
-
-	return servingCertSecret, nil
-}
-
 // getRotationBufferWindow gets the period in hours
 // from hawtio CR before expiry of the certificate
-func getRotationBufferWindow(hawtio *hawtiov2.Hawtio) time.Duration {
-	periodHours := hawtio.Spec.Auth.ClientCertExpirationPeriod
+func getRotationBufferWindow(hawtio commonapi.HawtioGeneral) time.Duration {
+	periodHours := hawtio.GetCertificateOptions().ExpirationPeriod
 	if periodHours == 0 {
 		periodHours = 24
 	}
@@ -41,13 +27,14 @@ func getRotationBufferWindow(hawtio *hawtiov2.Hawtio) time.Duration {
 	return time.Duration(periodHours) * time.Hour
 }
 
-func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
+func KubeCreateServingCertificate(ctx context.Context, r *ReconcileBase, hawtio commonapi.HawtioGeneral) (*corev1.Secret, time.Duration, error) {
 	// This secret name should be the same as used in deployment.go
-	servingSecretName := hawtio.Name + "-tls-serving"
+	metadataInfo := hawtio.GetMetadataInfo()
+	servingSecretName := metadataInfo.Name + "-tls-serving"
 	rotationWindow := getRotationBufferWindow(hawtio)
 
 	// Check whether serving certificate secret exists
-	servingCertSecret, err := r.CoreClient.Secrets(hawtio.Namespace).Get(ctx, servingSecretName, metav1.GetOptions{})
+	servingCertSecret, err := r.CoreClient.Secrets(metadataInfo.Namespace).Get(ctx, servingSecretName, metav1.GetOptions{})
 	if err == nil {
 		// Found the secret
 
@@ -92,7 +79,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 				return nil, 0, err
 			}
 
-			// reset expiryIn to maximum with buffer as new certificate
+			// reset expiryIn to maximum as new certificate
 			expiryIn = checkCertificateExpiry(rotationWindow, servingCertSecret, r.Logger)
 		}
 
@@ -102,7 +89,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 	if kerrors.IsNotFound(err) {
 		conKLog.Info("Serving certificate secret not found, creating a new one", "secret", servingSecretName)
 
-		servingCertSecret, err := newSelfCertificateSecret(ctx, r, hawtio, servingSecretName, hawtio.Namespace)
+		servingCertSecret, err := newSelfCertificateSecret(ctx, r, hawtio, servingSecretName, metadataInfo.Namespace)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -111,7 +98,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 		if err != nil {
 			return nil, 0, err
 		}
-		_, err = r.CoreClient.Secrets(hawtio.Namespace).Create(ctx, servingCertSecret, metav1.CreateOptions{})
+		_, err = r.CoreClient.Secrets(metadataInfo.Namespace).Create(ctx, servingCertSecret, metav1.CreateOptions{})
 		if err != nil {
 			return nil, 0, errs.Wrap(err, "Creating the serving certificate secret failed")
 		}

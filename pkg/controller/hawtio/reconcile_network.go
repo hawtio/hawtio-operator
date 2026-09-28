@@ -17,6 +17,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
+	commonctrl "github.com/hawtio/hawtio-operator/pkg/controller/common"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	kresources "github.com/hawtio/hawtio-operator/pkg/resources/kubernetes"
 	oresources "github.com/hawtio/hawtio-operator/pkg/resources/openshift"
@@ -40,7 +41,7 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
 		blueprint := resources.NewService(hawtio, r.ApiSpec, reqLogger)
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *corev1.Service) {
+		serverBlueprint, err := commonctrl.HydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *corev1.Service) {
 			// If hydration stripped required fields, patch them directly back from source
 			if len(hydrated.Spec.Ports) == 0 {
 				hydrated.Spec.Ports = source.Spec.Ports
@@ -217,7 +218,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
 		blueprint := oresources.NewRoute(hawtio, deploymentConfig.TLSRouteSecret, deploymentConfig.CACertRouteSecret, reqLogger)
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *routev1.Route) {
+		serverBlueprint, err := commonctrl.HydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *routev1.Route) {
 			// If hydration stripped required fields, patch them directly back from source
 			if hydrated.Spec.To.Kind == "" || hydrated.Spec.To.Name == "" {
 				hydrated.Spec.To = source.Spec.To
@@ -297,7 +298,7 @@ func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
 		blueprint := kresources.NewIngress(hawtio, r.ApiSpec, deploymentConfig.ServingCertSecret, reqLogger)
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *networkingv1.Ingress) {
+		serverBlueprint, err := commonctrl.HydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *networkingv1.Ingress) {
 			// If hydration stripped required fields, patch them directly back from source
 			if len(hydrated.Spec.Rules) == 0 {
 				hydrated.Spec.Rules = source.Spec.Rules

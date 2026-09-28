@@ -11,7 +11,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
-	hawtioctrls "github.com/hawtio/hawtio-operator/pkg/controller/common"
+	commonctrl "github.com/hawtio/hawtio-operator/pkg/controller/common"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,7 +37,7 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			// If the poller finishes sooner, its channel event will wake up the
 			// reconcile again anyway
 			// Return None, and our custom struct with the 2-second delay
-			return controllerutil.OperationResultNone, &hawtioctrls.RequeueError{
+			return controllerutil.OperationResultNone, &commonctrl.RequeueError{
 				Message:      "waiting for initial registry baseline",
 				RequeueAfter: 2 * time.Second,
 			}
@@ -62,7 +62,7 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 			return err
 		}
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *appsv1.Deployment) {
+		serverBlueprint, err := commonctrl.HydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *appsv1.Deployment) {
 			// If hydration stripped required fields, patch them directly back from source
 			if hydrated.Spec.Selector == nil {
 				hydrated.Spec.Selector = source.Spec.Selector

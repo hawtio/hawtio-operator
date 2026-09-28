@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	commonctrl "github.com/hawtio/hawtio-operator/pkg/controller/common"
 
 	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
@@ -141,7 +142,7 @@ func (r *ReconcileHawtio) reconcileOAuthClient(ctx context.Context, hawtio *hawt
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-%s-reconcileOAuthClient", namespacedName.Name, namespacedName.Namespace))
 		blueprint := resources.NewOAuthClient(clientName, hawtio, reqLogger)
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *oauthv1.OAuthClient) {
+		serverBlueprint, err := commonctrl.HydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *oauthv1.OAuthClient) {
 			// If hydration stripped required fields, patch them directly back from source
 			if hydrated.GrantMethod == "" {
 				hydrated.GrantMethod = source.GrantMethod

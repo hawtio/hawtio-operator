@@ -25,6 +25,10 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
+const (
+	HawtioUnderTestEnvVar = "HAWTIO_UNDER_TEST"
+)
+
 // ReconcileBase is a base reconciler for the hawtio implementations
 type ReconcileBase struct {
 	util.BuildVariables

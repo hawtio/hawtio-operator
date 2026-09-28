@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
-	hawtioctrls "github.com/hawtio/hawtio-operator/pkg/controller/common"
+	commonctrl "github.com/hawtio/hawtio-operator/pkg/controller/common"
 
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/resources"
@@ -30,7 +30,7 @@ var maxRequeueTime = 24 * time.Hour
 
 func (r *ReconcileHawtio) usingCustomClientSecret(hawtio *hawtiov2.Hawtio) bool {
 	commonName := hawtio.Spec.Auth.ClientCertCommonName
-	return len(commonName) > 0 && commonName != HAWTIO_CERT_COMMON_NAME
+	return len(commonName) > 0 && commonName != commonctrl.HAWTIO_CERT_COMMON_NAME
 }
 
 //
@@ -39,7 +39,7 @@ func (r *ReconcileHawtio) usingCustomClientSecret(hawtio *hawtiov2.Hawtio) bool 
 // Returns (certificate secret, time before next check required, error)
 //
 func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
-	if ! r.ApiSpec.IsOpenShift4 {
+	if !r.ApiSpec.IsOpenShift4 {
 		return nil, 0, nil // not required on Kubernetes
 	}
 
@@ -50,8 +50,9 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 	//
 	// Create proxying certificate in operator namespace - only applicable for OCP
 	// Check if operator's master proxy secret is created
+	// Secret should be in the operator's own namespace
 	//
-	clientCertSecret, nextCheckIn, err := r.osCreateClientCertificate(ctx, hawtio, clientSecretName)
+	clientCertSecret, nextCheckIn, err := commonctrl.OsCreateClientCertificate(ctx, &r.ReconcileBase, hawtio, clientSecretName)
 	if err != nil {
 		if err == ErrLegacyResourceAdopted {
 			r.Logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
@@ -62,7 +63,7 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 	}
 
 	if clientCertSecret != nil {
-		r.Logger.V(util.DebugLogLevel).Info("Setting owner of client secret", "Secret Name" , clientCertSecret.Name, "Secret Namespace", clientCertSecret.Namespace)
+		r.Logger.V(util.DebugLogLevel).Info("Setting owner of client secret", "Secret Name", clientCertSecret.Name, "Secret Namespace", clientCertSecret.Namespace)
 
 		// Set the owner reference for garbage collection.
 		owner, err := r.getOperatorOwner(ctx)
@@ -86,7 +87,7 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 // Returns (certificate secret, error)
 //
 func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio, masterSecret *corev1.Secret, targetName *string) error {
-	if ! r.ApiSpec.IsOpenShift4 || targetName == nil {
+	if !r.ApiSpec.IsOpenShift4 || targetName == nil {
 		return nil // not required on Kubernetes
 	}
 
@@ -175,7 +176,7 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 }
 
 func (r *ReconcileHawtio) findConsoleURL(ctx context.Context) (string, error) {
-	if ! r.ApiSpec.IsOpenShift4 {
+	if !r.ApiSpec.IsOpenShift4 {
 		return "", nil
 	}
 
@@ -202,9 +203,9 @@ func (r *ReconcileHawtio) resolveServingClientCertificate(ctx context.Context, h
 	r.Logger.V(util.DebugLogLevel).Info("Resolving Kubernetes serving certificate")
 
 	// Create -serving certificate
-	servingCertSecret, expiryIn, err := kubeCreateServingCertificate(ctx, r, hawtio)
+	servingCertSecret, expiryIn, err := commonctrl.KubeCreateServingCertificate(ctx, &r.ReconcileBase, hawtio)
 	if err != nil {
-		if err == hawtioctrls.ErrLegacyResourceAdopted {
+		if err == commonctrl.ErrLegacyResourceAdopted {
 			r.Logger.Error(err, "Kube serving certificate exists but need to adopt")
 		} else {
 			r.Logger.Error(err, "Failed to create serving certificate")
@@ -340,49 +341,4 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	deploymentConfiguration.CACertRouteSecret = caCertRouteSecret
 
 	return deploymentConfiguration, nil
-}
-
-// hydrateDefaults performs a server-side Dry-Run Create to populate the
-// 'blueprint' object with all the default values (Spec, Status, etc.) that
-// the specific cluster applies.
-// It accepts an optional ensureSpecIntegrity closure to validate that
-// critical fields remain present and if not restore them from the blueprint
-// object.
-// It returns the "hydrated" object.
-func hydrateDefaults[T client.Object](ctx context.Context, c client.Client, blueprint T, ensureSpecIntegrity func(source T, hydrated T)) (T, error) {
-	// DeepCopy to avoid mutating the input object in case the caller reuses it
-	// Cast the result back to T (which works because T is a pointer to a struct)
-	obj := blueprint.DeepCopyObject().(T)
-
-	// OpenShift OAuthClient validation rejects it.
-	obj.SetGenerateName("")
-
-	// Generate a unique, valid name.
-	// Ends with a number, satisfying the [a-z0-9] regex constraint.
-	// Use a very short name (t + 7 digits) to prevent DNS length errors in Routes.
-	// Example: t4829102
-	obj.SetName(fmt.Sprintf("t%d", time.Now().UnixNano()%10000000))
-
-	obj.SetResourceVersion("")
-	obj.SetUID("")
-	obj.SetSelfLink("")
-	obj.SetCreationTimestamp(metav1.Time{})
-	// Clear OwnerReferences just in case, though DryRun usually ignores them
-	obj.SetOwnerReferences(nil)
-
-	// Perform Dry-Run Create
-	// The API server will populate defaults and return the object
-	if err := c.Create(ctx, obj, client.DryRunAll); err != nil {
-		// We return the 'zero' value of T and the error
-		var zero T
-		return zero, fmt.Errorf("failed to hydrate defaults via dry-run: %w", err)
-	}
-
-	// Validate with the ensureSpecIntegrity function if one was provided
-	// to patch any dropped fields
-	if ensureSpecIntegrity != nil {
-		ensureSpecIntegrity(blueprint, obj)
-	}
-
-	return obj, nil
 }

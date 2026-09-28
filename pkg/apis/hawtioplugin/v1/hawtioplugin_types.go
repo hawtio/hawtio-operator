@@ -164,6 +164,8 @@ func init() {
 // GetMetadataInfo implements the HawtioGeneral interface method
 func (hawtioPlugin HawtioPlugin) GetMetadataInfo() common.MetadataInfo {
 	return common.MetadataInfo{
+		Name:               hawtioPlugin.Name,
+		Namespace:          hawtioPlugin.Namespace,
 		LabelPatterns:      hawtioPlugin.Spec.MetadataPropagation.Labels,
 		AnnotationPatterns: hawtioPlugin.Spec.MetadataPropagation.Annotations,
 	}

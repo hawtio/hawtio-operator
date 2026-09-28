@@ -14,6 +14,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
+	commonctrl "github.com/hawtio/hawtio-operator/pkg/controller/common"
 
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	"github.com/hawtio/hawtio-operator/pkg/openshift"
@@ -93,7 +94,7 @@ func (r *ReconcileHawtio) reconcileConsoleLink(ctx context.Context, hawtio *hawt
 
 		r.Logger.V(util.DebugLogLevel).Info("ConsoleLink Default", "blueprint", util.ToJSONString(blueprint))
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *consolev1.ConsoleLink) {
+		serverBlueprint, err := commonctrl.HydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *consolev1.ConsoleLink) {
 			r.Logger.V(util.DebugLogLevel).Info("ConsoleLink Hydrating Callback", "hydrated", util.ToJSONString(hydrated), "source", util.ToJSONString(source))
 
 			// If hydration stripped required fields, patch them directly back from source

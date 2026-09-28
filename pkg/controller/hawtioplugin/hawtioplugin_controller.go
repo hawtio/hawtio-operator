@@ -31,7 +31,6 @@ import (
 )
 
 const (
-	HawtioUnderTestEnvVar     = "HAWTIO_UNDER_TEST"
 	singletonHawtioPluginName = "hawtio-console-plugin"
 )
 
@@ -72,7 +71,7 @@ func (r *ReconcileHawtioPlugin) setupWithManager(mgr ctrl.Manager) error {
 	// Need to skip name registry validation if
 	// the controller is being run through test suites
 	skipValidation := false
-	if os.Getenv(HawtioUnderTestEnvVar) == "true" {
+	if os.Getenv(commonctrl.HawtioUnderTestEnvVar) == "true" {
 		skipValidation = true
 	}
 
