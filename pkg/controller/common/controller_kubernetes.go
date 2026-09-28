@@ -5,13 +5,14 @@ import (
 	"time"
 
 	commonapi "github.com/hawtio/hawtio-operator/pkg/apis/common"
-	"github.com/hawtio/hawtio-operator/pkg/resources"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 )
 
 var conKLog = logf.Log.WithName("controller_hawtio_kubernetes")

@@ -12,7 +12,7 @@ import (
 	hawtiopluginv1 "github.com/hawtio/hawtio-operator/pkg/apis/hawtioplugin/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	resources "github.com/hawtio/hawtio-operator/pkg/resources"
+	commonres "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	pluginres "github.com/hawtio/hawtio-operator/pkg/resources/hawtioplugin"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
@@ -35,8 +35,8 @@ func (r *ReconcileHawtioPlugin) verifyRBACConfigMap(ctx context.Context, hawtioP
 		return false, err
 	}
 
-	if _, ok := rbacConfigMap.Data[resources.RBACConfigMapKey]; !ok {
-		r.Logger.Info("RBAC ConfigMap does not contain expected key: "+resources.RBACConfigMapKey, "ConfigMap", cm)
+	if _, ok := rbacConfigMap.Data[commonres.RbacConfigMapKey]; !ok {
+		r.Logger.Info("RBAC ConfigMap does not contain expected key: "+commonres.RbacConfigMapKey, "ConfigMap", cm)
 		// Let's poll for the RBAC ConfigMap to contain the expected key
 		return false, nil
 	}

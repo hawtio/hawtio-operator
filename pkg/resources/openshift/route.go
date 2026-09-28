@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/hawtio/hawtio-operator/pkg/resources"
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 

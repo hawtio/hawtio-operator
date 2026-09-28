@@ -12,7 +12,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
-	"github.com/hawtio/hawtio-operator/pkg/resources"
+	common "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -30,9 +30,9 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 	log.V(util.DebugLogLevel).Info("Reconciling ingress")
 
 	isSSL := util.IsSSL(hawtio, apiSpec)
-	servicePort := resources.PlainServicePort
+	servicePort := common.PlainServicePort
 	if isSSL {
-		servicePort = resources.SSLServicePort
+		servicePort = common.SSLServicePort
 	}
 
 	annotations := map[string]string{}
@@ -43,10 +43,10 @@ func NewIngress(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, se
 	}
 	annotations["nginx.ingress.kubernetes.io/rewrite-target"] = "/$1"
 
-	resources.PropagateAnnotations(hawtio, annotations, log)
+	common.PropagateAnnotations(hawtio, annotations, log)
 
-	labels := resources.LabelsForHawtio(hawtio.Name)
-	resources.PropagateLabels(hawtio, labels, log)
+	labels := common.LabelsForHawtio(hawtio.Name)
+	common.PropagateLabels(hawtio, labels, log)
 
 	ingressTLS := networkingv1.IngressTLS{}
 	if servingSecret != nil {

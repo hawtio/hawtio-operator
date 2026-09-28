@@ -6,6 +6,7 @@ metadata:
   creationTimestamp: "2025-10-21T09:24:03Z"
   labels:
     app: hawtio
+    deployment: hawtio-online
   name: hawtio-online
   namespace: default
   ownerReferences:

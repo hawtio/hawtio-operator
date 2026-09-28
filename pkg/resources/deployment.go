@@ -16,24 +16,20 @@ import (
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
+	common "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 const (
-	serviceSigningSecretVolumeName            = "hawtio-online-tls-serving"
-	serviceSigningSecretVolumeMountPath       = "/etc/tls/private/serving"
-	serviceSigningSecretVolumeMountPathLegacy = "/etc/tls/private"
-	clientCertificateSecretVolumeName         = "hawtio-online-tls-proxying"
-	clientCertificateSecretVolumeMountPath    = "/etc/tls/private/proxying"
-	onlineConfigMapVolumeName                 = "hawtio-online"
-	rbacConfigMapVolumeName                   = "hawtio-rbac"
-	rbacConfigMapVolumeMountPath              = "/etc/hawtio/rbac"
-	RBACConfigMapKey                          = "ACL.yaml"
-	configVersionAnnotation                   = "hawtio.hawt.io/configversion"
-	clientCertSecretVersionAnnotation         = "hawtio.hawt.io/certversion"
-	serverRootDirectory                       = "/usr/share/nginx/html"
-	OnlineDigestAnnotation                    = "hawtio.io/online-digest"
-	GatewayDigestAnnotation                   = "hawtio.io/gateway-digest"
+	// Serving Certificate
+	serviceSigningSecretVolumeName = "hawtio-online-tls-serving"
+
+	// Proxy Certificate
+	clientCertificateSecretVolumeName = "hawtio-online-tls-proxying"
+
+	onlineConfigMapVolumeName = "hawtio-online"
+	OnlineDigestAnnotation    = "hawtio.io/online-digest"
+	GatewayDigestAnnotation   = "hawtio.io/gateway-digest"
 )
 
 func NewDefaultDeployment(hawtio *hawtiov2.Hawtio) *appsv1.Deployment {
@@ -66,10 +62,10 @@ func newDeployment(hawtio *hawtiov2.Hawtio, replicas *int32, pts corev1.PodTempl
 	deployment := NewDefaultDeployment(hawtio)
 
 	annotations := map[string]string{}
-	PropagateAnnotations(hawtio, annotations, log)
+	common.PropagateAnnotations(hawtio, annotations, log)
 
-	labels := LabelsForHawtio(hawtio.Name)
-	PropagateLabels(hawtio, labels, log)
+	labels := common.LabelsForHawtio(hawtio.Name)
+	common.PropagateLabels(hawtio, labels, log)
 
 	deployment.SetAnnotations(annotations)
 	deployment.SetLabels(labels)
@@ -101,10 +97,9 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	gatewayContainer := newGatewayContainer(hawtio, apiSpec, buildVariables, log)
 
 	annotations := map[string]string{
-		configVersionAnnotation: config.ConfigMap.GetResourceVersion(),
+		common.ConfigVersionAnnotation: config.ConfigMap.GetResourceVersion(),
 	}
-
-	PropagateAnnotations(hawtio, annotations, log)
+	common.PropagateAnnotations(hawtio, annotations, log)
 
 	volumeMounts, err := newVolumeMounts(hawtio, apiSpec, hawtio.Spec.RBAC.ConfigMap, buildVariables, log)
 	if err != nil {
@@ -137,7 +132,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 		}
 
 		if hawtio.Spec.RBAC.ConfigMap != "" {
-			volume, ok := volumeMounts[rbacConfigMapVolumeName]
+			volume, ok := volumeMounts[common.RbacConfigMapVolumeName]
 			if ok {
 				gatewayContainer.VolumeMounts = append(gatewayContainer.VolumeMounts, volume)
 			}
@@ -145,7 +140,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	}
 	volumes := newVolumes(hawtio, apiSpec, config, log)
 
-	labels := LabelsForHawtio(hawtio.Name)
+	labels := common.LabelsForHawtio(hawtio.Name)
 	additionalLabels, err := labelUtils.ConvertSelectorToLabelsMap(buildVariables.AdditionalLabels)
 	if err != nil {
 		return corev1.PodTemplateSpec{}, err
@@ -153,7 +148,7 @@ func newPodTemplateSpec(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	for name, value := range additionalLabels {
 		labels[name] = value
 	}
-	PropagateLabels(hawtio, labels, log)
+	common.PropagateLabels(hawtio, labels, log)
 
 	pod := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
@@ -184,23 +179,23 @@ func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, co
 
 	if util.IsSSL(hawtio, apiSpec) {
 		log.V(util.DebugLogLevel).Info("Adding secret volume for serving certificate %s-tls-serving at %s", hawtio.Name, serviceSigningSecretVolumeName)
-		volume := newSecretVolume(hawtio.Name+"-tls-serving", serviceSigningSecretVolumeName)
+		volume := common.NewSecretVolume(hawtio.Name+"-tls-serving", serviceSigningSecretVolumeName)
 		volumes = append(volumes, volume)
 	}
 
 	if apiSpec.IsOpenShift4 && config.ClientCertSecretName != nil {
 		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding secret volume for proxying certificate %s-tls-proxying at %s", *config.ClientCertSecretName, clientCertificateSecretVolumeName))
-		volume := newSecretVolume(*config.ClientCertSecretName, clientCertificateSecretVolumeName)
+		volume := common.NewSecretVolume(*config.ClientCertSecretName, clientCertificateSecretVolumeName)
 		volumes = append(volumes, volume)
 	}
 
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding config map volume %s at %s", hawtio.Name, onlineConfigMapVolumeName))
-	volume := newConfigMapVolume(hawtio.Name, onlineConfigMapVolumeName)
+	volume := common.NewConfigMapVolume(hawtio.Name, onlineConfigMapVolumeName)
 	volumes = append(volumes, volume)
 
 	if rbacConfigMapName := hawtio.Spec.RBAC.ConfigMap; rbacConfigMapName != "" {
-		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding config map volume %s at %s", rbacConfigMapName, rbacConfigMapVolumeName))
-		volume = newConfigMapVolume(rbacConfigMapName, rbacConfigMapVolumeName)
+		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding config map volume %s at %s", rbacConfigMapName, common.RbacConfigMapVolumeName))
+		volume = common.NewConfigMapVolume(rbacConfigMapName, common.RbacConfigMapVolumeName)
 		volumes = append(volumes, volume)
 	}
 
@@ -219,11 +214,11 @@ func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpe
 	if buildVariables.ServerRootDirectory != "" {
 		volumeMountPath = path.Join(buildVariables.ServerRootDirectory, "online", hawtioConfigKey)
 	} else {
-		volumeMountPath = path.Join(serverRootDirectory, "online", hawtioConfigKey)
+		volumeMountPath = path.Join(common.ServerRootDirectory, "online", hawtioConfigKey)
 	}
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding volume mount %s at %s", onlineConfigMapVolumeName, volumeMountPath))
 
-	volumeMount := newVolumeMount(onlineConfigMapVolumeName, volumeMountPath, hawtioConfigKey)
+	volumeMount := common.NewVolumeMount(onlineConfigMapVolumeName, volumeMountPath, hawtioConfigKey)
 	volumeMounts[onlineConfigMapVolumeName] = volumeMount
 
 	/*
@@ -236,7 +231,7 @@ func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpe
 			return nil, err
 		}
 		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding volume mount %s at %s", serviceSigningSecretVolumeName, volumeMountPath))
-		volumeMount = newVolumeMount(serviceSigningSecretVolumeName, volumeMountPath, "")
+		volumeMount = common.NewVolumeMount(serviceSigningSecretVolumeName, volumeMountPath, "")
 		volumeMounts[serviceSigningSecretVolumeName] = volumeMount
 	}
 
@@ -244,8 +239,8 @@ func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpe
 		/*
 		 * The proxying volume
 		 */
-		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding volume mount %s at %s", clientCertificateSecretVolumeName, clientCertificateSecretVolumeMountPath))
-		volumeMount = newVolumeMount(clientCertificateSecretVolumeName, clientCertificateSecretVolumeMountPath, "")
+		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding volume mount %s at %s", clientCertificateSecretVolumeName, common.ClientCertificateSecretVolumeMountPath))
+		volumeMount = common.NewVolumeMount(clientCertificateSecretVolumeName, common.ClientCertificateSecretVolumeMountPath, "")
 		volumeMounts[clientCertificateSecretVolumeName] = volumeMount
 	}
 
@@ -253,9 +248,9 @@ func newVolumeMounts(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpe
 	 * The rbac volume
 	 */
 	if rbacConfigMapName != "" {
-		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding volume mount %s at %s", rbacConfigMapVolumeName, rbacConfigMapVolumeMountPath))
-		volumeMount = newVolumeMount(rbacConfigMapVolumeName, rbacConfigMapVolumeMountPath, "")
-		volumeMounts[rbacConfigMapVolumeName] = volumeMount
+		log.V(util.DebugLogLevel).Info(fmt.Sprintf("Adding volume mount %s at %s", common.RbacConfigMapVolumeName, common.RbacConfigMapVolumeMountPath))
+		volumeMount = common.NewVolumeMount(common.RbacConfigMapVolumeName, common.RbacConfigMapVolumeMountPath, "")
+		volumeMounts[common.RbacConfigMapVolumeName] = volumeMount
 	}
 
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("New VolumeMounts %s", util.ToJSONString(volumeMounts)))
@@ -271,7 +266,7 @@ func getServingCertificateMountPath(version string, legacyServingCertificateMoun
 		if err != nil {
 			// not a standard version format (possibly an arbitrary tag)
 			// which is fine and just skip version check
-			return serviceSigningSecretVolumeMountPath, nil
+			return common.ServiceSigningSecretVolumeMountPath, nil
 		}
 		var constraints *semver.Constraints
 		if legacyServingCertificateMountVersion == "" {
@@ -286,8 +281,8 @@ func getServingCertificateMountPath(version string, legacyServingCertificateMoun
 			}
 		}
 		if constraints.Check(semVer) {
-			return serviceSigningSecretVolumeMountPathLegacy, nil
+			return common.ServiceSigningSecretVolumeMountPathLegacy, nil
 		}
 	}
-	return serviceSigningSecretVolumeMountPath, nil
+	return common.ServiceSigningSecretVolumeMountPath, nil
 }

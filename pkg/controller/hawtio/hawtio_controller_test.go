@@ -18,7 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
-	"github.com/hawtio/hawtio-operator/pkg/resources"
+	resources "github.com/hawtio/hawtio-operator/pkg/resources"
+	commonres "github.com/hawtio/hawtio-operator/pkg/resources/common"
 )
 
 func TestNonWatchedResourceNameNotFound(t *testing.T) {
@@ -84,19 +85,19 @@ var plainHawtioEnvVars = []corev1.EnvVar{
 		Value: "form",
 	},
 	{
-		Name:  resources.HawtioOnlineLogLvlEnvVar,
-		Value: resources.HawtioOnlineLogLvlValue,
+		Name:  commonres.HawtioOnlineLogLvlEnvVar,
+		Value: commonres.HawtioOnlineLogLvlValue,
 	},
 }
 
 var sslHawtioEnvVars = append(plainHawtioEnvVars,
 	corev1.EnvVar{
-		Name:  resources.HawtioSSLKey,
-		Value: resources.HawtioSSLKeyValue,
+		Name:  commonres.HawtioSSLKey,
+		Value: commonres.HawtioSSLKeyValue,
 	},
 	corev1.EnvVar{
-		Name:  resources.HawtioSSLCert,
-		Value: resources.HawtioSSLCertValue,
+		Name:  commonres.HawtioSSLCert,
+		Value: commonres.HawtioSSLCertValue,
 	},
 )
 
@@ -106,26 +107,26 @@ var plainGatewayEnvVars = []corev1.EnvVar{
 		Value: "form",
 	},
 	{
-		Name:  resources.GatewayLogLvlEnvVar,
-		Value: resources.GatewayLogLvlValue,
+		Name:  commonres.GatewayLogLvlEnvVar,
+		Value: commonres.GatewayLogLvlValue,
 	},
 	{
-		Name:  resources.GatewayMaskIPEnvVar,
-		Value: resources.GatewayMaskIPValue,
+		Name:  commonres.GatewayMaskIPEnvVar,
+		Value: commonres.GatewayMaskIPValue,
 	},
 }
 
 var sslGatewayEnvVars = append(plainGatewayEnvVars,
 	corev1.EnvVar{
-		Name:  resources.GatewaySSLKeyEnvVar,
+		Name:  commonres.GatewaySSLKeyEnvVar,
 		Value: "/etc/tls/private/serving/tls.key",
 	},
 	corev1.EnvVar{
-		Name:  resources.GatewaySSLCertEnvVar,
+		Name:  commonres.GatewaySSLCertEnvVar,
 		Value: "/etc/tls/private/serving/tls.crt",
 	},
 	corev1.EnvVar{
-		Name:  resources.GatewaySSLCertCAEnvVar,
+		Name:  commonres.GatewaySSLCertCAEnvVar,
 		Value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
 	},
 )
@@ -133,7 +134,7 @@ var sslGatewayEnvVars = append(plainGatewayEnvVars,
 type Expected struct {
 	hawtioEnvVars  []corev1.EnvVar
 	gatewayEnvVars []corev1.EnvVar
-	connectScheme  resources.Connect
+	connectScheme  commonres.Connect
 }
 
 func TestHawtioController_Reconcile(t *testing.T) {
@@ -149,7 +150,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			expected: Expected{
 				hawtioEnvVars:  sslHawtioEnvVars,
 				gatewayEnvVars: sslGatewayEnvVars,
-				connectScheme:  resources.SSLConnect,
+				connectScheme:  commonres.SSLConnect,
 			},
 		},
 		{
@@ -158,7 +159,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			expected: Expected{
 				hawtioEnvVars:  plainHawtioEnvVars,
 				gatewayEnvVars: plainGatewayEnvVars,
-				connectScheme:  resources.PlainConnect,
+				connectScheme:  commonres.PlainConnect,
 			},
 		},
 		{
@@ -167,7 +168,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			expected: Expected{
 				hawtioEnvVars:  sslHawtioEnvVars,
 				gatewayEnvVars: sslGatewayEnvVars,
-				connectScheme:  resources.SSLConnect,
+				connectScheme:  commonres.SSLConnect,
 			},
 		},
 	}

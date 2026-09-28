@@ -1,10 +1,10 @@
-package resources
+package common
 
 import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func newVolumeMount(volumeMountName string, volumeMountPath string, volumeMountSubPath string) corev1.VolumeMount {
+func NewVolumeMount(volumeMountName string, volumeMountPath string, volumeMountSubPath string) corev1.VolumeMount {
 	volumeMount := corev1.VolumeMount{
 		Name:      volumeMountName,
 		MountPath: volumeMountPath,
@@ -14,7 +14,7 @@ func newVolumeMount(volumeMountName string, volumeMountPath string, volumeMountS
 	return volumeMount
 }
 
-func newSecretVolume(secretName string, volumeName string) corev1.Volume {
+func NewSecretVolume(secretName string, volumeName string) corev1.Volume {
 	volume := corev1.Volume{
 		Name: volumeName,
 		VolumeSource: corev1.VolumeSource{
@@ -26,7 +26,7 @@ func newSecretVolume(secretName string, volumeName string) corev1.Volume {
 	return volume
 }
 
-func newConfigMapVolume(configMapName string, volumeName string) corev1.Volume {
+func NewConfigMapVolume(configMapName string, volumeName string) corev1.Volume {
 	executeMode := int32(420)
 	volume := corev1.Volume{
 		Name: volumeName,

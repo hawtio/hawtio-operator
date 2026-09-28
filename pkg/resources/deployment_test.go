@@ -11,6 +11,7 @@ import (
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
+	commonres "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 	"github.com/stretchr/testify/assert"
 )
@@ -19,17 +20,17 @@ func TestGetServingCertificateMountPath(t *testing.T) {
 	// version 'latest' should pass
 	path, err := getServingCertificateMountPath("latest", "< 1.2.0")
 	assert.NoError(t, err)
-	assert.Equal(t, serviceSigningSecretVolumeMountPath, path)
+	assert.Equal(t, commonres.ServiceSigningSecretVolumeMountPath, path)
 
 	// a standard version should pass
 	path, err = getServingCertificateMountPath("1.0.0", "< 1.2.0")
 	assert.NoError(t, err)
-	assert.Equal(t, serviceSigningSecretVolumeMountPathLegacy, path)
+	assert.Equal(t, commonres.ServiceSigningSecretVolumeMountPathLegacy, path)
 
 	// any arbitrary tag name as a version should also pass
 	path, err = getServingCertificateMountPath("test", "< 1.2.0")
 	assert.NoError(t, err)
-	assert.Equal(t, serviceSigningSecretVolumeMountPath, path)
+	assert.Equal(t, commonres.ServiceSigningSecretVolumeMountPath, path)
 }
 
 type Expected struct {
@@ -134,12 +135,12 @@ func TestNewDeploymentLogging(t *testing.T) {
 			assert.NoError(t, err)
 
 			onlineEnv := deployment.Spec.Template.Spec.Containers[0].Env
-			onlineLogLvlValue, found := findEnvVar(onlineEnv, HawtioOnlineLogLvlEnvVar)
+			onlineLogLvlValue, found := findEnvVar(onlineEnv, commonres.HawtioOnlineLogLvlEnvVar)
 			assert.True(t, found)
 			assert.Equal(t, tc.expected.onlineLogLevel, onlineLogLvlValue)
 
 			gatewayEnv := deployment.Spec.Template.Spec.Containers[1].Env
-			gatewayLogLvlValue, found := findEnvVar(gatewayEnv, GatewayLogLvlEnvVar)
+			gatewayLogLvlValue, found := findEnvVar(gatewayEnv, commonres.GatewayLogLvlEnvVar)
 			assert.True(t, found)
 			assert.Equal(t, tc.expected.gatewayLogLevel, gatewayLogLvlValue)
 		})
@@ -228,7 +229,7 @@ func TestNewDeploymentMaskIP(t *testing.T) {
 			assert.NoError(t, err)
 
 			gatewayEnv := deployment.Spec.Template.Spec.Containers[1].Env
-			gatewayIPMask, found := findEnvVar(gatewayEnv, GatewayMaskIPEnvVar)
+			gatewayIPMask, found := findEnvVar(gatewayEnv, commonres.GatewayMaskIPEnvVar)
 			assert.True(t, found)
 			assert.Equal(t, tc.expected.maskIP, gatewayIPMask)
 		})
@@ -317,16 +318,16 @@ func TestNewDeploymentMasterBurstSize(t *testing.T) {
 			assert.NoError(t, err)
 
 			onlineEnv := deployment.Spec.Template.Spec.Containers[0].Env
-			masterBurstSize, found := findEnvVar(onlineEnv, NginxMasterBurstSizeEnvVar)
+			masterBurstSize, found := findEnvVar(onlineEnv, commonres.NginxMasterBurstSizeEnvVar)
 
 			// Check if the test case expects a value
 			if tc.expected.masterBurstSize != "" {
 				// If we expect a value, assert it was found AND matches the value
-				assert.True(t, found, "Expected %s to be found", NginxMasterBurstSizeEnvVar)
+				assert.True(t, found, "Expected %s to be found", commonres.NginxMasterBurstSizeEnvVar)
 				assert.Equal(t, tc.expected.masterBurstSize, masterBurstSize)
 			} else {
 				// If we expect empty/nothing, assert it was NOT found
-				assert.False(t, found, "Expected %s NOT to be found", NginxMasterBurstSizeEnvVar)
+				assert.False(t, found, "Expected %s NOT to be found", commonres.NginxMasterBurstSizeEnvVar)
 			}
 		})
 	}

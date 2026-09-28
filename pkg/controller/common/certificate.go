@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	commonapi "github.com/hawtio/hawtio-operator/pkg/apis/common"
-	"github.com/hawtio/hawtio-operator/pkg/resources"
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 

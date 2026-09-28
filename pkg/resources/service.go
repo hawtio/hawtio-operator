@@ -11,12 +11,8 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	common "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
-)
-
-const (
-	PlainServicePort = 80
-	SSLServicePort   = 443
 )
 
 func NewDefaultService(hawtio *hawtiov2.Hawtio) *corev1.Service {
@@ -36,16 +32,14 @@ func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, lo
 	annotations := map[string]string{
 		"service.beta.openshift.io/serving-cert-secret-name": name + "-tls-serving",
 	}
-	PropagateAnnotations(hawtio, annotations, log)
+	common.PropagateAnnotations(hawtio, annotations, log)
 
-	labels := map[string]string{
-		LabelAppKey: "hawtio",
-	}
-	PropagateLabels(hawtio, labels, log)
+	labels := common.LabelsForHawtio(hawtio.Name)
+	common.PropagateLabels(hawtio, labels, log)
 
-	servicePort := PlainServicePort
+	servicePort := common.PlainServicePort
 	if util.IsSSL(hawtio, apiSpec) {
-		servicePort = SSLServicePort
+		servicePort = common.SSLServicePort
 	}
 
 	service := NewDefaultService(hawtio)
@@ -57,10 +51,10 @@ func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, lo
 				Name:       name,
 				Protocol:   "TCP",
 				Port:       int32(servicePort),
-				TargetPort: intstr.FromString(containerPortName),
+				TargetPort: intstr.FromString(common.ContainerPortName),
 			},
 		},
-		Selector:                 LabelsForHawtio(name),
+		Selector:                 common.LabelsForHawtio(name),
 		SessionAffinity:          "None",
 		PublishNotReadyAddresses: true,
 	}

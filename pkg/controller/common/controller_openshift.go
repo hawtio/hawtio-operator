@@ -5,13 +5,14 @@ import (
 	"time"
 
 	commonapi "github.com/hawtio/hawtio-operator/pkg/apis/common"
-	"github.com/hawtio/hawtio-operator/pkg/resources"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 )
 
 func OsCreateClientCertificate(ctx context.Context, r *ReconcileBase, hawtio commonapi.HawtioGeneral, clientSecretName string) (*corev1.Secret, time.Duration, error) {

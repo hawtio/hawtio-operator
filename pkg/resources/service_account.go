@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	common "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -43,8 +44,8 @@ func NewServiceAccount(hawtio *hawtiov2.Hawtio, log logr.Logger) (*corev1.Servic
 		}
 	}
 
-	labels := LabelsForHawtio(hawtio.Name)
-	PropagateLabels(hawtio, labels, log)
+	labels := common.LabelsForHawtio(hawtio.Name)
+	common.PropagateLabels(hawtio, labels, log)
 
 	sa := NewDefaultServiceAccount(hawtio)
 	sa.SetLabels(labels)

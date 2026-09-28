@@ -6,7 +6,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/hawtio/hawtio-operator/pkg/resources"
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 
 	"github.com/stretchr/testify/assert"
 )

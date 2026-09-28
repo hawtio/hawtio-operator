@@ -6,6 +6,8 @@ import (
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	oauthv1 "github.com/openshift/api/oauth/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 )
 
 func NewDefaultOAuthClient(name string) *oauthv1.OAuthClient {
@@ -20,8 +22,8 @@ func NewOAuthClient(name string, hawtio *hawtiov2.Hawtio, log logr.Logger) *oaut
 	oAuthClient := NewDefaultOAuthClient(name)
 	oAuthClient.GrantMethod = oauthv1.GrantHandlerAuto
 
-	labels := LabelsForHawtio(hawtio.Name)
-	PropagateLabels(hawtio, labels, log)
+	labels := resources.LabelsForHawtio(hawtio.Name)
+	resources.PropagateLabels(hawtio, labels, log)
 	oAuthClient.SetLabels(labels)
 
 	return oAuthClient

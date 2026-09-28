@@ -13,6 +13,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	common "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
@@ -65,9 +66,9 @@ func NewConfigMap(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, 
 
 	configMap := NewDefaultConfigMap(hawtio)
 
-	labels := LabelsForHawtio(hawtio.Name)
+	labels := common.LabelsForHawtio(hawtio.Name)
 
-	PropagateLabels(hawtio, labels, log)
+	common.PropagateLabels(hawtio, labels, log)
 	configMap.SetLabels(labels)
 
 	configMap.Data = map[string]string{

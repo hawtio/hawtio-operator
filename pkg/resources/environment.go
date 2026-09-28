@@ -1,59 +1,41 @@
 package resources
 
 import (
-	"path"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+
+	common "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 const (
-	HawtioTypeEnvVar                = "HAWTIO_ONLINE_MODE"
-	HawtioNamespaceEnvVar           = "HAWTIO_ONLINE_NAMESPACE"
-	HawtioAuthEnvVar                = "HAWTIO_ONLINE_AUTH"
-	HawtioOAuthClientEnvVar         = "HAWTIO_OAUTH_CLIENT_ID"
-	HawtioDisableRbacRegistry       = "HAWTIO_ONLINE_DISABLE_RBAC_REGISTRY"
-	OpenShiftClusterVersionEnvVar   = "OPENSHIFT_CLUSTER_VERSION"
-	OpenShiftWebConsoleUrlEnvVar    = "OPENSHIFT_WEB_CONSOLE_URL"
-	NginxClientBodyBufferSize       = "NGINX_CLIENT_BODY_BUFFER_SIZE"
-	NginxProxyBuffers               = "NGINX_PROXY_BUFFERS"
-	NginxSubrequestOutputBufferSize = "NGINX_SUBREQUEST_OUTPUT_BUFFER_SIZE"
-	NginxMasterBurstSizeEnvVar      = "NGINX_MASTER_BURST"
-	HawtioAuthTypeForm              = "form"
-	HawtioAuthTypeOAuth             = "oauth"
-	HawtioSSLKey                    = "HAWTIO_ONLINE_SSL_KEY"
-	HawtioSSLCert                   = "HAWTIO_ONLINE_SSL_CERTIFICATE"
+	// HawtioTypeEnvVar is the env var for the mode of hawtio-online (exported for controller tests)
+	HawtioTypeEnvVar = "HAWTIO_ONLINE_MODE"
+	// HawtioNamespaceEnvVar is the env var for the namespace targetted by hawtio-online (exported for controller tests)
+	HawtioNamespaceEnvVar = "HAWTIO_ONLINE_NAMESPACE"
+	// HawtioOAuthClientEnvVar is the env var for the auth client-id of hawtio-online (exported for controller tests)
+	HawtioOAuthClientEnvVar = "HAWTIO_OAUTH_CLIENT_ID"
+	// HawtioAuthEnvVar is the env var for the type of authentication of hawtio-online (exported for controller tests)
+	HawtioAuthEnvVar = "HAWTIO_ONLINE_AUTH"
 
-	/*
-	 * Gateway Env Vars
-	 */
-	GatewaySSLKeyEnvVar      = "HAWTIO_ONLINE_GATEWAY_SSL_KEY"            // /etc/tls/private/serving/tls.key
-	GatewaySSLCertEnvVar     = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE"    // /etc/tls/private/serving/tls.crt
-	GatewaySSLCertCAEnvVar   = "HAWTIO_ONLINE_GATEWAY_SSL_CERTIFICATE_CA" // /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-	GatewayLogLvlEnvVar      = "HAWTIO_ONLINE_GATEWAY_LOG_LEVEL"          // info
-	GatewayRbacEnvVar        = "HAWTIO_ONLINE_RBAC_ACL"
-	GatewayMaskIPEnvVar      = "HAWTIO_ONLINE_MASK_IP_ADDRESSES" // true
-	HawtioOnlineLogLvlEnvVar = "HAWTIO_ONLINE_LOG_LEVEL"         // info
+	hawtioAuthTypeForm  = "form"
+	hawtioAuthTypeOAuth = "oauth"
 
-	HawtioSSLKeyValue       = "/etc/tls/private/serving/tls.key"
-	HawtioSSLCertValue      = "/etc/tls/private/serving/tls.crt"
-	HawtioSSLCertCAValue    = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-	HawtioOnlineLogLvlValue = "info"
-	GatewayLogLvlValue      = "info"
-	GatewayMaskIPValue      = "false"
+	openShiftClusterVersionEnvVar = "OPENSHIFT_CLUSTER_VERSION"
+	openShiftWebConsoleUrlEnvVar  = "OPENSHIFT_WEB_CONSOLE_URL"
 )
 
 func envVarForAuth(isOpenShift bool) corev1.EnvVar {
 	// Ensure that we provide the correct mode of authentication
 	var authType string
 	if isOpenShift {
-		authType = HawtioAuthTypeOAuth
+		authType = hawtioAuthTypeOAuth
 	} else {
-		authType = HawtioAuthTypeForm
+		authType = hawtioAuthTypeForm
 	}
 	authTypeEnvVar := corev1.EnvVar{
 		Name:  HawtioAuthEnvVar,
@@ -101,12 +83,12 @@ func envVarsForHawtio(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSp
 	if isSSL {
 		envVars = append(envVars,
 			corev1.EnvVar{
-				Name:  HawtioSSLKey,
-				Value: HawtioSSLKeyValue,
+				Name:  common.HawtioSSLKey,
+				Value: common.HawtioSSLKeyValue,
 			},
 			corev1.EnvVar{
-				Name:  HawtioSSLCert,
-				Value: HawtioSSLCertValue,
+				Name:  common.HawtioSSLCert,
+				Value: common.HawtioSSLCertValue,
 			},
 		)
 	}
@@ -126,14 +108,14 @@ func envVarsForHawtio(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSp
 		})
 	}
 
-	onlineLogLvl := HawtioOnlineLogLvlValue
+	onlineLogLvl := common.HawtioOnlineLogLvlValue
 	if hawtio.Spec.Logging.OnlineLogLevel != "" {
 		onlineLogLvl = hawtio.Spec.Logging.OnlineLogLevel
 	}
 
 	envVars = append(envVars,
 		corev1.EnvVar{
-			Name:  HawtioOnlineLogLvlEnvVar,
+			Name:  common.HawtioOnlineLogLvlEnvVar,
 			Value: onlineLogLvl,
 		},
 	)
@@ -144,42 +126,13 @@ func envVarsForHawtio(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSp
 func envVarsForHawtioOCP4(openShiftVersion string, openShiftConsoleURL string) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{
 		{
-			Name:  OpenShiftClusterVersionEnvVar,
+			Name:  openShiftClusterVersionEnvVar,
 			Value: openShiftVersion,
 		},
 		{
-			Name:  OpenShiftWebConsoleUrlEnvVar,
+			Name:  openShiftWebConsoleUrlEnvVar,
 			Value: openShiftConsoleURL,
 		},
-	}
-	return envVars
-}
-
-func envVarsForNginx(nginx hawtiov2.HawtioNginx) []corev1.EnvVar {
-	var envVars []corev1.EnvVar
-	if nginx.ClientBodyBufferSize != "" {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  NginxClientBodyBufferSize,
-			Value: nginx.ClientBodyBufferSize,
-		})
-	}
-	if nginx.ProxyBuffers != "" {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  NginxProxyBuffers,
-			Value: nginx.ProxyBuffers,
-		})
-	}
-	if nginx.SubrequestOutputBufferSize != "" {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  NginxSubrequestOutputBufferSize,
-			Value: nginx.SubrequestOutputBufferSize,
-		})
-	}
-	if nginx.MasterBurstSize != "" {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  NginxMasterBurstSizeEnvVar,
-			Value: nginx.MasterBurstSize,
-		})
 	}
 	return envVars
 }
@@ -190,37 +143,37 @@ func envVarsForGateway(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerS
 	if isSSL {
 		envVars = append(envVars,
 			corev1.EnvVar{
-				Name:  GatewaySSLKeyEnvVar,
-				Value: HawtioSSLKeyValue, // serving-certificate key
+				Name:  common.GatewaySSLKeyEnvVar,
+				Value: common.HawtioSSLKeyValue, // serving-certificate key
 			},
 			corev1.EnvVar{
-				Name:  GatewaySSLCertEnvVar,
-				Value: HawtioSSLCertValue, // serving-certificate certificate
+				Name:  common.GatewaySSLCertEnvVar,
+				Value: common.HawtioSSLCertValue, // serving-certificate certificate
 			},
 			corev1.EnvVar{
-				Name:  GatewaySSLCertCAEnvVar,
-				Value: HawtioSSLCertCAValue, // serviceaccount certificate authority
+				Name:  common.GatewaySSLCertCAEnvVar,
+				Value: common.HawtioSSLCertCAValue, // serviceaccount certificate authority
 			},
 		)
 	}
 
-	gatewayLogLvl := GatewayLogLvlValue
+	gatewayLogLvl := common.GatewayLogLvlValue
 	if hawtio.Spec.Logging.GatewayLogLevel != "" {
 		gatewayLogLvl = hawtio.Spec.Logging.GatewayLogLevel
 	}
 
-	gatewayMaskIP := GatewayMaskIPValue
+	gatewayMaskIP := common.GatewayMaskIPValue
 	if hawtio.Spec.Logging.MaskIPAddresses != "" {
 		gatewayMaskIP = hawtio.Spec.Logging.MaskIPAddresses
 	}
 
 	envVars = append(envVars,
 		corev1.EnvVar{
-			Name:  GatewayLogLvlEnvVar,
+			Name:  common.GatewayLogLvlEnvVar,
 			Value: gatewayLogLvl,
 		},
 		corev1.EnvVar{
-			Name:  GatewayMaskIPEnvVar,
+			Name:  common.GatewayMaskIPEnvVar,
 			Value: gatewayMaskIP,
 		},
 	)
@@ -228,29 +181,6 @@ func envVarsForGateway(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerS
 	// Needs to be added to gateway in the same way as the hawtio image
 	authTypeEnvVar := envVarForAuth(apiSpec.IsOpenShift4)
 	envVars = append(envVars, authTypeEnvVar)
-
-	return envVars
-}
-
-func envVarsForRBAC(rbac hawtiov2.HawtioRBAC) []corev1.EnvVar {
-	var envVars []corev1.EnvVar
-
-	aclPath := ""
-	if rbac.ConfigMap != "" {
-		aclPath = path.Join(rbacConfigMapVolumeMountPath, RBACConfigMapKey)
-
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  GatewayRbacEnvVar,
-			Value: aclPath,
-		})
-	}
-
-	if rbac.DisableRBACRegistry != nil && *rbac.DisableRBACRegistry {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  HawtioDisableRbacRegistry,
-			Value: "true",
-		})
-	}
 
 	return envVars
 }

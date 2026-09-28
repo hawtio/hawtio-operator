@@ -2,7 +2,6 @@ package resources
 
 import (
 	"fmt"
-	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -11,37 +10,9 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	"github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
-
-const (
-	// OnlineReadinessPeriodValue is the default for Online's Readiness period value
-	OnlineReadinessPeriodValue = 5
-	// OnlineLivenessPeriodValue is the default for Online's Liveness period value
-	OnlineLivenessPeriodValue = 10
-	// GatewayReadinessPeriodValue is the default for Gateway's Readiness period value
-	GatewayReadinessPeriodValue = 30
-	// GatewayLivenessPeriodValue is the default for Gateway's Liveness period value
-	GatewayLivenessPeriodValue = 120
-
-	containerPortName        = "nginx"
-	containerGatewayPortName = "express"
-)
-
-type Connect struct {
-	Port     int32
-	Protocol corev1.URIScheme
-}
-
-var PlainConnect = Connect{
-	Port:     8080,
-	Protocol: "HTTP",
-}
-
-var SSLConnect = Connect{
-	Port:     8443,
-	Protocol: "HTTPS",
-}
 
 func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, openShiftConsoleURL string, bv util.BuildVariables, log logr.Logger) corev1.Container {
 	/*
@@ -83,19 +54,19 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	envVars := newHawtioEnvVars(hawtio, apiSpec, openShiftConsoleURL)
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container Env Vars %s", util.ToJSONString(envVars)))
 
-	connect := PlainConnect
+	connect := common.PlainConnect
 	if util.IsSSL(hawtio, apiSpec) {
-		connect = SSLConnect
+		connect = common.SSLConnect
 	}
 
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Hawtio Container protocols %s", util.ToJSONString(connect)))
 
-	var readinessPeriodValue int32 = OnlineReadinessPeriodValue
+	var readinessPeriodValue int32 = common.OnlineReadinessPeriodValue
 	if hawtio.Spec.HealthChecks.OnlineReadinessPeriod != nil {
 		readinessPeriodValue = *hawtio.Spec.HealthChecks.OnlineReadinessPeriod
 	}
 
-	var livenessPeriodValue int32 = OnlineLivenessPeriodValue
+	var livenessPeriodValue int32 = common.OnlineLivenessPeriodValue
 	if hawtio.Spec.HealthChecks.OnlineLivenessPeriod != nil {
 		livenessPeriodValue = *hawtio.Spec.HealthChecks.OnlineLivenessPeriod
 	}
@@ -103,7 +74,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 	container := corev1.Container{
 		Name:            hawtio.Name + "-container",
 		Image:           bv.ImageURI(bv.GetOnlineImageRepo(), hawtioVersion),
-		ImagePullPolicy: getImagePullPolicy(),
+		ImagePullPolicy: common.GetImagePullPolicy(),
 		Env:             envVars,
 		ReadinessProbe: &corev1.Probe{
 			InitialDelaySeconds: 5,
@@ -111,7 +82,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 			PeriodSeconds:       readinessPeriodValue,
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Port:   intstr.FromString(containerPortName),
+					Port:   intstr.FromString(common.ContainerPortName),
 					Path:   "/online",
 					Scheme: connect.Protocol,
 				},
@@ -122,7 +93,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 			PeriodSeconds:  livenessPeriodValue,
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Port:   intstr.FromString(containerPortName),
+					Port:   intstr.FromString(common.ContainerPortName),
 					Path:   "/online",
 					Scheme: connect.Protocol,
 				},
@@ -130,7 +101,7 @@ func newHawtioContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServer
 		},
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          containerPortName,
+				Name:          common.ContainerPortName,
 				ContainerPort: connect.Port,
 				Protocol:      "TCP",
 			},
@@ -170,18 +141,18 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 	envVars := newGatewayEnvVars(hawtio, apiSpec)
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container Env Vars %s", util.ToJSONString(envVars)))
 
-	connect := PlainConnect
+	connect := common.PlainConnect
 	if util.IsSSL(hawtio, apiSpec) {
-		connect = SSLConnect
+		connect = common.SSLConnect
 	}
 	log.V(util.DebugLogLevel).Info(fmt.Sprintf("Gateway Container protocols %s", util.ToJSONString(connect)))
 
-	var readinessPeriodValue int32 = GatewayReadinessPeriodValue
+	var readinessPeriodValue int32 = common.GatewayReadinessPeriodValue
 	if hawtio.Spec.HealthChecks.GatewayReadinessPeriod != nil {
 		readinessPeriodValue = *hawtio.Spec.HealthChecks.GatewayReadinessPeriod
 	}
 
-	var livenessPeriodValue int32 = GatewayLivenessPeriodValue
+	var livenessPeriodValue int32 = common.GatewayLivenessPeriodValue
 	if hawtio.Spec.HealthChecks.GatewayLivenessPeriod != nil {
 		livenessPeriodValue = *hawtio.Spec.HealthChecks.GatewayLivenessPeriod
 	}
@@ -189,11 +160,11 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 	container := corev1.Container{
 		Name:            hawtio.Name + "-gateway-container",
 		Image:           bv.ImageURI(bv.GetOnlineGatewayImageRepo(), gatewayVersion),
-		ImagePullPolicy: getImagePullPolicy(),
+		ImagePullPolicy: common.GetImagePullPolicy(),
 		Env:             envVars,
 		Ports: []corev1.ContainerPort{
 			{
-				Name:          containerGatewayPortName,
+				Name:          common.ContainerGatewayPortName,
 				ContainerPort: 3000,
 				Protocol:      "TCP",
 			},
@@ -201,7 +172,7 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 		LivenessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Port:   intstr.FromString(containerGatewayPortName),
+					Port:   intstr.FromString(common.ContainerGatewayPortName),
 					Path:   "/status",
 					Scheme: connect.Protocol,
 				},
@@ -212,7 +183,7 @@ func newGatewayContainer(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServe
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Port:   intstr.FromString(containerGatewayPortName),
+					Port:   intstr.FromString(common.ContainerGatewayPortName),
 					Path:   "/status",
 					Scheme: connect.Protocol,
 				},
@@ -238,7 +209,7 @@ func newHawtioEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSp
 		envVars = append(envVars, envVarsForOpenShift4...)
 	}
 
-	envVarsForNginx := envVarsForNginx(hawtio.Spec.Nginx)
+	envVarsForNginx := common.EnvVarsForNginx(hawtio.GetNginxOptions())
 	envVars = append(envVars, envVarsForNginx...)
 
 	return envVars
@@ -250,25 +221,8 @@ func newGatewayEnvVars(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerS
 	envVarsForGateway := envVarsForGateway(hawtio, apiSpec)
 	envVars = append(envVars, envVarsForGateway...)
 
-	envVarsForRBAC := envVarsForRBAC(hawtio.Spec.RBAC)
+	envVarsForRBAC := common.EnvVarsForRBAC(hawtio.GetRbacOptions())
 	envVars = append(envVars, envVarsForRBAC...)
 
 	return envVars
-}
-
-func getImagePullPolicy() corev1.PullPolicy {
-	pullPolicy := os.Getenv("IMAGE_PULL_POLICY")
-
-	if pullPolicy == "" {
-		fmt.Println("Defaulting to pull policy of being 'Always'")
-		pullPolicy = "Always"
-	}
-
-	if pullPolicy != "Always" && pullPolicy != "Never" && pullPolicy != "IfNotPresent" {
-		fmt.Printf("Invalid value %s for IMAGE_PULL_POLICY\n", pullPolicy)
-		fmt.Println("Defaulting to pull policy of being 'Always'")
-		pullPolicy = "Always"
-	}
-
-	return corev1.PullPolicy(pullPolicy)
 }

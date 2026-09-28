@@ -8,7 +8,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 
-	"github.com/hawtio/hawtio-operator/pkg/resources"
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 )
 
 // defaultConsoleLinkText Default text for console launcher link

@@ -17,7 +17,7 @@ import (
 	commonctrl "github.com/hawtio/hawtio-operator/pkg/controller/common"
 
 	"github.com/hawtio/hawtio-operator/pkg/cfg"
-	"github.com/hawtio/hawtio-operator/pkg/resources"
+	resources "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
