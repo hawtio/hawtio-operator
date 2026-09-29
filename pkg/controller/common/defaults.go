@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	commonapi "github.com/hawtio/hawtio-operator/pkg/apis/common"
+	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
 
@@ -54,4 +59,50 @@ func HydrateDefaults[T client.Object](ctx context.Context, c client.Client, blue
 	}
 
 	return obj, nil
+}
+
+//
+// reconcileMasterClientCertificate determines existence and validity
+// of the proxy master client certificate.
+// Returns (certificate secret, time before next check required, error)
+//
+func (r *ReconcileBase) ResolveMasterClientCertificate(ctx context.Context, hawtio commonapi.HawtioGeneral, masterClientSecretName string) (*corev1.Secret, time.Duration, error) {
+	if !r.ApiSpec.IsOpenShift4 {
+		return nil, 0, nil // not required on Kubernetes
+	}
+
+	r.Logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift master proxying certificate in Operator Namespace %s", r.OperatorPod.Namespace))
+
+	//
+	// Create proxying certificate in operator namespace - only applicable for OCP
+	// Check if operator's master proxy secret is created
+	// Secret should be in the operator's own namespace
+	//
+	clientCertSecret, nextCheckIn, err := OsCreateClientCertificate(ctx, r, hawtio, masterClientSecretName)
+	if err != nil {
+		if err == ErrLegacyResourceAdopted {
+			r.Logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
+		} else {
+			r.Logger.Error(err, "Failed to create OpenShift proxying certificate")
+		}
+		return nil, 0, err
+	}
+
+	if clientCertSecret != nil {
+		r.Logger.V(util.DebugLogLevel).Info("Setting owner of client secret", "Secret Name", clientCertSecret.Name, "Secret Namespace", clientCertSecret.Namespace)
+
+		// Set the owner reference for garbage collection.
+		owner, err := r.GetOperatorOwner(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		r.Logger.V(util.DebugLogLevel).Info("Client Secret", "Owner", owner.GetName(), "Namespace", owner.GetNamespace())
+
+		err = controllerutil.SetControllerReference(owner, clientCertSecret, r.Scheme)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return clientCertSecret, nextCheckIn, nil
 }

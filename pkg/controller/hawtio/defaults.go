@@ -34,54 +34,6 @@ func (r *ReconcileHawtio) usingCustomClientSecret(hawtio *hawtiov2.Hawtio) bool 
 }
 
 //
-// reconcileMasterClientCertificate determines existence and validity
-// of the proxy master client certificate.
-// Returns (certificate secret, time before next check required, error)
-//
-func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
-	if !r.ApiSpec.IsOpenShift4 {
-		return nil, 0, nil // not required on Kubernetes
-	}
-
-	clientSecretName := MasterClientSecretName
-
-	r.Logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift master proxying certificate in Operator Namespace %s", r.OperatorPod.Namespace))
-
-	//
-	// Create proxying certificate in operator namespace - only applicable for OCP
-	// Check if operator's master proxy secret is created
-	// Secret should be in the operator's own namespace
-	//
-	clientCertSecret, nextCheckIn, err := commonctrl.OsCreateClientCertificate(ctx, &r.ReconcileBase, hawtio, clientSecretName)
-	if err != nil {
-		if err == ErrLegacyResourceAdopted {
-			r.Logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
-		} else {
-			r.Logger.Error(err, "Failed to create OpenShift proxying certificate")
-		}
-		return nil, 0, err
-	}
-
-	if clientCertSecret != nil {
-		r.Logger.V(util.DebugLogLevel).Info("Setting owner of client secret", "Secret Name", clientCertSecret.Name, "Secret Namespace", clientCertSecret.Namespace)
-
-		// Set the owner reference for garbage collection.
-		owner, err := r.getOperatorOwner(ctx)
-		if err != nil {
-			return nil, 0, err
-		}
-		r.Logger.V(util.DebugLogLevel).Info("Client Secret", "Owner", owner.GetName(), "Namespace", owner.GetNamespace())
-
-		err = controllerutil.SetControllerReference(owner, clientCertSecret, r.Scheme)
-		if err != nil {
-			return nil, 0, err
-		}
-	}
-
-	return clientCertSecret, nextCheckIn, nil
-}
-
-//
 // resolveSlaveClientCertificate determines existence and validity
 // of the proxy slave client certificate.
 // Returns (certificate secret, error)

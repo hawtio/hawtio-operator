@@ -307,7 +307,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Resolve the master client proxy certificate (if applicable)
 	r.Logger.V(util.DebugLogLevel).Info("=== Resolving Master Client Certificate ===")
-	masterClientSecret, nextMasterCertCheckIn, err := r.resolveMasterClientCertificate(ctx, hawtio)
+	masterClientSecret, nextMasterCertCheckIn, err := r.ResolveMasterClientCertificate(ctx, hawtio, MasterClientSecretName)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

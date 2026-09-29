@@ -192,6 +192,16 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 	}
 
+	// Resolve the master client proxy certificate (if applicable)
+	r.Logger.V(util.DebugLogLevel).Info("=== Resolving Plugin Console Client Certificate ===")
+	masterClientSecret, nextMasterCertCheckIn, err := r.ResolveMasterClientCertificate(ctx, hawtioPlugin, MasterClientSecretName)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if masterClientSecret != nil {
+		r.Logger.V(util.DebugLogLevel).Info("Plugin Console Client Certificate", "secret", masterClientSecret.Name, "next check-in", nextMasterCertCheckIn.String())
+	}
+
 	//
 	// - If the rbac ConfigMap was invalid then fail (not found is ok)
 	//
@@ -295,5 +305,11 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 	// 		return reconcile.Result{}, err
 	// 	}
 	// }
-	return ctrl.Result{}, nil
+
+	if deploymentConfig.RequeueAfter > 0 {
+		r.Logger.Info("Reconciliation complete. Scheduling next cert rotation check.", "WakeUpIn", deploymentConfig.RequeueAfter.String())
+		return reconcile.Result{RequeueAfter: deploymentConfig.RequeueAfter}, nil
+	}
+
+	return reconcile.Result{}, nil
 }
