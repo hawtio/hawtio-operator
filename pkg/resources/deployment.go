@@ -177,9 +177,9 @@ func newVolumes(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, co
 
 	var volumes []corev1.Volume
 
-	if util.IsSSL(hawtio, apiSpec) {
+	if util.IsSSL(hawtio, apiSpec) && config.ServingCertSecretName != nil {
 		log.V(util.DebugLogLevel).Info("Adding secret volume for serving certificate %s-tls-serving at %s", hawtio.Name, serviceSigningSecretVolumeName)
-		volume := common.NewSecretVolume(hawtio.Name+"-tls-serving", serviceSigningSecretVolumeName)
+		volume := common.NewSecretVolume(*config.ServingCertSecretName, serviceSigningSecretVolumeName)
 		volumes = append(volumes, volume)
 	}
 

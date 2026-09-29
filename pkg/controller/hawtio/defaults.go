@@ -264,6 +264,14 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 		return deploymentConfiguration, err
 	}
 	deploymentConfiguration.ServingCertSecret = servingSecret
+	if servingSecret != nil {
+		// Kubernetes serving certificate name
+		deploymentConfiguration.ServingCertSecretName = &servingSecret.Name
+	} else {
+		// OpenShift and default serving certificate name
+		srvSecretName := hawtio.Name + "-tls-serving"
+		deploymentConfiguration.ServingCertSecretName = &srvSecretName
+	}
 
 	// If the serving cert has a valid expiration timer...
 	if expiryIn > 0 {

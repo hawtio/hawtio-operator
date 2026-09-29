@@ -11,6 +11,7 @@ import (
 
 	hawtiov2 "github.com/hawtio/hawtio-operator/pkg/apis/hawtio/v2"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	"github.com/hawtio/hawtio-operator/pkg/cfg"
 	common "github.com/hawtio/hawtio-operator/pkg/resources/common"
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
@@ -24,13 +25,14 @@ func NewDefaultService(hawtio *hawtiov2.Hawtio) *corev1.Service {
 	}
 }
 
-func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, log logr.Logger) *corev1.Service {
+func NewService(hawtio *hawtiov2.Hawtio, apiSpec *capabilities.ApiServerSpec, config cfg.DeploymentConfiguration, log logr.Logger) *corev1.Service {
 	log.V(util.DebugLogLevel).Info("Reconciling service")
 
 	name := hawtio.Name
 
-	annotations := map[string]string{
-		"service.beta.openshift.io/serving-cert-secret-name": name + "-tls-serving",
+	annotations := map[string]string{}
+	if config.ServingCertSecretName != nil {
+		annotations["service.beta.openshift.io/serving-cert-secret-name"] = *config.ServingCertSecretName
 	}
 	common.PropagateAnnotations(hawtio, annotations, log)
 

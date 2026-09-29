@@ -24,7 +24,7 @@ import (
 	"github.com/hawtio/hawtio-operator/pkg/util"
 )
 
-func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
+func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2.Hawtio, config cfg.DeploymentConfiguration) (controllerutil.OperationResult, error) {
 	targetService := resources.NewDefaultService(hawtio)
 
 	opResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, targetService, func() error {
@@ -39,7 +39,7 @@ func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2
 		}
 
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
-		blueprint := resources.NewService(hawtio, r.ApiSpec, reqLogger)
+		blueprint := resources.NewService(hawtio, r.ApiSpec, config, reqLogger)
 
 		serverBlueprint, err := commonctrl.HydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *corev1.Service) {
 			// If hydration stripped required fields, patch them directly back from source

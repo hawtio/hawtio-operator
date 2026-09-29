@@ -405,7 +405,7 @@ func (r *ReconcileHawtio) Reconcile(ctx context.Context, request reconcile.Reque
 
 	// Reconcile the service resource
 	r.Logger.V(util.DebugLogLevel).Info("=== Reconciling Service ===")
-	opResult, err = r.reconcileService(ctx, hawtio)
+	opResult, err = r.reconcileService(ctx, hawtio, deploymentConfig)
 	r.LogOperationResult("Service", opResult)
 	if err != nil {
 		return commonctrl.HandleResultAndError(err)

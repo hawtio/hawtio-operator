@@ -2,6 +2,7 @@ package hawtioplugin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -196,11 +197,14 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 	r.Logger.V(util.DebugLogLevel).Info("=== Resolving Plugin Console Client Certificate ===")
 	masterClientSecret, nextMasterCertCheckIn, err := r.ResolveMasterClientCertificate(ctx, hawtioPlugin, MasterClientSecretName)
 	if err != nil {
-		return reconcile.Result{}, err
+		return commonctrl.HandleResultAndError(err)
 	}
-	if masterClientSecret != nil {
-		r.Logger.V(util.DebugLogLevel).Info("Plugin Console Client Certificate", "secret", masterClientSecret.Name, "next check-in", nextMasterCertCheckIn.String())
+	if masterClientSecret == nil {
+		err := errors.New("master client certificate secret should be initialized")
+		return commonctrl.HandleResultAndError(err)
 	}
+
+	r.Logger.V(util.DebugLogLevel).Info("Plugin Console Client Certificate", "secret", masterClientSecret.Name, "next check-in", nextMasterCertCheckIn.String())
 
 	//
 	// - If the rbac ConfigMap was invalid then fail (not found is ok)
@@ -224,7 +228,15 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 	r.Logger.V(util.DebugLogLevel).Info("=== Reconciling Service Account ===")
 	opResult, err := r.reconcileServiceAccount(ctx, hawtioPlugin, r.OperatorPod.Namespace)
 	r.LogOperationResult("ServiceAccount", opResult)
-	if err == nil {
+	if err != nil {
+		return commonctrl.HandleResultAndError(err)
+	}
+
+	// Intialize the deployment inputs required for the deployment resources
+	// * proxy certificate
+	r.Logger.V(util.DebugLogLevel).Info("=== Initializing Deployment Configuration ===")
+	deploymentConfig, err := r.initDeploymentConfiguration(ctx, hawtioPlugin, masterClientSecret.Name, nextMasterCertCheckIn)
+	if err != nil {
 		return commonctrl.HandleResultAndError(err)
 	}
 
