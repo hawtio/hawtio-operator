@@ -1,13 +1,17 @@
 about:
-  title: Hawtio Online Console
+  title: Red Hat build of HawtIO
   productInfo: []
-  description: The Hawtio Online Console eases the discovery and management of 'hawtio-enabled'
-    applications deployed on OpenShift.
-  imgSrc: /online/hawtio-logo.svg
+  additionalInfo: The Red Hat build of HawtIO eases the discovery and management of hawtio-enabled applications deployed on OpenShift.
+  copyright: "© HawtIO project & Red Hat"
+  imgSrc: "/online/hawtio-logo.svg"
 branding:
-  appName: Hawtio Online Console
-  appLogoUrl: /online/hawtio-logo.svg
-  favicon: /online/favicon.ico
+  appName: Red Hat build of HawtIO
   showAppName: true
+  appLogoUrl: "/online/hawtio-logo.svg"
+  companyLogoUrl: "/online/company-logo-RedHat-A-Reverse-RGB.png"
+  css: "/online/branding-redhat.css"
+  favicon: "/online/favicon.ico"
 login:
   title: Log in with your token
+disabledRoutes:
+  - connect
