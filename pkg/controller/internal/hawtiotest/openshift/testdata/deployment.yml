@@ -144,8 +144,6 @@ spec:
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
-        - mountPath: /etc/tls/private/proxying
-          name: hawtio-online-tls-proxying
         - mountPath: /etc/tls/private/serving
           name: hawtio-online-tls-serving
         - mountPath: /etc/tls/private/proxying
