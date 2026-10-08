@@ -67,15 +67,17 @@ ARG HAWTIO_OPERATOR_IMAGE_LABEL_NAME
 # copied into builder image
 #
 ARG HAWTIO_OPERATOR_SRC=/hawtio-operator
+ARG HAWTIO_DESCRIPTION="Kubernetes operator that installs the Red Hat build of HawtIO."
 
-LABEL name="${HAWTIO_OPERATOR_IMAGE_LABEL_NAME}" \
-      version="${HAWTIO_OPERATOR_VERSION}" \
-      maintainer="Paul Richardson <parichar@redhat.com>" \
-      summary="Kubernetes operator that installs the Red Hat build of HawtIO." \
-      description="Kubernetes operator that installs the Red Hat build of HawtIO." \
-      com.redhat.component="hawtio-operator-container" \
+LABEL com.redhat.component="hawtio-operator-container" \
+      description="${HAWTIO_DESCRIPTION}" \
       io.k8s.display-name="Operator for the Red Hat build of HawtIO" \
-      io.openshift.tags="hawtio,operator"
+      io.k8s.description="${HAWTIO_DESCRIPTION}" \
+      io.openshift.tags="hawtio,operator" \
+      maintainer="Paul Richardson <parichar@redhat.com>" \
+      name="${HAWTIO_OPERATOR_IMAGE_LABEL_NAME}" \
+      summary="${HAWTIO_DESCRIPTION}" \
+      version="${HAWTIO_OPERATOR_VERSION}"
 
 #
 # Perform an upgrade of all packages to ensure
