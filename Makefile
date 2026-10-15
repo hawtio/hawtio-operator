@@ -358,14 +358,19 @@ bundle: kustomize operator-sdk pre-bundle
 	@# Sets the operator image to the preferred image:tag
 	@cd bundle && $(KUSTOMIZE) edit set image $(IMAGE_NAME)=$(IMAGE):$(VERSION)
 	@# Build kustomize manifests
-	$(KUSTOMIZE) build $(KOPTIONS) bundle | \
+	$(KUSTOMIZE) build $(KOPTIONS) $(BUNDLE) | \
 		$(OPERATOR_SDK) generate bundle \
-		--kustomize-dir bundle \
+		--kustomize-dir $(BUNDLE) \
 		--version $(OPERATOR_VERSION) -q --overwrite \
 		$(BUNDLE_METADATA_OPTS)
 	@$(MAKE) post-bundle
 
 post-bundle:
+	@echo "--- Moving Dockerfile into $(BUNDLE) directory ---"
+	@# Move Dockerfile into bundle
+	mv bundle.Dockerfile $(BUNDLE)/
+	@# Strip the $(BUNDLE) prefix so paths match the bundle context root
+	sed -i 's|COPY $(BUNDLE)/|COPY |g' $(BUNDLE)/bundle.Dockerfile
 	@echo "--- Injecting isolated local Role & RoleBinding into bundle ---"
 	@cp $(DEPLOY)/setup/base/operator_role.yaml $(MANIFESTS)/
 	@cp $(DEPLOY)/setup/base/operator_role_binding.yaml $(MANIFESTS)/

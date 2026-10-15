@@ -20,6 +20,6 @@ LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 LABEL com.redhat.openshift.versions: ">=v4.17"
 
 # Copy files to locations specified by labels.
-COPY bundle/manifests /manifests/
-COPY bundle/metadata /metadata/
-COPY bundle/tests/scorecard /tests/scorecard/
+COPY manifests /manifests/
+COPY metadata /metadata/
+COPY tests/scorecard /tests/scorecard/
