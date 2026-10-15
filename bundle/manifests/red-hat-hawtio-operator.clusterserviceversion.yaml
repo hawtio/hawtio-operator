@@ -340,7 +340,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: hawtio-operator
-                image: quay.io/hawtio/operator:2.1.0
+                image: us.icr.io/op-sdp-camel-fxm3c5g2/hawtio-rhel9-operator:latest-promoted@sha256:923b6d0866e69b7214502a3a6c0d290860d166030e3686eebaf27e850fc8fcbc
                 imagePullPolicy: Always
                 name: hawtio-operator
                 ports:
