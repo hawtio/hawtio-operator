@@ -7,7 +7,7 @@ metadata:
     categories: Integration & Delivery
     certified: "false"
     description: Hawtio eases the discovery and management of Java applications deployed on OpenShift.
-    containerImage: quay.io/hawtio/operator:2.1.0
+    containerImage: us.icr.io/op-sdp-camel-fxm3c5g2/hawtio-rhel9-operator:latest-promoted@sha256:923b6d0866e69b7214502a3a6c0d290860d166030e3686eebaf27e850fc8fcbc
     repository: https://github.com/hawtio/hawtio-operator
     support: Red Hat
   labels:

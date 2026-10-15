@@ -98,8 +98,8 @@ metadata:
     capabilities: Seamless Upgrades
     categories: Integration & Delivery
     certified: "false"
-    containerImage: quay.io/hawtio/operator:2.1.0
-    createdAt: "2026-10-05T11:10:02Z"
+    containerImage: us.icr.io/op-sdp-camel-fxm3c5g2/hawtio-rhel9-operator:latest-promoted@sha256:923b6d0866e69b7214502a3a6c0d290860d166030e3686eebaf27e850fc8fcbc
+    createdAt: "2026-10-15T15:47:32Z"
     description: Hawtio eases the discovery and management of Java applications deployed
       on OpenShift.
     olm.skipRange: '>=1.0.0 <2.0.1'
