@@ -368,9 +368,9 @@ bundle: kustomize operator-sdk pre-bundle
 post-bundle:
 	@echo "--- Moving Dockerfile into $(BUNDLE) directory ---"
 	@# Move Dockerfile into bundle
-	mv bundle.Dockerfile $(BUNDLE)/
+	mv bundle.Dockerfile $(BUNDLE)/Dockerfile
 	@# Strip the $(BUNDLE) prefix so paths match the bundle context root
-	sed -i 's|COPY $(BUNDLE)/|COPY |g' $(BUNDLE)/bundle.Dockerfile
+	sed -i 's|COPY $(BUNDLE)/|COPY |g' $(BUNDLE)/Dockerfile
 	@echo "--- Injecting isolated local Role & RoleBinding into bundle ---"
 	@cp $(DEPLOY)/setup/base/operator_role.yaml $(MANIFESTS)/
 	@cp $(DEPLOY)/setup/base/operator_role_binding.yaml $(MANIFESTS)/
