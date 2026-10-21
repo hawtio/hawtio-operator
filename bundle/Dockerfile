@@ -10,14 +10,14 @@ LABEL operators.operatorframework.io.bundle.channel.default.v1=v2
 LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.2
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
-LABEL operators.openshift.io/valid-subscription: '["Red Hat Application Foundations"]'
+LABEL operators.openshift.io/valid-subscription="Red Hat Application Foundations"
 
 # Labels for testing.
 LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 
 # Openshift min compatibility
-LABEL com.redhat.openshift.versions: ">=v4.17"
+LABEL com.redhat.openshift.versions=">=v4.17"
 
 # Copy files to locations specified by labels.
 COPY manifests /manifests/
