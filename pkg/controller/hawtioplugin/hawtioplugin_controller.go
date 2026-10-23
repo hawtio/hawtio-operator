@@ -240,18 +240,34 @@ func (r *ReconcileHawtioPlugin) Reconcile(ctx context.Context, request ctrl.Requ
 		return commonctrl.HandleResultAndError(err)
 	}
 
-	//2
-	// - Plugin
-	//   * ConsolePlugin: hawtio-online-console-plugin
-	//   * Service: hawtio-online-console-plugin
-	//   * Deployment: hawtio-online-console-plugin
-	//   * service certificate secret generated from annotation in Service
 	//
 	// - Gateway
-	//   * ConfigMap: hawtio-online-console-plugin-rbac
 	//   * Deployment: hawtio-online-console-plugin-gateway
 	//   * Service: hawtio-online-console-plugin-gateway (service certificate)
-	//   * Route: hawtio-online-console-plugin-gateway
+	//	   - service certificate secret generated from annotation in Service
+	//
+
+	// Reconcile the deployment resource
+	r.Logger.V(util.DebugLogLevel).Info("=== Reconciling Deployment ===")
+	opResult, err = r.reconcileGatewayDeployment(ctx, hawtioPlugin, deploymentConfig)
+	r.LogOperationResult("Deployment", opResult)
+	if err != nil {
+		return commonctrl.HandleResultAndError(err)
+	}
+
+	// Reconcile the service resource
+	r.Logger.V(util.DebugLogLevel).Info("=== Reconciling Service ===")
+	opResult, err = r.reconcileGatewayService(ctx, hawtioPlugin, r.OperatorPod.Namespace, deploymentConfig)
+	r.LogOperationResult("Service", opResult)
+	if err != nil {
+		return commonctrl.HandleResultAndError(err)
+	}
+
+	// - Plugin
+	//   * Deployment: hawtio-online-console-plugin
+	//   * Service: hawtio-online-console-plugin
+	//     - service certificate secret generated from annotation in Service
+	//   * ConsolePlugin: hawtio-online-console-plugin
 	//
 
 	// TODO - resources

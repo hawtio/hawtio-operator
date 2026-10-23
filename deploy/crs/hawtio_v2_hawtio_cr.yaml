@@ -32,3 +32,5 @@ spec:
     onlineLivenessPeriod: 5
     gatewayReadinessPeriod: 30
     gatewayLivenessPeriod: 120
+
+  enableHawtioPlugin: true
