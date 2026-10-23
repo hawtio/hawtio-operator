@@ -47,7 +47,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 	rotationWindow := getRotationBufferWindow(hawtio)
 
 	// Check whether serving certificate secret exists
-	servingCertSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, servingSecretName, metav1.GetOptions{})
+	servingCertSecret, err := r.CoreClient.Secrets(hawtio.Namespace).Get(ctx, servingSecretName, metav1.GetOptions{})
 	if err == nil {
 		// Found the secret
 
@@ -69,7 +69,7 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 		// Is the secret certificate invalid (expired).
 		// If so they need to update it with a new certificate.
 		//
-		expiryIn := checkCertificateExpiry(rotationWindow, servingCertSecret, r.logger)
+		expiryIn := checkCertificateExpiry(rotationWindow, servingCertSecret, r.Logger)
 		if expiryIn == 0 {
 			// certificate is invalid or close to expiring
 			// create a new one and update the secret
@@ -88,12 +88,12 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 			servingCertSecret.Data[corev1.TLSPrivateKeyKey] = newSecret.Data[corev1.TLSPrivateKeyKey]
 
 			// Commit the update
-			if err := r.client.Update(ctx, servingCertSecret); err != nil {
+			if err := r.Client.Update(ctx, servingCertSecret); err != nil {
 				return nil, 0, err
 			}
 
 			// reset expiryIn to maximum with buffer as new certificate
-			expiryIn = checkCertificateExpiry(rotationWindow, servingCertSecret, r.logger)
+			expiryIn = checkCertificateExpiry(rotationWindow, servingCertSecret, r.Logger)
 		}
 
 		return servingCertSecret, expiryIn, nil
@@ -107,18 +107,18 @@ func kubeCreateServingCertificate(ctx context.Context, r *ReconcileHawtio, hawti
 			return nil, 0, err
 		}
 
-		err = controllerutil.SetControllerReference(hawtio, servingCertSecret, r.scheme)
+		err = controllerutil.SetControllerReference(hawtio, servingCertSecret, r.Scheme)
 		if err != nil {
 			return nil, 0, err
 		}
-		_, err = r.coreClient.Secrets(hawtio.Namespace).Create(ctx, servingCertSecret, metav1.CreateOptions{})
+		_, err = r.CoreClient.Secrets(hawtio.Namespace).Create(ctx, servingCertSecret, metav1.CreateOptions{})
 		if err != nil {
 			return nil, 0, errs.Wrap(err, "Creating the serving certificate secret failed")
 		}
 
 		conKLog.Info("Serving certificate created successfully", "secret", servingSecretName)
 		// New Secret so maximum expiry period with buffer
-		expiryIn := checkCertificateExpiry(rotationWindow, servingCertSecret, r.logger)
+		expiryIn := checkCertificateExpiry(rotationWindow, servingCertSecret, r.Logger)
 		return servingCertSecret, expiryIn, nil
 	}
 

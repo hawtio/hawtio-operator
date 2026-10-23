@@ -204,13 +204,13 @@ func TestHawtioController_Reconcile(t *testing.T) {
 			t.Run("hawtio-online", func(t *testing.T) {
 				t.Run("check if the Hawtio has been created", func(t *testing.T) {
 					hawtio := hawtiov2.NewHawtio()
-					err = r.client.Get(context.TODO(), NamespacedName, hawtio)
+					err = r.Client.Get(context.TODO(), NamespacedName, hawtio)
 
 					require.NoError(t, err)
 				})
 				t.Run("check if the Deployment has been created", func(t *testing.T) {
 					deployment := appsv1.Deployment{}
-					err = r.client.Get(context.TODO(), NamespacedName, &deployment)
+					err = r.Client.Get(context.TODO(), NamespacedName, &deployment)
 					require.NoError(t, err)
 
 					assert.NotNil(t, deployment.Spec.Template.Spec)
@@ -234,7 +234,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 				})
 				t.Run("check if the Container resources have been set", func(t *testing.T) {
 					deployment := appsv1.Deployment{}
-					err = r.client.Get(context.TODO(), NamespacedName, &deployment)
+					err = r.Client.Get(context.TODO(), NamespacedName, &deployment)
 					require.NoError(t, err)
 
 					hawtioContainer := deployment.Spec.Template.Spec.Containers[0]
@@ -245,7 +245,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 				})
 				t.Run("check if the ConfigMap has been created", func(t *testing.T) {
 					configMap := corev1.ConfigMap{}
-					err = r.client.Get(context.TODO(), NamespacedName, &configMap)
+					err = r.Client.Get(context.TODO(), NamespacedName, &configMap)
 					require.NoError(t, err)
 
 					config, err := resources.GetHawtioConfig(&configMap)
@@ -274,7 +274,7 @@ func TestHawtioController_Reconcile(t *testing.T) {
 				})
 				t.Run("check if the environment variables have been set", func(t *testing.T) {
 					deployment := appsv1.Deployment{}
-					err = r.client.Get(context.TODO(), NamespacedName, &deployment)
+					err = r.Client.Get(context.TODO(), NamespacedName, &deployment)
 					require.NoError(t, err)
 
 					hawtioContainer := deployment.Spec.Template.Spec.Containers[0]

@@ -26,21 +26,21 @@ import (
 func (r *ReconcileHawtio) reconcileService(ctx context.Context, hawtio *hawtiov2.Hawtio) (controllerutil.OperationResult, error) {
 	targetService := resources.NewDefaultService(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetService, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, targetService, func() error {
 		// A read-only copy of the cluster state for diff logging
 		liveSnapshot := targetService.DeepCopy()
 		oldClusterIP := targetService.Spec.ClusterIP
 		oldClusterIPs := targetService.Spec.ClusterIPs
 
 		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, targetService, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, targetService, r.Scheme); err != nil {
 			return err
 		}
 
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileService", hawtio.Name))
-		blueprint := resources.NewService(hawtio, r.apiSpec, reqLogger)
+		blueprint := resources.NewService(hawtio, r.ApiSpec, reqLogger)
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *corev1.Service) {
+		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *corev1.Service) {
 			// If hydration stripped required fields, patch them directly back from source
 			if len(hydrated.Spec.Ports) == 0 {
 				hydrated.Spec.Ports = source.Spec.Ports
@@ -112,7 +112,7 @@ func (r *ReconcileHawtio) validateRoutePermissions(ctx context.Context, hawtio *
 		// Custom Route is not required so SAR not necessary
 		return nil
 	}
-	r.logger.V(util.DebugLogLevel).Info("Validating User Permissions for custom Route Host Name")
+	r.Logger.V(util.DebugLogLevel).Info("Validating User Permissions for custom Route Host Name")
 
 	// Does the user have the privilege to create a custom-host in a route
 	resourceAttr := &authorizationv1.ResourceAttributes{
@@ -128,12 +128,12 @@ func (r *ReconcileHawtio) validateRoutePermissions(ctx context.Context, hawtio *
 
 func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig cfg.DeploymentConfiguration) (*routev1.Route, controllerutil.OperationResult, error) {
 	// Only create a route if confirmed as Openshift and supports routes
-	if !r.apiSpec.IsOpenShift4 || !r.apiSpec.Routes {
+	if !r.ApiSpec.IsOpenShift4 || !r.ApiSpec.Routes {
 		return nil, controllerutil.OperationResultNone, nil
 	}
 
 	existingRoute := &routev1.Route{}
-	err := r.client.Get(ctx, types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}, existingRoute)
+	err := r.Client.Get(ctx, types.NamespacedName{Name: hawtio.Name, Namespace: hawtio.Namespace}, existingRoute)
 	routeExists := err == nil
 
 	//
@@ -142,7 +142,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 	//
 	if err != nil && !kerrors.IsNotFound(err) {
 		// A real error occurred trying to get the Route. Fail fast.
-		r.logger.Error(err, "Failed to get existing Route for pre-check")
+		r.Logger.Error(err, "Failed to get existing Route for pre-check")
 		return nil, controllerutil.OperationResultNone, err
 	}
 
@@ -157,7 +157,7 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 		// with an active custom route, log a warning & let it survive
 		//
 		if _, ok := err.(*ErrNoModifiedByAnnotation); ok && routeExists {
-			r.logger.Error(err, "Legacy Hawtio CR detected with active custom route but missing 'modified-by' annotation. Allowing existing route to remain but CR should be edited and saved to allow the webhook to add a modified-by annotation.",
+			r.Logger.Error(err, "Legacy Hawtio CR detected with active custom route but missing 'modified-by' annotation. Allowing existing route to remain but CR should be edited and saved to allow the webhook to add a modified-by annotation.",
 				"name", hawtio.Name,
 				"namespace", hawtio.Namespace,
 			)
@@ -187,9 +187,9 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 			// See https://github.com/openshift/origin/pull/9425
 			// We must delete the route to force a regeneration.
 
-			r.logger.Info("Deleting Route to trigger hostname regeneration.", "Route.Name", existingRoute.Name)
-			if err := r.client.Delete(ctx, existingRoute); err != nil {
-				r.logger.Error(err, "Failed to delete Route for regeneration")
+			r.Logger.Info("Deleting Route to trigger hostname regeneration.", "Route.Name", existingRoute.Name)
+			if err := r.Client.Delete(ctx, existingRoute); err != nil {
+				r.Logger.Error(err, "Failed to delete Route for regeneration")
 				return nil, controllerutil.OperationResultNone, err
 			}
 
@@ -203,21 +203,21 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 	// err was not found so carry-on with creating a new route
 	targetRoute := oresources.NewDefaultRoute(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetRoute, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, targetRoute, func() error {
 		// A read-only copy of the cluster state for diff logging
 		liveSnapshot := targetRoute.DeepCopy()
 		// The current route's host field
 		existingHost := liveSnapshot.Spec.Host
 
 		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, targetRoute, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, targetRoute, r.Scheme); err != nil {
 			return err
 		}
 
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileRoute", hawtio.Name))
 		blueprint := oresources.NewRoute(hawtio, deploymentConfig.TLSRouteSecret, deploymentConfig.CACertRouteSecret, reqLogger)
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *routev1.Route) {
+		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *routev1.Route) {
 			// If hydration stripped required fields, patch them directly back from source
 			if hydrated.Spec.To.Kind == "" || hydrated.Spec.To.Name == "" {
 				hydrated.Spec.To = source.Spec.To
@@ -279,25 +279,25 @@ func (r *ReconcileHawtio) reconcileRoute(ctx context.Context, hawtio *hawtiov2.H
 
 func (r *ReconcileHawtio) reconcileIngress(ctx context.Context, hawtio *hawtiov2.Hawtio, deploymentConfig cfg.DeploymentConfiguration) (*networkingv1.Ingress, controllerutil.OperationResult, error) {
 	// Only create an ingress if confirmed as not a route version of Openshift
-	if r.apiSpec.IsOpenShift4 && r.apiSpec.Routes {
+	if r.ApiSpec.IsOpenShift4 && r.ApiSpec.Routes {
 		return nil, controllerutil.OperationResultNone, nil
 	}
 
 	targetIngress := kresources.NewDefaultIngress(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetIngress, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, targetIngress, func() error {
 		// A read-only copy of the cluster state for diff logging
 		liveSnapshot := targetIngress.DeepCopy()
 
 		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, targetIngress, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, targetIngress, r.Scheme); err != nil {
 			return err
 		}
 
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileIngress", hawtio.Name))
-		blueprint := kresources.NewIngress(hawtio, r.apiSpec, deploymentConfig.ServingCertSecret, reqLogger)
+		blueprint := kresources.NewIngress(hawtio, r.ApiSpec, deploymentConfig.ServingCertSecret, reqLogger)
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *networkingv1.Ingress) {
+		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *networkingv1.Ingress) {
 			// If hydration stripped required fields, patch them directly back from source
 			if len(hydrated.Spec.Rules) == 0 {
 				hydrated.Spec.Rules = source.Spec.Rules

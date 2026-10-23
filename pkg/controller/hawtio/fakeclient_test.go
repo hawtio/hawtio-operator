@@ -27,6 +27,7 @@ import (
 
 	"github.com/hawtio/hawtio-operator/pkg/apis"
 	"github.com/hawtio/hawtio-operator/pkg/capabilities"
+	commonctrl "github.com/hawtio/hawtio-operator/pkg/controller/common"
 )
 
 //buildReconcileWithFakeClientWithMocks return *ReconcileHawtio with fake client, scheme and mock objects
@@ -94,12 +95,14 @@ func buildReconcileWithFakeClientWithMocks(objs []client.Object, t *testing.T) *
 	}
 
 	return &ReconcileHawtio{
-		scheme:       scheme,
-		client:       client,
+		ReconcileBase: commonctrl.ReconcileBase{
+			Client:     client,
+			Scheme:     scheme,
+			CoreClient: coreClient,
+			ApiSpec:    apiSpec,
+		},
 		configClient: configClient,
-		coreClient:   coreClient,
 		oauthClient:  fakeoauth.NewSimpleClientset(),
 		apiClient:    apiClient,
-		apiSpec:      apiSpec,
 	}
 }

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -18,18 +18,18 @@ import (
 func (r *ReconcileHawtio) reconcileConfigMap(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.ConfigMap, controllerutil.OperationResult, error) {
 	configMap := resources.NewDefaultConfigMap(hawtio)
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, configMap, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
 		// A read-only copy of the cluster state for diff logging
 		liveSnapshot := configMap.DeepCopy()
 
 		// Set the owner reference for garbage collection.
-		if err := controllerutil.SetControllerReference(hawtio, configMap, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, configMap, r.Scheme); err != nil {
 			return err
 		}
 
 		// Get the target state for the ConfigMap
 		reqLogger := hawtioLogger.WithName(fmt.Sprintf("%s-reconcileConfigMap", hawtio.Name))
-		crConfigMap, err := resources.NewConfigMap(hawtio, r.apiSpec, reqLogger)
+		crConfigMap, err := resources.NewConfigMap(hawtio, r.ApiSpec, reqLogger)
 		if err != nil {
 			reqLogger.Error(err, "Error reconciling ConfigMap")
 			return err

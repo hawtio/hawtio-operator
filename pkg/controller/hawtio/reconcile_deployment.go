@@ -43,25 +43,25 @@ func (r *ReconcileHawtio) reconcileDeployment(ctx context.Context, hawtio *hawti
 		}
 	}
 
-	opResult, err := controllerutil.CreateOrUpdate(ctx, r.client, targetDeployment, func() error {
+	opResult, err := controllerutil.CreateOrUpdate(ctx, r.Client, targetDeployment, func() error {
 		// A read-only copy of the cluster state for diff logging
 		liveSnapshot := targetDeployment.DeepCopy()
 
 		// Set the owner reference for garbage collection
-		if err := controllerutil.SetControllerReference(hawtio, targetDeployment, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(hawtio, targetDeployment, r.Scheme); err != nil {
 			return err
 		}
 
 		// Local, ideal state generated from the Hawtio CR
 		blueprint, err := resources.NewDeployment(
-			hawtio, r.apiSpec, deploymentConfig,
+			hawtio, r.ApiSpec, deploymentConfig,
 			r.BuildVariables, reqLogger)
 		if err != nil {
 			reqLogger.Error(err, "Error reconciling deployment")
 			return err
 		}
 
-		serverBlueprint, err := hydrateDefaults(ctx, r.client, blueprint, func(source, hydrated *appsv1.Deployment) {
+		serverBlueprint, err := hydrateDefaults(ctx, r.Client, blueprint, func(source, hydrated *appsv1.Deployment) {
 			// If hydration stripped required fields, patch them directly back from source
 			if hydrated.Spec.Selector == nil {
 				hydrated.Spec.Selector = source.Spec.Selector

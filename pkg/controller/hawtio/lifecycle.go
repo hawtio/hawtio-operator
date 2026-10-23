@@ -64,16 +64,16 @@ func handleResultAndError(err error) (reconcile.Result, error) {
 }
 
 func (r *ReconcileHawtio) fetchHawtio(ctx context.Context, namespacedName client.ObjectKey) (*hawtiov2.Hawtio, error) {
-	r.logger.V(util.DebugLogLevel).Info("Fetching the Hawtio custom resource")
+	r.Logger.V(util.DebugLogLevel).Info("Fetching the Hawtio custom resource")
 
 	hawtio := hawtiov2.NewHawtio()
-	err := r.client.Get(ctx, namespacedName, hawtio)
+	err := r.Client.Get(ctx, namespacedName, hawtio)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.logger.V(util.DebugLogLevel).Info("No Hawtio CR found")
+			r.Logger.V(util.DebugLogLevel).Info("No Hawtio CR found")
 			return nil, nil
 		}
 		// Error reading the object - requeue the request.
@@ -88,7 +88,7 @@ func (r *ReconcileHawtio) handleDeletion(ctx context.Context, hawtio *hawtiov2.H
 		return false, nil
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("=== Deleting Installation ===")
+	r.Logger.V(util.DebugLogLevel).Info("=== Deleting Installation ===")
 	err := r.deletion(ctx, hawtio, namespacedName)
 	if err != nil {
 		return true, fmt.Errorf("deletion failed: %v", err)
@@ -105,18 +105,18 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio,
 
 	clientName := namespacedName.Name + "-" + namespacedName.Namespace
 
-	if r.apiSpec.IsOpenShift4 {
+	if r.ApiSpec.IsOpenShift4 {
 		if hawtio.Spec.Type == hawtiov2.ClusterHawtioDeploymentType {
 			// Remove URI from OAuth client
 			oc := &oauthv1.OAuthClient{}
 			clientName := namespacedName.Name + "-" + namespacedName.Namespace
-			err := r.client.Get(ctx, types.NamespacedName{Name: clientName}, oc)
+			err := r.Client.Get(ctx, types.NamespacedName{Name: clientName}, oc)
 			if err != nil && !kerrors.IsNotFound(err) {
 				return fmt.Errorf("failed to get OAuth client: %v", err)
 			}
 			updated := resources.RemoveRedirectURIFromOauthClient(oc, hawtio.Status.URL)
 			if updated {
-				err := r.client.Update(ctx, oc)
+				err := r.Client.Update(ctx, oc)
 				if err != nil {
 					return fmt.Errorf("failed to remove redirect URI from OAuth client: %v", err)
 				}
@@ -129,7 +129,7 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio,
 				Name: clientName,
 			},
 		}
-		err := r.client.Delete(ctx, consoleLink)
+		err := r.Client.Delete(ctx, consoleLink)
 		if err != nil && !kerrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 			return fmt.Errorf("failed to delete console link: %v", err)
 		}
@@ -143,7 +143,7 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio,
 		// Use patch rather than update to ensure only the
 		// explicit changes are merged in rather than potentially
 		// overwriting with a stale hawtio CR
-		err := r.client.Patch(ctx, hawtio, client.MergeFrom(previous))
+		err := r.Client.Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return fmt.Errorf("failed to remove finalizer: %v", err)
 		}
@@ -155,11 +155,11 @@ func (r *ReconcileHawtio) deletion(ctx context.Context, hawtio *hawtiov2.Hawtio,
 func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
 	// Add a finalizer, that's needed to clean up cluster-wide resources, like ConsoleLink and OAuthClient
 	if controllerutil.ContainsFinalizer(hawtio, hawtioFinalizer) {
-		r.logger.V(util.DebugLogLevel).Info("Finalizer already present")
+		r.Logger.V(util.DebugLogLevel).Info("Finalizer already present")
 		return false, nil // nothing to do
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("Adding a finalizer")
+	r.Logger.V(util.DebugLogLevel).Info("Adding a finalizer")
 
 	previous := hawtio.DeepCopy()
 	controllerutil.AddFinalizer(hawtio, hawtioFinalizer)
@@ -167,13 +167,13 @@ func (r *ReconcileHawtio) addFinalizer(ctx context.Context, hawtio *hawtiov2.Haw
 	// Use patch rather than update to ensure only the
 	// explicit changes are merged in rather than potentially
 	// overwriting with a stale hawtio CR
-	err := r.client.Patch(ctx, hawtio, client.MergeFrom(previous))
+	err := r.Client.Patch(ctx, hawtio, client.MergeFrom(previous))
 	if err != nil {
-		r.logger.V(util.DebugLogLevel).Info("Error finalizer")
+		r.Logger.V(util.DebugLogLevel).Info("Error finalizer")
 		return false, fmt.Errorf("failed to update finalizer: %v", err)
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("Completed finalizer")
+	r.Logger.V(util.DebugLogLevel).Info("Completed finalizer")
 	return true, nil
 }
 
@@ -186,7 +186,7 @@ func (r *ReconcileHawtio) deleteSecret(ctx context.Context, hawtio *hawtiov2.Haw
 		return nil
 	}
 
-	r.logger.Info("Executing deletion of old client secret", "Name", secretName)
+	r.Logger.Info("Executing deletion of old client secret", "Name", secretName)
 
 	oldSlaveSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -195,10 +195,10 @@ func (r *ReconcileHawtio) deleteSecret(ctx context.Context, hawtio *hawtiov2.Haw
 		},
 	}
 
-	err := r.client.Delete(ctx, oldSlaveSecret)
+	err := r.Client.Delete(ctx, oldSlaveSecret)
 	if err != nil && !kerrors.IsNotFound(err) {
 		// Log but don't fail the loop; garbage collection handles leaks on CR deletion
-		r.logger.Error(err, "Failed to remove old active secret during tidy-up", "Name", secretName)
+		r.Logger.Error(err, "Failed to remove old active secret during tidy-up", "Name", secretName)
 	}
 
 	return nil

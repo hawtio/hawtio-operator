@@ -15,7 +15,7 @@ func (r *ReconcileHawtio) logOperationResult(resource string, result controlleru
 		return // no need to log occasions where no action was taken
 	}
 
-	r.logger.Info("=== Resource "+resource+" Reconciliation Completed ===", "Result", result)
+	r.Logger.Info("=== Resource "+resource+" Reconciliation Completed ===", "Result", result)
 }
 
 // calculateSecretHash generates a deterministic SHA-256 hash of the secret's data map payload.

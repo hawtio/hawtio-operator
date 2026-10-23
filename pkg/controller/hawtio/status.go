@@ -15,12 +15,12 @@ import (
 )
 
 func (r *ReconcileHawtio) setHawtioPhase(ctx context.Context, hawtio *hawtiov2.Hawtio, phase hawtiov2.HawtioPhase) error {
-	r.logger.V(util.DebugLogLevel).Info("Setting Hawtio CR Phase:", "Phase", phase)
+	r.Logger.V(util.DebugLogLevel).Info("Setting Hawtio CR Phase:", "Phase", phase)
 
 	if hawtio.Status.Phase != phase {
 		previous := hawtio.DeepCopy()
 		hawtio.Status.Phase = phase
-		err := r.client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
+		err := r.Client.Status().Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return fmt.Errorf("failed to update hawtio phase to %s: %v", phase, err)
 		}
@@ -34,15 +34,15 @@ func (r *ReconcileHawtio) updateHawtioStatus(ctx context.Context, hawtio *hawtio
 	// This prevents empty updates and reduces load on the API server.
 	if !reflect.DeepEqual(hawtio.Status, newStatus) {
 		hawtio.Status = *newStatus
-		r.logger.Info("Status has changed, updating Hawtio CR",
+		r.Logger.Info("Status has changed, updating Hawtio CR",
 			"Phase", newStatus.Phase,
 			"URL", newStatus.URL,
 			"Replicas", newStatus.Replicas,
 			"Image", newStatus.Image,
 			"Gateway Image", newStatus.GatewayImage,
 			"Client Certificate", newStatus.ClientCertificate)
-		if err := r.client.Status().Update(ctx, hawtio); err != nil {
-			r.logger.Error(err, "Failed to update Hawtio status")
+		if err := r.Client.Status().Update(ctx, hawtio); err != nil {
+			r.Logger.Error(err, "Failed to update Hawtio status")
 			return true, err
 		}
 

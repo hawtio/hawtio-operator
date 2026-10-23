@@ -38,13 +38,13 @@ func (r *ReconcileHawtio) usingCustomClientSecret(hawtio *hawtiov2.Hawtio) bool 
 // Returns (certificate secret, time before next check required, error)
 //
 func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
-	if ! r.apiSpec.IsOpenShift4 {
+	if ! r.ApiSpec.IsOpenShift4 {
 		return nil, 0, nil // not required on Kubernetes
 	}
 
 	clientSecretName := MasterClientSecretName
 
-	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift master proxying certificate in Operator Namespace %s", r.operatorPod.Namespace))
+	r.Logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift master proxying certificate in Operator Namespace %s", r.OperatorPod.Namespace))
 
 	//
 	// Create proxying certificate in operator namespace - only applicable for OCP
@@ -53,24 +53,24 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 	clientCertSecret, nextCheckIn, err := r.osCreateClientCertificate(ctx, hawtio, clientSecretName)
 	if err != nil {
 		if err == ErrLegacyResourceAdopted {
-			r.logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
+			r.Logger.Error(err, "OpenShift proxying certificate exists but need to adopt")
 		} else {
-			r.logger.Error(err, "Failed to create OpenShift proxying certificate")
+			r.Logger.Error(err, "Failed to create OpenShift proxying certificate")
 		}
 		return nil, 0, err
 	}
 
 	if clientCertSecret != nil {
-		r.logger.V(util.DebugLogLevel).Info("Setting owner of client secret", "Secret Name" , clientCertSecret.Name, "Secret Namespace", clientCertSecret.Namespace)
+		r.Logger.V(util.DebugLogLevel).Info("Setting owner of client secret", "Secret Name" , clientCertSecret.Name, "Secret Namespace", clientCertSecret.Namespace)
 
 		// Set the owner reference for garbage collection.
 		owner, err := r.getOperatorOwner(ctx)
 		if err != nil {
 			return nil, 0, err
 		}
-		r.logger.V(util.DebugLogLevel).Info("Client Secret", "Owner", owner.GetName(), "Namespace", owner.GetNamespace())
+		r.Logger.V(util.DebugLogLevel).Info("Client Secret", "Owner", owner.GetName(), "Namespace", owner.GetNamespace())
 
-		err = controllerutil.SetControllerReference(owner, clientCertSecret, r.scheme)
+		err = controllerutil.SetControllerReference(owner, clientCertSecret, r.Scheme)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -85,16 +85,16 @@ func (r *ReconcileHawtio) resolveMasterClientCertificate(ctx context.Context, ha
 // Returns (certificate secret, error)
 //
 func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio, masterSecret *corev1.Secret, targetName *string) error {
-	if ! r.apiSpec.IsOpenShift4 || targetName == nil {
+	if ! r.ApiSpec.IsOpenShift4 || targetName == nil {
 		return nil // not required on Kubernetes
 	}
 
-	r.logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift proxying certificate %s", *targetName))
+	r.Logger.V(util.DebugLogLevel).Info(fmt.Sprintf("Resolving OpenShift proxying certificate %s", *targetName))
 
 	if r.usingCustomClientSecret(hawtio) {
 		// User-specified common name means custom certificate is provided
 		// custom secret should be named ${hawtio.Name}-tls-proxy
-		r.logger.Info(fmt.Sprintf("Custom proxying common name specified. Expecting secret '%s' in CR namespace %s", *targetName, hawtio.Namespace))
+		r.Logger.Info(fmt.Sprintf("Custom proxying common name specified. Expecting secret '%s' in CR namespace %s", *targetName, hawtio.Namespace))
 		return nil
 	}
 
@@ -110,7 +110,7 @@ func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, haw
 	}
 
 	labels := resources.LabelsForHawtio(hawtio.Name)
-	resources.PropagateLabels(hawtio, labels, r.logger)
+	resources.PropagateLabels(hawtio, labels, r.Logger)
 	slaveSecret.SetLabels(labels)
 
 	// Deep copy the key/value data pairs from the master secret
@@ -120,30 +120,30 @@ func (r *ReconcileHawtio) resolveSlaveClientCertificate(ctx context.Context, haw
 		slaveSecret.Data[key] = newValue
 	}
 
-	err := controllerutil.SetControllerReference(hawtio, slaveSecret, r.scheme)
+	err := controllerutil.SetControllerReference(hawtio, slaveSecret, r.Scheme)
 	if err != nil {
 		return err
 	}
 
 	// Execute atomic blind creation
-	err = r.client.Create(ctx, slaveSecret)
+	err = r.Client.Create(ctx, slaveSecret)
 	if err != nil {
 		// If the API server says it's already there, our blind self-healing/staging logic is satisfied.
 		if kerrors.IsAlreadyExists(err) {
-			r.logger.Info("Target secret already exists in Hawtio CR namespace. Skipping creation.", "Namespace", hawtio.Namespace, "Name", targetName)
+			r.Logger.Info("Target secret already exists in Hawtio CR namespace. Skipping creation.", "Namespace", hawtio.Namespace, "Name", targetName)
 			return nil
 		}
 		// Bubble up genuine cluster or RBAC errors
 		return err
 	}
 
-	r.logger.Info("Successfully duplicated secret to Hawtio CR namespace.", "Namespace", hawtio.Namespace, "Name", targetName)
+	r.Logger.Info("Successfully duplicated secret to Hawtio CR namespace.", "Namespace", hawtio.Namespace, "Name", targetName)
 	return nil
 }
 
 func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawtiov2.Hawtio) (bool, error) {
 	if len(hawtio.Spec.Type) == 0 {
-		r.logger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type not specified. Defaulting to Cluster")
+		r.Logger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type not specified. Defaulting to Cluster")
 
 		previous := hawtio.DeepCopy()
 		hawtio.Spec.Type = hawtiov2.ClusterHawtioDeploymentType
@@ -151,7 +151,7 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 		// Use patch rather than update to ensure only the
 		// explicit changes are merged in rather than potentially
 		// overwriting with a stale hawtio CR
-		err := r.client.Patch(ctx, hawtio, client.MergeFrom(previous))
+		err := r.Client.Patch(ctx, hawtio, client.MergeFrom(previous))
 		if err != nil {
 			return false, fmt.Errorf("failed to update type: %v", err)
 		}
@@ -160,7 +160,7 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 	}
 
 	if hawtio.Spec.Type != hawtiov2.NamespaceHawtioDeploymentType && (hawtio.Spec.Type != hawtiov2.ClusterHawtioDeploymentType) {
-		r.logger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type neither Cluster or Namespace")
+		r.Logger.V(util.DebugLogLevel).Info("Hawtio.Spec.Type neither Cluster or Namespace")
 
 		err := r.setHawtioPhase(ctx, hawtio, hawtiov2.HawtioPhaseFailed)
 		if err != nil {
@@ -174,17 +174,17 @@ func (r *ReconcileHawtio) verifyHawtioSpecType(ctx context.Context, hawtio *hawt
 }
 
 func (r *ReconcileHawtio) findConsoleURL(ctx context.Context) (string, error) {
-	if ! r.apiSpec.IsOpenShift4 {
+	if ! r.ApiSpec.IsOpenShift4 {
 		return "", nil
 	}
 
 	//
 	// === Find the OCP Console Public URL ===
 	//
-	cm, err := r.coreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
+	cm, err := r.CoreClient.ConfigMaps("openshift-config-managed").Get(ctx, "console-public", metav1.GetOptions{})
 	if err != nil {
 		if !kerrors.IsNotFound(err) && !kerrors.IsForbidden(err) {
-			r.logger.Error(err, "Error getting OpenShift managed configuration")
+			r.Logger.Error(err, "Error getting OpenShift managed configuration")
 			return "", err
 		}
 	}
@@ -193,20 +193,20 @@ func (r *ReconcileHawtio) findConsoleURL(ctx context.Context) (string, error) {
 }
 
 func (r *ReconcileHawtio) resolveServingClientCertificate(ctx context.Context, hawtio *hawtiov2.Hawtio) (*corev1.Secret, time.Duration, error) {
-	if r.apiSpec.IsOpenShift4 {
+	if r.ApiSpec.IsOpenShift4 {
 		// -serving certificate is automatically created on OCP
 		return nil, 0, nil // not required on OCP
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("Resolving Kubernetes serving certificate")
+	r.Logger.V(util.DebugLogLevel).Info("Resolving Kubernetes serving certificate")
 
 	// Create -serving certificate
 	servingCertSecret, expiryIn, err := kubeCreateServingCertificate(ctx, r, hawtio)
 	if err != nil {
 		if err == ErrLegacyResourceAdopted {
-			r.logger.Error(err, "Kube serving certificate exists but need to adopt")
+			r.Logger.Error(err, "Kube serving certificate exists but need to adopt")
 		} else {
-			r.logger.Error(err, "Failed to create serving certificate")
+			r.Logger.Error(err, "Failed to create serving certificate")
 		}
 		return nil, 0, err
 	}
@@ -214,7 +214,7 @@ func (r *ReconcileHawtio) resolveServingClientCertificate(ctx context.Context, h
 	// Can be nil in tests
 	if servingCertSecret != nil {
 		// Set the owner reference for garbage collection.
-		err = controllerutil.SetControllerReference(hawtio, servingCertSecret, r.scheme)
+		err = controllerutil.SetControllerReference(hawtio, servingCertSecret, r.Scheme)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -229,9 +229,9 @@ func (r *ReconcileHawtio) resolveRouteCertificate(ctx context.Context, hawtio *h
 		return nil, nil // no secret specified
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route certificate secret to deployment")
+	r.Logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route certificate secret to deployment")
 
-	tlsRouteSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	tlsRouteSecret, err := r.CoreClient.Secrets(hawtio.Namespace).Get(ctx, secretName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func (r *ReconcileHawtio) resolveRouteCertificate(ctx context.Context, hawtio *h
 	// Structural Validation
 	if len(tlsRouteSecret.Data[corev1.TLSPrivateKeyKey]) == 0 || len(tlsRouteSecret.Data[corev1.TLSCertKey]) == 0 {
 		err := fmt.Errorf("custom route secret %s is missing required keys: tls.crt and/or tls.key", secretName)
-		r.logger.Error(err, "Invalid custom certificate secret")
+		r.Logger.Error(err, "Invalid custom certificate secret")
 		return nil, err
 	}
 
@@ -253,9 +253,9 @@ func (r *ReconcileHawtio) resolveRouteCACertificate(ctx context.Context, hawtio 
 		return nil, nil // no secret specified
 	}
 
-	r.logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA certificate secret to deployment")
+	r.Logger.V(util.DebugLogLevel).Info("Assigning Hawtio.Spec.Route CA certificate secret to deployment")
 
-	caRouteSecret, err := r.coreClient.Secrets(hawtio.Namespace).Get(ctx, caCertSecretName, metav1.GetOptions{})
+	caRouteSecret, err := r.CoreClient.Secrets(hawtio.Namespace).Get(ctx, caCertSecretName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func (r *ReconcileHawtio) resolveRouteCACertificate(ctx context.Context, hawtio 
 	// Structural Validation
 	if len(caRouteSecret.Data[corev1.TLSPrivateKeyKey]) == 0 || len(caRouteSecret.Data[corev1.TLSCertKey]) == 0 {
 		err := fmt.Errorf("custom route secret %s is missing required keys: tls.crt and/or tls.key", caCertSecretName)
-		r.logger.Error(err, "Invalid custom certificate secret")
+		r.Logger.Error(err, "Invalid custom certificate secret")
 		return nil, err
 	}
 
@@ -287,7 +287,7 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	//
 	// Find the OpenShift Console URL if appropriate
 	//
-	r.logger.V(util.DebugLogLevel).Info("Setting console URL on deployment")
+	r.Logger.V(util.DebugLogLevel).Info("Setting console URL on deployment")
 	url, err := r.findConsoleURL(ctx)
 	if err != nil {
 		return deploymentConfiguration, err
@@ -298,7 +298,7 @@ func (r *ReconcileHawtio) initDeploymentConfiguration(ctx context.Context, hawti
 	// Log if deprecated clientCertCheckSchedule still used in CR
 	//
 	if hawtio.Spec.Auth.ClientCertCheckSchedule != "" {
-		r.logger.Info("Notice: clientCertCheckSchedule is deprecated in v2+ and is being ignored. " +
+		r.Logger.Info("Notice: clientCertCheckSchedule is deprecated in v2+ and is being ignored. " +
 			"Certificate rotation is now handled natively by the controller.")
 	}
 
